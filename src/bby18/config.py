@@ -26,7 +26,7 @@ class GameConfig:
     network_actions_per_turn: int = 1
     chart_cost: int = 20
     upgrade_cost: int = 20
-    service_cost: int = 10
+    service_cost: int = 20
 
     # Economy
     typed_pair_value: int = 30

@@ -39,7 +39,7 @@ Each operating turn a corporation, in order:
 
 1. Takes **at most one network action** (placeholder allowance): chart an uncharted hex
    (cost 20), upgrade a charted tile it has service on to three exits (cost 20), or extend
-   service onto one already-charted tile adjacent to its network (cost 10).
+   service onto one already-charted tile adjacent to its network (cost 20, raised from 10 on 2026-09-27 after the first bot playtests showed nearly every tile shared).
 2. Has its **revenue** computed automatically (see Economy).
 3. Chooses to **pay** the full revenue as dividends or **withhold** it into the treasury.
 
