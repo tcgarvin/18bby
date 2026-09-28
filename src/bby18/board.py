@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from importlib import resources
 
-from bby18.hexgrid import Hex, hexes_within_radius
+from bby18.hexgrid import Direction, Hex, hexes_within_radius
 
 
 @dataclass(frozen=True)
@@ -35,9 +35,30 @@ class Board:
                 raise ValueError(f"Duplicate planet name {planet.name}")
             self._by_hex[planet.hex] = planet
             self._by_name[planet.name] = planet
+        # Geometry never changes, so on-board adjacency is computed once for fast searches.
+        self._neighbors: dict[Hex, tuple[tuple[Direction, Hex], ...]] = {
+            h: tuple((d, n) for d, n in h.neighbors() if n in hexes) for h in hexes
+        }
+        self._exits: dict[Hex, frozenset[Direction]] = {
+            h: frozenset(d for d, _ in pairs) for h, pairs in self._neighbors.items()
+        }
 
     def contains(self, hex: Hex) -> bool:
         return hex in self.hexes
+
+    def neighbors(self, hex: Hex) -> tuple[tuple[Direction, Hex], ...]:
+        """Adjacent hexes that are on the board, with the direction to each."""
+        pairs = self._neighbors.get(hex)
+        if pairs is None:
+            return tuple((d, n) for d, n in hex.neighbors() if n in self.hexes)
+        return pairs
+
+    def on_board_directions(self, hex: Hex) -> frozenset[Direction]:
+        """Directions from ``hex`` that face an on-board hex."""
+        exits = self._exits.get(hex)
+        if exits is None:
+            return frozenset(d for d, _ in self.neighbors(hex))
+        return exits
 
     def is_planet(self, hex: Hex) -> bool:
         return hex in self._by_hex

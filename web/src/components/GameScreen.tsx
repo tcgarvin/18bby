@@ -13,7 +13,7 @@ import { LogPanel, actorLabel } from "./LogPanel";
 import { NetworkActions } from "./NetworkActions";
 import { PlayersPanel } from "./PlayersPanel";
 import { StockActions } from "./StockActions";
-import { StockTrack } from "./StockTrack";
+import { StockMarket } from "./StockMarket";
 
 interface GameScreenProps {
   gameId: string;
@@ -128,7 +128,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             />
             <MapLegend state={state} focusCorp={focusCorp} />
           </section>
-          <StockTrack state={state} />
+          <StockMarket state={state} />
         </div>
 
         <aside className="game__side">

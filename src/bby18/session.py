@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
 
-from bby18.actions import NetworkAction, PassStock, StockAction
+from bby18.actions import NetworkAction, NoNetworkAction, PassStock, StockAction
 from bby18.game import Game
 from bby18.state import Corporation, Player
 
@@ -166,7 +166,7 @@ class GameSession:
             game.priority_player = (self._stock.current + 1) % n
         self._stock.current = (self._stock.current + 1) % n
         if self._stock.consecutive_passes >= n:
-            game.stock_rounds_played += 1
+            game.finish_stock_round()
             self._begin_operating_round(0)
 
     # --- operating rounds ------------------------------------------------------
@@ -192,7 +192,9 @@ class GameSession:
     def _network_step(self, action: NetworkAction) -> None:
         self.game.apply_network_action(self.current_corporation, action)
         self._operating.actions_taken += 1
-        if self._operating.actions_taken >= self.game.config.network_actions_per_turn:
+        # Passing ends the corporation's network actions for this turn.
+        done = isinstance(action, NoNetworkAction)
+        if done or self._operating.actions_taken >= self.game.config.network_actions_per_turn:
             self.phase = Phase.DIVIDEND
 
     def _dividend_step(self, action: Dividend) -> None:

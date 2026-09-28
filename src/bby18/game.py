@@ -7,7 +7,7 @@ legal and applies the consequences.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import combinations
 
 from bby18.actions import (
@@ -25,7 +25,7 @@ from bby18.actions import (
 from bby18.board import Board, Planet, load_board
 from bby18.config import DEFAULT_CONFIG, GameConfig
 from bby18.hexgrid import Hex
-from bby18.market import StockTrack
+from bby18.market import StockMarket
 from bby18.network import HyperspaceNetwork, IllegalAction
 from bby18.revenue import RevenueResult, compute_revenue
 from bby18.state import NO_PLAYER, Corporation, CorpStatus, Player
@@ -48,7 +48,7 @@ class Game:
     players: list[Player]
     corporations: dict[str, Corporation]
     network: HyperspaceNetwork
-    track: StockTrack
+    market: StockMarket
     bank: int = 0
     round_number: int = 0
     round_label: str = "setup"
@@ -59,6 +59,7 @@ class Game:
 
     @classmethod
     def new(cls, player_names: list[str], config: GameConfig = DEFAULT_CONFIG) -> Game:
+        config.validate_rule_variants()
         board = load_board(config.map_file)
         cash = config.starting_cash(len(player_names))
         players = [Player(f"P{i + 1}", name, cash) for i, name in enumerate(player_names)]
@@ -72,7 +73,7 @@ class Game:
             players=players,
             corporations=corporations,
             network=HyperspaceNetwork(board),
-            track=StockTrack(config),
+            market=StockMarket(config),
         )
 
     # --- helpers -------------------------------------------------------------
@@ -90,7 +91,7 @@ class Game:
             raise KeyError(f"No corporation {corp_id}") from None
 
     def price(self, corp: Corporation) -> int:
-        return self.track.price_at(corp.price_index)
+        return self.market.price_at(corp.market_cell)
 
     def homeworld(self, corp: Corporation) -> Hex:
         return self.board.planet_named(corp.spec.homeworld).hex
@@ -104,7 +105,16 @@ class Game:
         ]
 
     def revenue(self, corp: Corporation) -> RevenueResult:
-        return compute_revenue(self.reachable_planets(corp), self.config)
+        result = compute_revenue(self.reachable_planets(corp), self.config)
+        if self.config.homeworld_basic_income > 0:
+            result = replace(result, floor=self.config.homeworld_basic_income)
+        return result
+
+    def ipo_price(self, corp: Corporation) -> int:
+        """What one IPO share of a started corporation costs now."""
+        if self.config.ipo_price_rule == "market_after_float" and corp.floated:
+            return max(corp.par, self.price(corp))
+        return corp.par
 
     def certificate_count(self, player: Player) -> int:
         count = 0
@@ -136,7 +146,7 @@ class Game:
             if not can_buy or corp.id in sold_this_round:
                 pass
             elif player.shares_in(corp.id) < self.config.max_holding_shares:
-                if corp.ipo_shares > 0 and player.cash >= corp.par:
+                if corp.ipo_shares > 0 and player.cash >= self.ipo_price(corp):
                     actions.append(BuyShare(corp.id, ShareSource.IPO))
                 if corp.pool_shares > 0 and player.cash >= self.price(corp):
                     actions.append(BuyShare(corp.id, ShareSource.POOL))
@@ -193,11 +203,12 @@ class Game:
                 raise IllegalAction(f"{player.name} cannot afford the president's share")
             corp.status = CorpStatus.PARRED
             corp.par = action.par
-            corp.price_index = self.track.index_of(action.par)
+            corp.market_cell = self.market.par_cell(action.par)
             corp.president = player.id
             corp.ipo_shares -= self.config.president_share_size
             player.cash -= cost
             self.bank += cost
+            self._capitalize(corp, self.config.president_share_size)
             player.shares[corp.id] = player.shares_in(corp.id) + self.config.president_share_size
             self._log(player.name, f"starts {corp.id} at par {action.par}")
             self._maybe_float(corp)
@@ -207,7 +218,7 @@ class Game:
         if action.source is ShareSource.IPO:
             if corp.ipo_shares < 1:
                 raise IllegalAction(f"{corp.id} has no IPO shares left")
-            cost = corp.par
+            cost = self.ipo_price(corp)
             corp.ipo_shares -= 1
         else:
             if corp.pool_shares < 1:
@@ -218,6 +229,8 @@ class Game:
             raise IllegalAction(f"{player.name} cannot afford a share of {corp.id}")
         player.cash -= cost
         self.bank += cost
+        if action.source is ShareSource.IPO:
+            self._capitalize(corp, 1)
         player.shares[corp.id] = player.shares_in(corp.id) + 1
         self._log(player.name, f"buys {corp.id} from {action.source.value} for {cost}")
         self._check_presidency(corp)
@@ -234,7 +247,7 @@ class Game:
         self.bank -= proceeds
         player.shares[corp.id] = player.shares_in(corp.id) - action.count
         corp.pool_shares += action.count
-        corp.price_index = self.track.step(corp.price_index, -action.count)
+        corp.market_cell = self.market.down(corp.market_cell, action.count)
         sold_this_round.add(corp.id)
         self._log(
             player.name, f"sells {action.count} {corp.id} for {proceeds}; price {self.price(corp)}"
@@ -248,12 +261,24 @@ class Game:
             corp.president = largest.id
             self._log(largest.name, f"becomes president of {corp.id}")
 
+    def _capitalize(self, corp: Corporation, shares_sold: int) -> None:
+        """Under incremental capitalization, the bank pays par per IPO share into the treasury.
+
+        The buyer's cash has already gone to the bank, so the bank's net change is the buyer's
+        cost minus par (zero when the share sold at par).
+        """
+        if self.config.capitalization == "incremental":
+            amount = corp.par * shares_sold
+            corp.treasury += amount
+            self.bank -= amount
+
     def _maybe_float(self, corp: Corporation) -> None:
         sold = self.config.shares_per_corporation - corp.ipo_shares
         if corp.status is CorpStatus.PARRED and sold >= self.config.float_threshold_shares:
             corp.status = CorpStatus.FLOATED
-            corp.treasury = corp.par * self.config.shares_per_corporation
-            self.bank -= corp.treasury
+            if self.config.capitalization == "full":
+                corp.treasury = corp.par * self.config.float_capital_shares
+                self.bank -= corp.treasury
             corp.float_order = self._floats
             self._floats += 1
             self._log(corp.id, f"floats with treasury {corp.treasury}")
@@ -266,8 +291,8 @@ class Game:
         net = self.network
         frontier: set[Hex] = set()
         for h in reach:
-            for _, n in h.neighbors():
-                if self.board.contains(n) and not self.board.is_planet(n):
+            for _, n in self.board.neighbors(h):
+                if not self.board.is_planet(n):
                     frontier.add(n)
         cfg = self.config
         for hex in sorted(frontier):
@@ -327,27 +352,48 @@ class Game:
             raise IllegalAction(f"{corp.id} cannot afford {cost} (treasury {corp.treasury})")
 
     def settle_revenue(self, corp: Corporation, pay: bool) -> RevenueResult:
+        """Apply the operating turn's revenue.
+
+        Withholding puts it all in the treasury and moves the price left one column. Paying
+        gives each player-held share its per-share amount; shares in the IPO or pool earn
+        nothing, and that money and any rounding remainder stay with the bank. The price moves
+        right by ``payout_steps``.
+        """
         result = self.revenue(corp)
         corp.last_revenue = result.total
+        price_before = self.price(corp)
         if result.total == 0 or not pay:
             corp.treasury += result.total
             self.bank -= result.total
-            corp.price_index = self.track.step(corp.price_index, -1)
+            if result.total > 0 or self.config.zero_revenue_moves_price:
+                corp.market_cell = self.market.left(corp.market_cell)
             self._log(corp.id, f"withholds {result.total}; price {self.price(corp)}")
             return result
         per_share = result.total // self.config.shares_per_corporation
-        remainder = result.total - per_share * self.config.shares_per_corporation
-        held = 0
         for p in self.players:
-            n = p.shares_in(corp.id)
-            p.cash += per_share * n
-            held += n
-        unheld = self.config.shares_per_corporation - held
-        corp.treasury += per_share * unheld + remainder
-        self.bank -= result.total
-        corp.price_index = self.track.step(corp.price_index, +1)
+            paid = per_share * p.shares_in(corp.id)
+            p.cash += paid
+            self.bank -= paid
+        corp.market_cell = self.market.right(
+            corp.market_cell, self.payout_steps(result.total, price_before)
+        )
         self._log(corp.id, f"pays {result.total} ({per_share}/share); price {self.price(corp)}")
         return result
+
+    def payout_steps(self, revenue: int, price: int) -> int:
+        """Columns to move right for paying out ``revenue`` at share price ``price``."""
+        return sum(1 for f in self.config.payout_step_fractions if revenue >= price * f)
+
+    def finish_stock_round(self) -> None:
+        """End-of-stock-round market moves: a started corporation with no shares left in the
+        IPO or the pool is sold out and moves up one row."""
+        self.stock_rounds_played += 1
+        for corp in self.corporations.values():
+            if corp.status is CorpStatus.UNSTARTED:
+                continue
+            if corp.ipo_shares == 0 and corp.pool_shares == 0:
+                corp.market_cell = self.market.up(corp.market_cell)
+                self._log(corp.id, f"is sold out; price {self.price(corp)}")
 
     # --- scoring -------------------------------------------------------------------
 

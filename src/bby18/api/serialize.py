@@ -22,6 +22,7 @@ from bby18.board import Board
 from bby18.game import Game
 from bby18.hexgrid import Direction, Hex
 from bby18.session import Action, Dividend, GameSession, Phase
+from bby18.state import Corporation
 
 Json = dict[str, Any]
 
@@ -87,6 +88,24 @@ def match_action(legal: list[Action], submitted: Json) -> Action:
     raise ValueError(f"Submitted action {submitted!r} is not legal right now")
 
 
+def _dividend_preview(game: Game, corp: Corporation, revenue: int) -> Json | None:
+    """Share price after paying or withholding this revenue, for the dividend buttons."""
+    if not corp.floated:
+        return None
+    market = game.market
+    steps = game.payout_steps(revenue, game.price(corp))
+    withheld = (
+        market.left(corp.market_cell)
+        if revenue > 0 or game.config.zero_revenue_moves_price
+        else corp.market_cell
+    )
+    paid = market.right(corp.market_cell, steps) if revenue > 0 else withheld
+    return {
+        "pay": market.price_at(paid),
+        "withhold": market.price_at(withheld),
+    }
+
+
 def _corp_to_json(game: Game, corp_id: str) -> Json:
     corp = game.corp(corp_id)
     revenue = game.revenue(corp) if corp.floated else None
@@ -96,7 +115,14 @@ def _corp_to_json(game: Game, corp_id: str) -> Json:
         "homeworld": corp.spec.homeworld,
         "status": corp.status.value,
         "par": corp.par,
+        "ipoPrice": game.ipo_price(corp),
         "price": game.price(corp) if corp.status.value != "unstarted" else 0,
+        "marketCell": (
+            [corp.market_cell.row, corp.market_cell.col]
+            if corp.status.value != "unstarted"
+            else None
+        ),
+        "dividendPreview": _dividend_preview(game, corp, revenue.total if revenue else 0),
         "treasury": corp.treasury,
         "ipoShares": corp.ipo_shares,
         "poolShares": corp.pool_shares,
@@ -157,7 +183,8 @@ def session_to_json(session: GameSession) -> Json:
         "corporations": [_corp_to_json(game, c) for c in game.corporations],
         "operatingOrder": [c.id for c in game.operating_order()],
         "tiles": tiles,
-        "stockTrack": list(game.config.stock_track),
+        "stockMarket": [list(row) for row in game.config.stock_market],
+        "parColumn": game.config.par_column,
         "config": {
             "chartCost": game.config.chart_cost,
             "upgradeCost": game.config.upgrade_cost,

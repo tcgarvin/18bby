@@ -55,7 +55,7 @@ def test_start_corp_sets_par_president_and_charges_double(game):
 def test_floats_at_half_sold_with_full_capitalization(game):
     cec = float_corp(game, "CEC", par=60)
     assert cec.floated
-    assert cec.treasury == 600
+    assert cec.treasury == 480  # eight times par
     assert cec.ipo_shares == 5
 
 
@@ -101,10 +101,10 @@ def test_operating_turn_charts_and_pays_dividends(game):
     charts = [a for a in legal if isinstance(a, Chart)]
     assert charts and NoNetworkAction() in legal
     # Corellia (-5,3) -> (-4,2) NE exit reaches Kuat? No: Kuat is (-3,2), two steps. Chart toward Alderaan (-4,1)
-    action = Chart(Hex(-4, 2), frozenset({D.SW, D.NW}), 20)
+    action = Chart(Hex(-4, 2), frozenset({D.SW, D.NW}), 50)
     assert action in charts
     game.apply_network_action(cec, action)
-    assert cec.treasury == 580
+    assert cec.treasury == 430
     result = game.revenue(cec)
     # Corellia (I/S) <-> Alderaan (M): Industry-Market typed pair.
     assert result.total == 30
@@ -113,7 +113,7 @@ def test_operating_turn_charts_and_pays_dividends(game):
     assert ann.cash == 400 - 120 + 6  # 3/share x 2
     assert bo.cash == 400 - 120 + 6
     assert cy.cash == 400 - 60 + 3
-    assert cec.treasury == 580 + 15  # 5 unheld shares x 3
+    assert cec.treasury == 430  # unheld shares pay nobody
     assert game.price(cec) == 70
 
 
@@ -121,7 +121,7 @@ def test_withholding_drops_price_and_keeps_cash(game):
     cec = float_corp(game, "CEC", par=70)
     game.settle_revenue(cec, pay=False)
     assert game.price(cec) == 60
-    assert cec.treasury == 700
+    assert cec.treasury == 560
 
 
 def test_operating_order_by_price_then_float_order(game):

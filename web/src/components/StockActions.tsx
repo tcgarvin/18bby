@@ -32,7 +32,7 @@ export function StockActions({ state, busy, onAct }: StockActionsProps) {
             <div className="trade__buttons">
               {option.ipoBuys.map((action) => (
                 <button type="button" key={`ipo-${action.par ?? 0}`} className="btn btn--small" disabled={busy} onClick={() => onAct(action)}>
-                  {action.par ? `Par ${action.par}` : `IPO ${corp.par}`}
+                  {action.par ? `Par ${action.par}` : `IPO ${corp.ipoPrice}`}
                 </button>
               ))}
               {option.poolBuy && (

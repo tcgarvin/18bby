@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from bby18.config import CorporationSpec
+from bby18.market import MarketCell
 
 NO_PLAYER = ""
 """Sentinel president id for a corporation nobody has bought into."""
@@ -33,7 +34,8 @@ class Corporation:
     spec: CorporationSpec
     status: CorpStatus = CorpStatus.UNSTARTED
     par: int = 0
-    price_index: int = 0
+    market_cell: MarketCell = MarketCell(0, 0)
+    """Position on the stock market; meaningless until the corporation starts."""
     treasury: int = 0
     ipo_shares: int = 10
     pool_shares: int = 0

@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import random
 from collections import Counter
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from statistics import mean
 
-from bby18.bots import GreedyBot, RandomBot
+from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.config import GameConfig
 from bby18.game import Game
+from bby18.metrics import (
+    CorpMetrics,
+    StockCounts,
+    corporation_metrics,
+    final_revenue_split,
+    planet_coverage,
+    worth_spread,
+)
 from bby18.runner import run_game
 from bby18.session import Decider
 
@@ -26,6 +35,53 @@ class GameSummary:
     junctions: int
     shared_tiles: int
     floated: int
+    winner_margin: float
+    """Winner's worth minus the runner-up's, as a fraction of mean worth."""
+    worth_cv: float
+    """Population standard deviation of final worth over its mean."""
+    corps: dict[str, CorpMetrics]
+    """Every corporation, floated or not."""
+    stock: StockCounts
+    final_typed_revenue: int
+    final_basic_revenue: int
+    planets_total: int
+    planets_reached: int
+    """Planets reached by at least one floated corporation."""
+    region_reached: dict[str, int]
+    region_total: dict[str, int]
+
+    @property
+    def planets_reached_fraction(self) -> float:
+        return self.planets_reached / self.planets_total
+
+    def to_row(self) -> dict[str, int | float | bool | str]:
+        """A flat, JSON-serializable record. Nested values use dotted keys."""
+        row: dict[str, int | float | bool | str] = {
+            "winner": self.winner,
+            "winner_margin": self.winner_margin,
+            "worth_cv": self.worth_cv,
+            "mean_worth": mean(self.worth.values()),
+            "tiles_charted": self.tiles_charted,
+            "junctions": self.junctions,
+            "shared_tiles": self.shared_tiles,
+            "floated": self.floated,
+            "final_typed_revenue": self.final_typed_revenue,
+            "final_basic_revenue": self.final_basic_revenue,
+            "planets_total": self.planets_total,
+            "planets_reached": self.planets_reached,
+            "planets_reached_fraction": self.planets_reached_fraction,
+        }
+        row.update(asdict(self.stock))
+        for seat, value in self.worth.items():
+            row[f"worth.{seat}"] = value
+        for corp_id, metrics in self.corps.items():
+            for name, value in asdict(metrics).items():
+                row[f"corp.{corp_id}.{name}"] = value
+        for region, count in self.region_reached.items():
+            row[f"region_reached.{region}"] = count
+        for region, count in self.region_total.items():
+            row[f"region_total.{region}"] = count
+        return row
 
 
 @dataclass
@@ -56,16 +112,44 @@ class Aggregate:
         return "\n".join(lines)
 
 
+def _greedy(policy: GreedyPolicy) -> Callable[[random.Random], Decider]:
+    return lambda rng: GreedyBot(rng, policy)
+
+
+BOT_KINDS: dict[str, Callable[[random.Random], Decider]] = {
+    "greedy": _greedy(GreedyPolicy()),
+    "random": RandomBot,
+    "greedy-rs": _greedy(
+        GreedyPolicy(start_order="random", par_choice="random", max_presidencies=2)
+    ),
+    "greedy-best": _greedy(GreedyPolicy(start_order="best_home", max_presidencies=2)),
+    "greedy-hold": _greedy(GreedyPolicy(withhold_when_revenue_below=60, pay_threshold=4)),
+    "greedy-sell": _greedy(GreedyPolicy(sell_losers=True, start_order="random")),
+    "greedy-max": _greedy(GreedyPolicy(par_choice="max", start_order="random", max_presidencies=2)),
+}
+"""Named bot kinds for playtests and sweeps. Each builds one seat's decider from its own rng."""
+
+MIX_PREFIX = "mix:"
+
+
+def seat_kinds(bot: str, player_count: int) -> list[str]:
+    """The bot kind for each seat. ``"mix:a,b"`` assigns kinds round-robin from seat 1;
+    any other string is one kind for every seat. Unknown kinds raise ``ValueError``."""
+    if bot.startswith(MIX_PREFIX):
+        kinds = [k.strip() for k in bot[len(MIX_PREFIX) :].split(",")]
+        if not kinds or any(not k for k in kinds):
+            raise ValueError(f"Bad mixed bot string {bot!r}; use mix:kind1,kind2,...")
+    else:
+        kinds = [bot]
+    unknown = [k for k in kinds if k not in BOT_KINDS]
+    if unknown:
+        raise ValueError(f"Unknown bot kind {unknown[0]!r}; choose from {', '.join(BOT_KINDS)}")
+    return [kinds[i % len(kinds)] for i in range(player_count)]
+
+
 def make_deciders(game: Game, kind: str, rng: random.Random) -> dict[str, Decider]:
-    deciders: dict[str, Decider] = {}
-    for p in game.players:
-        if kind == "greedy":
-            deciders[p.id] = GreedyBot(random.Random(rng.random()))
-        elif kind == "random":
-            deciders[p.id] = RandomBot(random.Random(rng.random()))
-        else:
-            raise ValueError(f"Unknown bot kind {kind!r}")
-    return deciders
+    kinds = seat_kinds(kind, len(game.players))
+    return {p.id: BOT_KINDS[k](random.Random(rng.random())) for p, k in zip(game.players, kinds)}
 
 
 def play_one(
@@ -74,10 +158,19 @@ def play_one(
     rng = random.Random(seed)
     game = Game.new([f"Player {i + 1}" for i in range(player_count)], config)
     run_game(game, make_deciders(game, kind, rng))
+    return game, summarize_game(game, seed)
+
+
+def summarize_game(game: Game, seed: int) -> GameSummary:
+    """Measure a finished game."""
     worth = {p.id: game.player_worth(p) for p in game.players}
     winner = max(worth, key=lambda k: worth[k])
+    margin, cv = worth_spread(worth)
     tiles = game.network.tiles()
-    summary = GameSummary(
+    typed, basic = final_revenue_split(game)
+    coverage = planet_coverage(game)
+    counts = corporation_metrics(game)
+    return GameSummary(
         seed=seed,
         winner=winner,
         worth=worth,
@@ -90,8 +183,17 @@ def play_one(
         junctions=sum(1 for t in tiles.values() if len(t.exits) == 3),
         shared_tiles=sum(1 for h in tiles if len(game.network.corporations_serving(h)) >= 2),
         floated=sum(1 for c in game.corporations.values() if c.floated),
+        winner_margin=margin,
+        worth_cv=cv,
+        corps=counts.corps,
+        stock=counts.stock,
+        final_typed_revenue=typed,
+        final_basic_revenue=basic,
+        planets_total=coverage.planets_total,
+        planets_reached=coverage.planets_reached,
+        region_reached=coverage.region_reached,
+        region_total=coverage.region_total,
     )
-    return game, summary
 
 
 def play_many(games: int, player_count: int, kind: str, config: GameConfig, seed: int) -> Aggregate:

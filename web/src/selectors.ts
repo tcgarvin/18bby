@@ -24,13 +24,6 @@ export function hexActionsByKey(actions: Action[]): Map<string, HexAction[]> {
   return byKey;
 }
 
-/** Price after moving `steps` along the linear track, clamped to its ends. */
-export function priceAfter(track: number[], price: number, steps: number): number {
-  const index = track.indexOf(price);
-  if (index < 0) return price;
-  return track[Math.max(0, Math.min(track.length - 1, index + steps))];
-}
-
 export interface CorpTradeOptions {
   corpId: string;
   ipoBuys: BuyAction[];

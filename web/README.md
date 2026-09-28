@@ -55,7 +55,7 @@ Games live in the API process's memory, so restarting the server ends them.
     traces stay continuous across tiles. It also draws planet badges, homeworld tags and,
     for the focused corporation, the scored pairs.
   - `NetworkActions`, `DividendActions`, `StockActions`: one control panel per phase.
-  - `CorporationsPanel`, `PlayersPanel`, `StockTrack`, `LogPanel`, `GameOver`, `NewGame`.
+  - `CorporationsPanel`, `PlayersPanel`, `StockMarket`, `LogPanel`, `GameOver`, `NewGame`.
   - `GameScreen`: layout and state for one game. `App` switches between screens and restores
     the game named in the URL.
 

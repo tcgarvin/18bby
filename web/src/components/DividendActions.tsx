@@ -1,6 +1,5 @@
 import type { Action, CorporationState, GameState } from "../api";
 import { corporationColor } from "../colors";
-import { priceAfter } from "../selectors";
 
 interface DividendActionsProps {
   state: GameState;
@@ -41,7 +40,8 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
       <div className="btn-row">
         {choices.map((action) => {
           const pay = action.choice === "pay";
-          const next = priceAfter(state.stockTrack, corp.price, pay ? 1 : -1);
+          const preview = corp.dividendPreview;
+          const next = preview === null ? corp.price : pay ? preview.pay : preview.withhold;
           return (
             <button
               type="button"

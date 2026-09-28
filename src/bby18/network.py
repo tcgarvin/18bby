@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from bby18.board import Board
 from bby18.hexgrid import Direction, Hex
 
+_OPPOSITE: dict[Direction, Direction] = {d: d.opposite for d in Direction}
+
 
 class IllegalAction(Exception):
     """Raised when a requested network change is not legal."""
@@ -75,23 +77,24 @@ class HyperspaceNetwork:
     def reachable(self, corp: str, origin: Hex) -> frozenset[Hex]:
         """All hexes ``corp`` can reach from ``origin`` through its own service."""
         service = self._service.get(corp, set())
+        board = self.board
         seen = {origin}
         queue = deque([origin])
         while queue:
             current = queue.popleft()
-            for direction, nxt in current.neighbors():
-                if nxt in seen or not self.board.contains(nxt):
+            for direction, nxt in board.neighbors(current):
+                if nxt in seen:
                     continue
-                if not self.board.is_planet(nxt) and nxt not in service:
+                if not board.is_planet(nxt) and nxt not in service:
                     continue
-                if self.connected(current, nxt):
+                if self.has_exit(current, direction) and self.has_exit(nxt, _OPPOSITE[direction]):
                     seen.add(nxt)
                     queue.append(nxt)
         return frozenset(seen)
 
     def legal_exits(self, hex: Hex) -> frozenset[Direction]:
         """Exits that face an on-board hex."""
-        return frozenset(d for d, n in hex.neighbors() if self.board.contains(n))
+        return self.board.on_board_directions(hex)
 
     # --- legality ------------------------------------------------------------
 

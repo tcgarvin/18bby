@@ -5,6 +5,13 @@ engine can run complete games. Every numeric value lives in `bby18/config.py` as
 and is expected to change with playtesting. Rules marked **placeholder** were chosen for
 expedience, not conviction.
 
+## Player count
+
+- **Three players is the design target** (decided 2026-09-28). Balance work tunes for three
+  players and checks four. The engine still runs two-player games, but they are not
+  balanced: with two corporations the game is a mirror match decided by a few credits of
+  dividends, and fixing that is deferred.
+
 ## Map and network
 
 - **Board:** the 127-hex "Room for junctions" map (`docs/design/hex-map-design.md`), loaded
@@ -37,9 +44,12 @@ expedience, not conviction.
 
 Each operating turn a corporation, in order:
 
-1. Takes **at most one network action** (placeholder allowance): chart an uncharted hex
-   (cost 20), upgrade a charted tile it has service on to three exits (cost 20), or extend
-   service onto one already-charted tile adjacent to its network (cost 20, raised from 10 on 2026-09-27 after the first bot playtests showed nearly every tile shared).
+1. Takes **up to two network actions** (placeholder allowance): chart an uncharted hex,
+   upgrade a charted tile it has service on to three exits, or extend service onto one
+   already-charted tile adjacent to its network. Each costs **50**. Passing ends the
+   corporation's network actions for the turn. (History: one action at cost 20 until
+   2026-09-28; service was 10 until 2026-09-27, when bot playtests showed nearly every tile
+   shared.)
 2. Has its **revenue** computed automatically (see Economy).
 3. Chooses to **pay** the full revenue as dividends or **withhold** it into the treasury.
 
@@ -57,19 +67,33 @@ have service on the tile.
 - **Matching:** the engine computes a maximum-weight matching over all reachable planets.
   Each planet scores at most once per corporation per operating round. Dual-tag planets
   use whichever tag yields the better matching.
-- **Dividends:** revenue is split into ten per-share amounts. Shares held by players pay
-  their holders. Shares not held by any player (IPO or bank pool) pay the corporation's
-  treasury (placeholder simplification).
+- **Dividends:** revenue is split into ten per-share amounts (rounded down). Shares held by
+  players pay their holders. Shares in the IPO or the bank pool pay **nobody**; that money and
+  the rounding remainder stay with the bank. (Until 2026-09-28 unheld shares paid the
+  treasury, which the balance sweep found was a dead sink that was never spent.)
 
 ## Stock market
 
-- **Linear track** (placeholder values):
-  `40 50 60 70 80 90 100 110 125 140 155 170 190 210 230 250 275 300 330 360 400`.
-- **Par** chosen by the president from `60, 70, 80, 90, 100`.
-- Pay dividends: price rises one step. Withhold: falls one step. Each share sold to the
-  pool: falls one step. Price never leaves the track.
+- **Two-dimensional market** (adopted 2026-09-28, replacing a linear track; grid values are
+  placeholders in `config.py`). Eight rows, top row highest; moving up one row is worth about
+  one column to the right. Lower rows end sooner (the bottom row tops out at 110, the top
+  row at 400).
+- **Par** chosen by the president from `60, 70, 80, 90, 100`, all in one par column
+  (column 4), with two rows below the lowest par so sales can always push a price down.
+- **Paying dividends moves the price right by payout size:** one column if revenue is at
+  least half the share price, two columns if it is at least 1.5 times the share price, no
+  move below half. At the end of a row a right move goes up instead.
+- **Withholding** (including a zero-revenue turn) moves it left one column; at the left
+  edge it goes down instead.
+- **Each share sold to the pool** moves it down one row, stopping where the row below ends.
+- **Sold out:** at the end of each stock round, a started corporation with no shares left in
+  the IPO or the pool moves up one row.
+- **Why:** the 2026-09-28 balance sweep found the linear track was a pay counter. Every
+  corporation that never withheld ended at exactly 230 whatever it earned, so selling,
+  withholding and par choice had no effect on price. The 2-D market ties the horizontal
+  move to earnings and the vertical move to demand, the classic 18xx split.
 - **Capitalization:** ten shares, president's certificate is 20%. When 50% of shares have
-  been sold, the corporation floats and receives ten times par from the bank.
+  been sold, the corporation floats and receives **eight** times par from the bank (ten times until 2026-09-28).
 - **Operating order:** descending share price; ties by float order.
 
 ## Stock round
@@ -82,7 +106,8 @@ after the last one who bought or sold.
 - **Holding limit:** 60% of any corporation. **Certificate limit:** 12.
 - **President:** must hold at least 20%; the presidency transfers to the largest
   holder if they exceed the president's holding.
-- **Starting cash** (placeholder): 2 players 600, 3 players 400, 4 players 300.
+- **Starting cash** (placeholder): 2 players 600, 3 players 400, 4 players 300. Kept below
+  about 430 per player at three players: above that, seat 1 wins on buy order alone.
 
 ## Game length
 
@@ -91,6 +116,17 @@ after the last one who bought or sold.
   (Empire escalation, rebellion, and so on) can replace it later without touching round
   logic.
 - **Final score:** cash plus share value at final market price.
+
+## Capital is meant to bind (decided 2026-09-28)
+
+A corporation should not be able to build every turn and pay every dividend. The 2026-09-28
+sweep found money never ran short: a corporation floated with 600 and could spend at most 240,
+so withholding was never worth a price step. The fix adopted together: two network actions
+per turn, action cost 50 (from 20), float capital eight times par (from ten), and unheld
+shares paying nobody. In bot playtests a corporation now withholds roughly one turn in three
+and still builds almost every action. Slightly over-tight is acceptable: a slow game leaves
+room for later features that inject money. Player starting cash was left alone because it
+did not bind corporate spending in any tested setting.
 
 ## Explicitly deferred
 

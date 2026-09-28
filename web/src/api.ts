@@ -103,7 +103,13 @@ export interface CorporationState {
   homeworld: string;
   status: CorpStatus;
   par: number;
+  /** What one IPO share costs now (par, or more under an experimental IPO price rule). */
+  ipoPrice: number;
   price: number;
+  /** [row, column] on the stock market, or null before the corporation starts. */
+  marketCell: [number, number] | null;
+  /** Share price after paying or withholding this turn's revenue; null until floated. */
+  dividendPreview: { pay: number; withhold: number } | null;
   treasury: number;
   ipoShares: number;
   poolShares: number;
@@ -154,7 +160,9 @@ export interface GameState {
   corporations: CorporationState[];
   operatingOrder: string[];
   tiles: TileState[];
-  stockTrack: number[];
+  /** Market rows, top (highest prices) first; lower rows may be shorter. */
+  stockMarket: number[][];
+  parColumn: number;
   config: GameConfig;
   log: LogEntry[];
 }
