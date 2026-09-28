@@ -121,6 +121,7 @@ export interface TileState {
 }
 
 export interface LogEntry {
+  seq: number;
   round: string;
   actor: string;
   text: string;

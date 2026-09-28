@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LogEntry } from "./api";
 import { newLogEntries } from "./logdiff";
 
-const entry = (n: number): LogEntry => ({ round: "SR1", actor: "P1", text: `e${n}` });
+const entry = (n: number): LogEntry => ({ seq: n, round: "SR1", actor: "P1", text: `e${n}` });
 const range = (from: number, to: number): LogEntry[] =>
   Array.from({ length: to - from }, (_, i) => entry(from + i));
 

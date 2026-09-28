@@ -22,7 +22,7 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
   const [error, setError] = useState<string | null>(null);
 
   const seedValue = seed.trim() === "" ? undefined : Number(seed);
-  const seedValid = seedValue === undefined || (Number.isInteger(seedValue) && seedValue > 0);
+  const seedValid = seedValue === undefined || (Number.isInteger(seedValue) && seedValue >= 0);
   const namesValid = seats.every((s) => s.name.trim().length > 0 && s.name.trim().length <= 40);
 
   function update(index: number, patch: Partial<Seat>) {
@@ -92,7 +92,7 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
           <span>Seed (optional)</span>
           <input value={seed} inputMode="numeric" placeholder="random" onChange={(e) => setSeed(e.target.value)} />
         </label>
-        {!seedValid && <p className="error">Seed must be a positive whole number.</p>}
+        {!seedValid && <p className="error">Seed must be a whole number.</p>}
         {seats.every((s) => s.bot) && <p className="muted">All seats are bots: the game will play to the end at once.</p>}
         {error && (
           <div className="error" role="alert">

@@ -25,7 +25,8 @@ class SeatSpec(BaseModel):
 
 class NewGameRequest(BaseModel):
     seats: list[SeatSpec] = Field(min_length=2, max_length=4)
-    seed: int = 0
+    seed: int | None = None
+    """Omit for a random seed. Any integer, including 0, is honored."""
 
 
 class ActionRequest(BaseModel):
@@ -48,7 +49,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/games")
     def new_game(request: NewGameRequest) -> Json:
-        seed = request.seed or secrets.randbits(32)
+        seed = request.seed if request.seed is not None else secrets.randbits(32)
         rng = random.Random(seed)
         game = Game.new([s.name for s in request.seats], DEFAULT_CONFIG)
         bots: dict[str, Decider] = {

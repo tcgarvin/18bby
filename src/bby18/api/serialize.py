@@ -171,8 +171,9 @@ def session_to_json(session: GameSession) -> Json:
             "basicRouteValue": game.config.basic_route_value,
         },
         "log": [
-            {"round": e.round_label, "actor": e.actor, "text": e.text} for e in game.log[-200:]
-        ],
+            {"seq": i, "round": e.round_label, "actor": e.actor, "text": e.text}
+            for i, e in enumerate(game.log)
+        ][-200:],
     }
 
 
