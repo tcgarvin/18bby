@@ -4,8 +4,7 @@ An 18xx-style game of hyperspace commerce set in the Star Wars galaxy, 18 years 
 Battle of Yavin. Corporations chart a shared hyperspace network, establish service on it, and
 earn revenue by pairing the planets they can reach.
 
-This repository holds the rules engine and a bot playtest harness. A digital board UI is a
-later milestone.
+This repository holds the rules engine, a bot playtest harness, a JSON API, and a browser UI.
 
 ## Layout
 
@@ -18,6 +17,7 @@ later milestone.
     `playtest.py` and `cli.py` the harness.
   - `config.py` holds every tunable number.
 - `tests/` — pytest suite.
+- `web/` — the browser frontend (see Frontend below).
 
 ## Setup
 
@@ -37,3 +37,11 @@ uv run bby18 replay --seed 7                          # full log of one game
 ```
 
 Change values in `src/bby18/config.py` (or construct a `GameConfig`) to test rule variants.
+
+## Frontend
+
+A browser UI for hotseat play lives in `web/` (Vite, React, TypeScript). Run the API with
+`uv run bby18 serve --port 8000`, then `cd web && npm install && npm run dev`, and open
+http://localhost:5173. See [`web/README.md`](web/README.md) for details.
+
+![Mid-game screenshot](docs/screenshots/game.png)

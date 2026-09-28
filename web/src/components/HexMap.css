@@ -1,0 +1,134 @@
+.hexmap {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100vh - 150px);
+  user-select: none;
+}
+
+.hexmap__cell {
+  stroke: #d3d9e1;
+  stroke-width: 1;
+}
+
+.hexmap__boundary {
+  fill: none;
+  stroke: #939dab;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.hexmap__option {
+  fill: #ffd76a;
+  fill-opacity: 0.35;
+  stroke: #d49b12;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.hexmap__option--selected {
+  fill-opacity: 0.65;
+  stroke: #9a6a00;
+  stroke-width: 3;
+  stroke-dasharray: none;
+}
+
+.hexmap__lane {
+  stroke: #9aa3ae;
+  stroke-linecap: round;
+  fill: none;
+  transition: stroke 150ms;
+}
+
+.hexmap--focused .hexmap__lane {
+  stroke: #b9c0c9;
+}
+
+.hexmap__trace {
+  fill: none;
+  stroke-linecap: round;
+  transition: opacity 150ms;
+}
+
+.hexmap__trace--dimmed {
+  opacity: 0.35;
+}
+
+.hexmap__preview path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 3 4;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.hexmap__pair {
+  fill: none;
+  stroke-width: 2;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.hexmap__pair--basic {
+  stroke-dasharray: 5 4;
+  stroke-width: 1.4;
+}
+
+.hexmap__pair-pill {
+  fill: #fff;
+  stroke-width: 1.2;
+}
+
+.hexmap__pair-value {
+  font: 600 10px var(--font-mono);
+  fill: var(--ink);
+  text-anchor: middle;
+}
+
+.hexmap__planet {
+  transition: opacity 150ms;
+}
+
+.hexmap__planet--dimmed {
+  opacity: 0.55;
+}
+
+.hexmap__badge-ring {
+  stroke: #3a4350;
+  stroke-width: 1;
+}
+
+.hexmap__badge-text {
+  font: 500 11px var(--font-sans);
+  fill: #1f2733;
+  text-anchor: middle;
+}
+
+.hexmap__badge-text--dual {
+  font-size: 8.5px;
+}
+
+.hexmap__planet-name {
+  font: 500 11.5px var(--font-sans);
+  fill: #1c2430;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.hexmap__home-label {
+  font: 600 7.5px var(--font-mono);
+  fill: #fff;
+  text-anchor: middle;
+}
+
+.hexmap__target {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.hexmap__target:hover {
+  fill: rgba(212, 155, 18, 0.12);
+}
