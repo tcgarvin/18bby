@@ -1,0 +1,958 @@
+{
+  "title": "18BBY \u2014 Selected 127-hex map",
+  "status": "Working layout selected September 27, 2026; economic roles and starting positions provisional.",
+  "coordinate_system": "Pointy-top axial q,r; neighboring directions (1,0),(0,1),(-1,1),(-1,0),(0,-1),(1,-1)",
+  "boundary": "max(abs(q),abs(r),abs(q+r)) <= 6",
+  "region_shading": "Nearest planet by axial distance; region tie priority Core, Mid Rim, Outer Rim. Visual convention only.",
+  "sources": [
+    {
+      "url": "https://lumiere-a.akamaihd.net/v1/documents/starwars_7c65cf9e.pdf",
+      "use": "Published regional assignments and coarse galactic-grid context for 23 worlds; this Atlas appendix incorporates Legends material."
+    },
+    {
+      "url": "https://www.starwars.com/databank/imperial-combat-drivers",
+      "use": "Confirms Lothal in the Outer Rim and farming on the planet."
+    },
+    {
+      "url": "https://starwars.fandom.com/wiki/Lothal",
+      "use": "Lothal U-7 coarse placement."
+    },
+    {
+      "url": "https://starwars.fandom.com/wiki/Bimmisaari",
+      "use": "Canon Mid Rim assignment for Bimmisaari."
+    }
+  ],
+  "assumptions": [
+    "Core on the left; broad northern, eastern and southern groups preserved, not a literal galactic projection.",
+    "Intermediate regions are compressed out, not relabeled.",
+    "Planet economic tags are design suggestions, not comprehensive canon classifications.",
+    "All empty hexes are potentially chartable; no fixed corridors or hazards yet.",
+    "The illustrated developed network is not prebuilt setup track.",
+    "Planet service at the example origins is assumed; exact planet-hex rules remain open."
+  ],
+  "map": {
+    "id": "hex-127",
+    "title": "Room for junctions",
+    "radius": 6,
+    "cells": [
+      [
+        -6,
+        0
+      ],
+      [
+        -6,
+        1
+      ],
+      [
+        -6,
+        2
+      ],
+      [
+        -6,
+        3
+      ],
+      [
+        -6,
+        4
+      ],
+      [
+        -6,
+        5
+      ],
+      [
+        -6,
+        6
+      ],
+      [
+        -5,
+        -1
+      ],
+      [
+        -5,
+        0
+      ],
+      [
+        -5,
+        1
+      ],
+      [
+        -5,
+        2
+      ],
+      [
+        -5,
+        3
+      ],
+      [
+        -5,
+        4
+      ],
+      [
+        -5,
+        5
+      ],
+      [
+        -5,
+        6
+      ],
+      [
+        -4,
+        -2
+      ],
+      [
+        -4,
+        -1
+      ],
+      [
+        -4,
+        0
+      ],
+      [
+        -4,
+        1
+      ],
+      [
+        -4,
+        2
+      ],
+      [
+        -4,
+        3
+      ],
+      [
+        -4,
+        4
+      ],
+      [
+        -4,
+        5
+      ],
+      [
+        -4,
+        6
+      ],
+      [
+        -3,
+        -3
+      ],
+      [
+        -3,
+        -2
+      ],
+      [
+        -3,
+        -1
+      ],
+      [
+        -3,
+        0
+      ],
+      [
+        -3,
+        1
+      ],
+      [
+        -3,
+        2
+      ],
+      [
+        -3,
+        3
+      ],
+      [
+        -3,
+        4
+      ],
+      [
+        -3,
+        5
+      ],
+      [
+        -3,
+        6
+      ],
+      [
+        -2,
+        -4
+      ],
+      [
+        -2,
+        -3
+      ],
+      [
+        -2,
+        -2
+      ],
+      [
+        -2,
+        -1
+      ],
+      [
+        -2,
+        0
+      ],
+      [
+        -2,
+        1
+      ],
+      [
+        -2,
+        2
+      ],
+      [
+        -2,
+        3
+      ],
+      [
+        -2,
+        4
+      ],
+      [
+        -2,
+        5
+      ],
+      [
+        -2,
+        6
+      ],
+      [
+        -1,
+        -5
+      ],
+      [
+        -1,
+        -4
+      ],
+      [
+        -1,
+        -3
+      ],
+      [
+        -1,
+        -2
+      ],
+      [
+        -1,
+        -1
+      ],
+      [
+        -1,
+        0
+      ],
+      [
+        -1,
+        1
+      ],
+      [
+        -1,
+        2
+      ],
+      [
+        -1,
+        3
+      ],
+      [
+        -1,
+        4
+      ],
+      [
+        -1,
+        5
+      ],
+      [
+        -1,
+        6
+      ],
+      [
+        0,
+        -6
+      ],
+      [
+        0,
+        -5
+      ],
+      [
+        0,
+        -4
+      ],
+      [
+        0,
+        -3
+      ],
+      [
+        0,
+        -2
+      ],
+      [
+        0,
+        -1
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        2
+      ],
+      [
+        0,
+        3
+      ],
+      [
+        0,
+        4
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        0,
+        6
+      ],
+      [
+        1,
+        -6
+      ],
+      [
+        1,
+        -5
+      ],
+      [
+        1,
+        -4
+      ],
+      [
+        1,
+        -3
+      ],
+      [
+        1,
+        -2
+      ],
+      [
+        1,
+        -1
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        1,
+        4
+      ],
+      [
+        1,
+        5
+      ],
+      [
+        2,
+        -6
+      ],
+      [
+        2,
+        -5
+      ],
+      [
+        2,
+        -4
+      ],
+      [
+        2,
+        -3
+      ],
+      [
+        2,
+        -2
+      ],
+      [
+        2,
+        -1
+      ],
+      [
+        2,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        2,
+        4
+      ],
+      [
+        3,
+        -6
+      ],
+      [
+        3,
+        -5
+      ],
+      [
+        3,
+        -4
+      ],
+      [
+        3,
+        -3
+      ],
+      [
+        3,
+        -2
+      ],
+      [
+        3,
+        -1
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        3,
+        2
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        4,
+        -6
+      ],
+      [
+        4,
+        -5
+      ],
+      [
+        4,
+        -4
+      ],
+      [
+        4,
+        -3
+      ],
+      [
+        4,
+        -2
+      ],
+      [
+        4,
+        -1
+      ],
+      [
+        4,
+        0
+      ],
+      [
+        4,
+        1
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        5,
+        -6
+      ],
+      [
+        5,
+        -5
+      ],
+      [
+        5,
+        -4
+      ],
+      [
+        5,
+        -3
+      ],
+      [
+        5,
+        -2
+      ],
+      [
+        5,
+        -1
+      ],
+      [
+        5,
+        0
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        6,
+        -6
+      ],
+      [
+        6,
+        -5
+      ],
+      [
+        6,
+        -4
+      ],
+      [
+        6,
+        -3
+      ],
+      [
+        6,
+        -2
+      ],
+      [
+        6,
+        -1
+      ],
+      [
+        6,
+        0
+      ]
+    ],
+    "minimumEmpty": 1,
+    "planets": [
+      {
+        "name": "Coruscant",
+        "region": "Core",
+        "tag": "M",
+        "position": [
+          -6,
+          0
+        ],
+        "atlas": "L-9"
+      },
+      {
+        "name": "Chandrila",
+        "region": "Core",
+        "tag": "A",
+        "position": [
+          -3,
+          -2
+        ],
+        "atlas": "L-9"
+      },
+      {
+        "name": "Brentaal IV",
+        "region": "Core",
+        "tag": "M",
+        "position": [
+          -2,
+          -1
+        ],
+        "atlas": "L-9"
+      },
+      {
+        "name": "Alderaan",
+        "region": "Core",
+        "tag": "M",
+        "position": [
+          -4,
+          1
+        ],
+        "atlas": "M-10"
+      },
+      {
+        "name": "Kuat",
+        "region": "Core",
+        "tag": "S",
+        "position": [
+          -3,
+          2
+        ],
+        "atlas": "M-10"
+      },
+      {
+        "name": "Corellia",
+        "region": "Core",
+        "tag": "I/S",
+        "position": [
+          -5,
+          3
+        ],
+        "atlas": "M-11"
+      },
+      {
+        "name": "Ord Mantell",
+        "region": "Mid Rim",
+        "tag": "I",
+        "position": [
+          -1,
+          -3
+        ],
+        "atlas": "L-7"
+      },
+      {
+        "name": "Ithor",
+        "region": "Mid Rim",
+        "tag": "A",
+        "position": [
+          1,
+          -3
+        ],
+        "atlas": "M-6"
+      },
+      {
+        "name": "Kashyyyk",
+        "region": "Mid Rim",
+        "tag": "R",
+        "position": [
+          0,
+          0
+        ],
+        "atlas": "P-9"
+      },
+      {
+        "name": "Bimmisaari",
+        "region": "Mid Rim",
+        "tag": "M",
+        "position": [
+          3,
+          -2
+        ],
+        "atlas": "R-9"
+      },
+      {
+        "name": "Bothawui",
+        "region": "Mid Rim",
+        "tag": "M",
+        "position": [
+          2,
+          1
+        ],
+        "atlas": "R-14"
+      },
+      {
+        "name": "Druckenwell",
+        "region": "Mid Rim",
+        "tag": "I",
+        "position": [
+          -1,
+          3
+        ],
+        "atlas": "P-15"
+      },
+      {
+        "name": "Malastare",
+        "region": "Mid Rim",
+        "tag": "R",
+        "position": [
+          -3,
+          4
+        ],
+        "atlas": "N-16"
+      },
+      {
+        "name": "Naboo",
+        "region": "Mid Rim",
+        "tag": "A/R",
+        "position": [
+          -2,
+          5
+        ],
+        "atlas": "O-17"
+      },
+      {
+        "name": "Mygeeto",
+        "region": "Outer Rim",
+        "tag": "M",
+        "position": [
+          0,
+          -6
+        ],
+        "atlas": "K-5"
+      },
+      {
+        "name": "Dantooine",
+        "region": "Outer Rim",
+        "tag": "A",
+        "position": [
+          2,
+          -5
+        ],
+        "atlas": "L-4"
+      },
+      {
+        "name": "Felucia",
+        "region": "Outer Rim",
+        "tag": "A",
+        "position": [
+          3,
+          -4
+        ],
+        "atlas": "R-6"
+      },
+      {
+        "name": "Mon Cala",
+        "region": "Outer Rim",
+        "tag": "S",
+        "position": [
+          6,
+          -6
+        ],
+        "atlas": "U-6"
+      },
+      {
+        "name": "Lothal",
+        "region": "Outer Rim",
+        "tag": "A",
+        "position": [
+          5,
+          -3
+        ],
+        "atlas": "U-7"
+      },
+      {
+        "name": "Kessel",
+        "region": "Outer Rim",
+        "tag": "R",
+        "position": [
+          4,
+          -1
+        ],
+        "atlas": "T-10"
+      },
+      {
+        "name": "Ryloth",
+        "region": "Outer Rim",
+        "tag": "R",
+        "position": [
+          3,
+          2
+        ],
+        "atlas": "R-17"
+      },
+      {
+        "name": "Sullust",
+        "region": "Outer Rim",
+        "tag": "I",
+        "position": [
+          1,
+          3
+        ],
+        "atlas": "M-17"
+      },
+      {
+        "name": "Eriadu",
+        "region": "Outer Rim",
+        "tag": "I",
+        "position": [
+          0,
+          6
+        ],
+        "atlas": "M-18"
+      },
+      {
+        "name": "Bespin",
+        "region": "Outer Rim",
+        "tag": "R",
+        "position": [
+          -6,
+          6
+        ],
+        "atlas": "K-18"
+      }
+    ],
+    "exampleNetwork": {
+      "routes": {
+        "A": [
+          [
+            -5,
+            3
+          ],
+          [
+            -4,
+            2
+          ],
+          [
+            -3,
+            1
+          ],
+          [
+            -2,
+            1
+          ],
+          [
+            -1,
+            1
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "B": [
+          [
+            -3,
+            2
+          ],
+          [
+            -3,
+            1
+          ],
+          [
+            -2,
+            1
+          ],
+          [
+            -1,
+            1
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "junction": [
+        -3,
+        1
+      ],
+      "tiles": [
+        {
+          "position": [
+            -4,
+            2
+          ],
+          "neighbors": [
+            [
+              -5,
+              3
+            ],
+            [
+              -3,
+              1
+            ]
+          ],
+          "service": [
+            "A"
+          ]
+        },
+        {
+          "position": [
+            -3,
+            1
+          ],
+          "neighbors": [
+            [
+              -4,
+              2
+            ],
+            [
+              -3,
+              2
+            ],
+            [
+              -2,
+              1
+            ]
+          ],
+          "service": [
+            "A",
+            "B"
+          ]
+        },
+        {
+          "position": [
+            -2,
+            1
+          ],
+          "neighbors": [
+            [
+              -3,
+              1
+            ],
+            [
+              -1,
+              1
+            ]
+          ],
+          "service": [
+            "A",
+            "B"
+          ]
+        },
+        {
+          "position": [
+            -1,
+            1
+          ],
+          "neighbors": [
+            [
+              -2,
+              1
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "service": [
+            "A",
+            "B"
+          ]
+        }
+      ]
+    },
+    "nearestPlanetSteps": {
+      "Coruscant": 3,
+      "Chandrila": 2,
+      "Brentaal IV": 2,
+      "Alderaan": 2,
+      "Kuat": 2,
+      "Corellia": 2,
+      "Ord Mantell": 2,
+      "Ithor": 2,
+      "Kashyyyk": 3,
+      "Bimmisaari": 2,
+      "Bothawui": 2,
+      "Druckenwell": 2,
+      "Malastare": 2,
+      "Naboo": 2,
+      "Mygeeto": 3,
+      "Dantooine": 2,
+      "Felucia": 2,
+      "Mon Cala": 3,
+      "Lothal": 2,
+      "Kessel": 2,
+      "Ryloth": 2,
+      "Sullust": 2,
+      "Eriadu": 3,
+      "Bespin": 3
+    }
+  }
+}

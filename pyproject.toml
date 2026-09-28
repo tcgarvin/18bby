@@ -1,0 +1,33 @@
+[project]
+name = "bby18"
+version = "0.1.0"
+description = "18BBY: an 18xx-style game of hyperspace commerce. Rules engine and playtest harness."
+readme = "README.md"
+authors = [{ name = "Tim Garvin", email = "tcgarvin@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = ["networkx>=3.2"]
+
+[project.scripts]
+bby18 = "bby18.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "black>=24", "mypy>=1.10", "types-networkx"]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = "networkx.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
