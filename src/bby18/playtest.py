@@ -10,7 +10,8 @@ from statistics import mean
 from bby18.bots import GreedyBot, RandomBot
 from bby18.config import GameConfig
 from bby18.game import Game
-from bby18.runner import Decider, run_game
+from bby18.runner import run_game
+from bby18.session import Decider
 
 
 @dataclass

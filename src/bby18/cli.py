@@ -23,7 +23,16 @@ def main() -> None:
     p_replay.add_argument("--bots", choices=["greedy", "random"], default="greedy")
     p_replay.add_argument("--seed", type=int, default=1)
 
+    p_serve = sub.add_parser("serve", help="run the HTTP API for the web frontend")
+    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--reload", action="store_true")
+
     args = parser.parse_args()
+    if args.command == "serve":
+        import uvicorn
+
+        uvicorn.run("bby18.api.app:app", port=args.port, reload=args.reload)
+        return
     if args.command == "playtest":
         print(play_many(args.games, args.players, args.bots, DEFAULT_CONFIG, args.seed).report())
     elif args.command == "replay":

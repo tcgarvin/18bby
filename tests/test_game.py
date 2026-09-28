@@ -8,7 +8,8 @@ from bby18.game import Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
 from bby18.network import IllegalAction
-from bby18.runner import run_game, run_stock_round
+from bby18.runner import run_game
+from bby18.session import GameSession
 from bby18.state import CorpStatus
 
 
@@ -151,7 +152,12 @@ def test_stock_round_priority_moves_past_last_actor(game):
             return True
 
     deciders = {p.id: StartOnce() for p in game.players}
-    run_stock_round(game, deciders)
+    session = GameSession(game)
+    while session.phase.value == "stock":
+        player = session.current_player
+        session.apply(
+            deciders[player.id].choose_stock_action(game, player, session.legal_actions())
+        )
     # Everyone started a corporation once; the last actor was player 3, so priority is player 1.
     assert game.priority_player == 0
     assert sum(1 for c in game.corporations.values() if c.status is CorpStatus.PARRED) == 3

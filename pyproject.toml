@@ -5,13 +5,23 @@ description = "18BBY: an 18xx-style game of hyperspace commerce. Rules engine an
 readme = "README.md"
 authors = [{ name = "Tim Garvin", email = "tcgarvin@gmail.com" }]
 requires-python = ">=3.11"
-dependencies = ["networkx>=3.2"]
+dependencies = [
+    "fastapi>=0.141.1",
+    "networkx>=3.2",
+    "uvicorn[standard]>=0.54.0",
+]
 
 [project.scripts]
 bby18 = "bby18.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "black>=24", "mypy>=1.10", "types-networkx"]
+dev = [
+    "pytest>=8",
+    "black>=24",
+    "mypy>=1.10",
+    "types-networkx",
+    "httpx>=0.28.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
