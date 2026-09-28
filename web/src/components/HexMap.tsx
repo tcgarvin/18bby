@@ -21,6 +21,7 @@ const LANE_WIDTH = S * 0.36;
 const TRACE_WIDTH = S * 0.075;
 const TRACE_SPACING = S * 0.082;
 const BADGE_RADIUS = S * 0.36;
+const NEUTRAL_CHANGE = "#5b6573";
 
 interface HexMapProps {
   board: Board;
@@ -32,6 +33,8 @@ interface HexMapProps {
   actionableHexes: Set<string>;
   selectedHex: Axial | null;
   preview: HexAction | null;
+  /** Hexes changed by others since your move, with the corporations that gained service there. */
+  changedHexes: Map<string, string[]>;
   onHexClick: (hex: Axial) => void;
 }
 
@@ -138,7 +141,7 @@ function previewSegments(preview: HexAction, tiles: TileState[], planetsByKey: M
 }
 
 export function HexMap(props: HexMapProps) {
-  const { board, tiles, corporations, focusCorp, actionableHexes, selectedHex, preview, onHexClick } = props;
+  const { board, tiles, corporations, focusCorp, actionableHexes, selectedHex, preview, changedHexes, onHexClick } = props;
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
   const boundaries = useMemo(() => regionBoundaries(board, regions), [board, regions]);
@@ -208,6 +211,24 @@ export function HexMap(props: HexMapProps) {
             );
           }),
         )}
+      </g>
+
+      <g className="hexmap__changes">
+        {board.hexes
+          .filter((hex) => changedHexes.has(hexKey(hex)))
+          .map((hex) => {
+            const gained = changedHexes.get(hexKey(hex)) ?? [];
+            return (
+              <path
+                key={hexKey(hex)}
+                d={cornersToPath(hexToPixel(hex, S), S * 0.94)}
+                stroke={gained.length > 0 ? corporationColor(gained[0], corpIds) : NEUTRAL_CHANGE}
+                className="hexmap__change"
+              >
+                <title>{gained.length > 0 ? `New service: ${gained.join(", ")}` : "New exit"}</title>
+              </path>
+            );
+          })}
       </g>
 
       {preview && focus && (

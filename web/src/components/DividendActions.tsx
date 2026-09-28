@@ -1,5 +1,6 @@
 import type { Action, CorporationState, GameState } from "../api";
 import { corporationColor } from "../colors";
+import { useHotkeys } from "../hotkeys";
 
 interface DividendActionsProps {
   state: GameState;
@@ -13,6 +14,7 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
   const { total, pairs } = corp.revenue;
   const perShare = total / state.config.sharesPerCorporation;
   const choices = state.legalActions.filter((a) => a.type === "dividend");
+  useHotkeys(Object.fromEntries(choices.map((action, i) => [String(i + 1), () => (busy ? false : onAct(action))])));
 
   return (
     <div className="actions">
@@ -38,7 +40,7 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
         <p className="muted">No scoring pairs yet.</p>
       )}
       <div className="btn-row">
-        {choices.map((action) => {
+        {choices.map((action, i) => {
           const pay = action.choice === "pay";
           const preview = corp.dividendPreview;
           const next = preview === null ? corp.price : pay ? preview.pay : preview.withhold;
@@ -50,7 +52,10 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
               disabled={busy}
               onClick={() => onAct(action)}
             >
-              {pay ? `Pay ${total}` : "Withhold"}
+              <span>
+                {pay ? `Pay ${total}` : "Withhold"}
+                <kbd>{i + 1}</kbd>
+              </span>
               <span className="btn__sub num">
                 price {corp.price} → {next}
               </span>

@@ -4,6 +4,7 @@ from bby18.actions import BuyShare, NoNetworkAction, PassStock
 from bby18.bots import GreedyBot
 from bby18.game import Game
 from bby18.session import Dividend, GameSession, Phase
+from bby18.state import CorpStatus
 
 
 def start_lowest_par(session):
@@ -74,3 +75,57 @@ def test_bots_play_until_a_human_is_needed_and_to_the_end():
         + game.bank
     )
     assert total == 1200
+
+
+def test_undo_restores_state_before_the_last_submitted_action():
+    game = Game.new(["Ann", "Bo"])
+    session = GameSession(game, record_undo=True)
+    assert not session.can_undo
+    start_lowest_par(session)
+    assert session.game.corp("CEC").status is CorpStatus.PARRED
+    session.undo()
+    assert session.game.corp("CEC").status is CorpStatus.UNSTARTED
+    assert session.current_player.id == "P1"
+    assert not session.can_undo
+
+
+def test_undo_takes_back_bot_moves_that_followed():
+    game = Game.new(["Human", "Bot"])
+    session = GameSession(game, {"P2": GreedyBot(random.Random(1))}, record_undo=True)
+    session.run_bots()
+    log_before = len(session.game.log)
+    start_lowest_par(session)
+    assert len(session.game.log) > log_before + 1  # the bot answered
+    session.undo()
+    assert len(session.game.log) == log_before
+    assert session.current_player.id == "P1"
+
+
+def test_undo_with_nothing_recorded_raises():
+    session = GameSession(Game.new(["Ann", "Bo"]))
+    try:
+        session.undo()
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_auto_forced_plays_single_legal_moves():
+    game = Game.new(["Ann", "Bo", "Cy"])
+    session = GameSession(game, auto_forced=True)
+    start_lowest_par(session)
+    for _ in range(3):
+        buys = [
+            a
+            for a in session.legal_actions()
+            if isinstance(a, BuyShare) and a.corp_id == "CEC" and not a.par
+        ]
+        session.apply(buys[0])
+    for _ in range(3):
+        session.apply(PassStock())
+    session.apply(NoNetworkAction())
+    # With no revenue the only dividend choice is to withhold, so it was played for us.
+    assert session.phase is Phase.NETWORK
+    assert game.round_label == "OR1.2"
+    assert game.log[session.automatic_log_start].text.startswith("withholds")

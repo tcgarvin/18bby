@@ -1,6 +1,7 @@
 import type { Action, Axial, CorporationState, GameState, HexAction, TileState } from "../api";
 import { corporationColor } from "../colors";
 import { hexKey } from "../hex";
+import { useHotkeys } from "../hotkeys";
 import { hexActionsByKey } from "../selectors";
 import { TilePreview } from "./TilePreview";
 
@@ -28,6 +29,13 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
   const tile: TileState | undefined = selectedHex
     ? state.tiles.find((t) => hexKey(t.hex) === hexKey(selectedHex))
     : undefined;
+  const keys: Record<string, () => void | false> = {
+    p: () => (noAction && !busy ? onAct(noAction) : false),
+  };
+  options.slice(0, 9).forEach((action, i) => {
+    keys[String(i + 1)] = () => (busy ? false : onAct(action));
+  });
+  useHotkeys(keys);
   const counts = { chart: 0, upgrade: 0, service: 0 };
   for (const actions of byKey.values()) {
     for (const a of actions) counts[a.type] += 1;
@@ -36,7 +44,8 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
   return (
     <div className="actions">
       <p className="actions__lead">
-        One network action for <strong style={{ color }}>{corp.id}</strong>. Treasury{" "}
+        Network action {state.networkActionsTaken + 1} of {state.config.networkActionsPerTurn} for{" "}
+        <strong style={{ color }}>{corp.id}</strong>. Treasury{" "}
         <strong className="num">{corp.treasury}</strong>. Chart {state.config.chartCost} · Upgrade{" "}
         {state.config.upgradeCost} · Service {state.config.serviceCost}.
       </p>
@@ -53,11 +62,11 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
               Hex ({selectedHex[0]}, {selectedHex[1]}){tile ? ` · charted ${tile.exits.join("/")}` : " · uncharted"}
             </span>
             <button type="button" className="link" onClick={() => onSelectHex(null)}>
-              close
+              close <kbd>Esc</kbd>
             </button>
           </div>
           <div className="hex-options__grid">
-            {options.map((action) => (
+            {options.map((action, i) => (
               <button
                 type="button"
                 key={JSON.stringify(action)}
@@ -75,7 +84,10 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
                   color={color}
                 />
                 <span className="tile-option__label">{describe(action)}</span>
-                <span className="tile-option__cost num">{action.cost}</span>
+                <span className="tile-option__cost num">
+                  {action.cost}
+                  {i < 9 && <kbd>{i + 1}</kbd>}
+                </span>
               </button>
             ))}
           </div>
@@ -84,7 +96,9 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
 
       {noAction && (
         <button type="button" className="btn" disabled={busy} onClick={() => onAct(noAction)}>
-          No network action
+          <span>
+            {state.networkActionsTaken > 0 ? "End network actions" : "No network action"} <kbd>P</kbd>
+          </span>
         </button>
       )}
     </div>

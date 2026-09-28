@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Action, Axial, Board, GameState, HexAction, LogEntry } from "../api";
-import { ApiError, submitAction } from "../api";
+import { ApiError, isHexAction, submitAction, undoAction } from "../api";
 import { corporationColor } from "../colors";
 import { hexKey } from "../hex";
+import { useHotkeys } from "../hotkeys";
 import { newLogEntries } from "../logdiff";
 import { findCorporation, hexActionsByKey, playerName } from "../selectors";
+import { changedHexes } from "../tilediff";
 import { CorporationsPanel } from "./CorporationsPanel";
 import { DividendActions } from "./DividendActions";
 import { GameOver } from "./GameOver";
@@ -38,6 +40,8 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   const [explicitFocus, setExplicitFocus] = useState<string | null>(null);
   const [selectedHex, setSelectedHex] = useState<Axial | null>(null);
   const [preview, setPreview] = useState<HexAction | null>(null);
+  /** Hexes changed by bots or forced moves since the last submitted action. */
+  const [changed, setChanged] = useState<Map<string, string[]>>(new Map());
 
   // A new operating corporation or phase starts from a clean selection.
   const turnKey = `${state.phase}:${state.roundLabel}:${state.currentCorporation ?? state.currentPlayer ?? ""}`;
@@ -55,19 +59,13 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
     [hexActions, state.phase, state.waitingOnHuman],
   );
 
-  async function act(action: Action) {
+  async function send(request: () => Promise<GameState>, onDone: (next: GameState) => void) {
     setBusy(true);
     setError(null);
     setPreview(null);
     try {
-      const next = await submitAction(gameId, action);
-      const added = newLogEntries(state.log, next.log);
-      setFresh(added);
-      // Skip the lines describing this move itself; what remains is what others did since.
-      const self = state.phase === "stock" ? state.currentPlayer : state.currentCorporation;
-      let own = 0;
-      while (own < added.length && added[own].actor === self) own++;
-      setRecent(added.slice(own));
+      const next = await request();
+      onDone(next);
       setState(next);
       setSelectedHex(null);
     } catch (err) {
@@ -76,6 +74,48 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
       setBusy(false);
     }
   }
+
+  function act(action: Action) {
+    void send(
+      () => submitAction(gameId, action),
+      (next) => {
+        setFresh(newLogEntries(state.log, next.log));
+        const automatic = next.log.filter((entry) => entry.seq >= next.automaticLogStart);
+        // A move nobody answered (the first of two network actions) keeps the previous summary.
+        if (automatic.length === 0) return;
+        setRecent(automatic);
+        const hexes = changedHexes(state.tiles, next.tiles);
+        if (isHexAction(action)) hexes.delete(hexKey(action.hex));
+        setChanged(hexes);
+      },
+    );
+  }
+
+  function undo() {
+    void send(
+      () => undoAction(gameId),
+      () => {
+        setFresh([]);
+        setRecent([]);
+        setChanged(new Map());
+      },
+    );
+  }
+
+  function dismissRecent() {
+    setRecent([]);
+    setChanged(new Map());
+  }
+
+  useHotkeys({
+    "mod+z": () => (state.canUndo && !busy ? undo() : false),
+    u: () => (state.canUndo && !busy ? undo() : false),
+    escape: () => {
+      if (selectedHex === null && explicitFocus === null) return false;
+      setSelectedHex(null);
+      setExplicitFocus(null);
+    },
+  });
 
   function toggleFocus(corpId: string) {
     setExplicitFocus((current) => (current === corpId ? null : corpId));
@@ -104,6 +144,17 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           </span>
         </div>
         <div className="topbar__right">
+          <button
+            type="button"
+            className="btn btn--small"
+            disabled={!state.canUndo || busy}
+            onClick={undo}
+            title="Take back your last move, and anything played automatically after it"
+          >
+            <span>
+              Undo <kbd>U</kbd>
+            </span>
+          </button>
           <span className="muted mono" title="Game id">
             {gameId}
           </span>
@@ -124,6 +175,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
               actionableHexes={actionableHexes}
               selectedHex={selectedHex}
               preview={preview}
+              changedHexes={changed}
               onHexClick={clickHex}
             />
             <MapLegend state={state} focusCorp={focusCorp} />
@@ -139,8 +191,11 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             {recent.length > 0 && (
               <div className="recent" role="status">
                 <div className="recent__head">
-                  <span>Since your move</span>
-                  <button type="button" className="link" onClick={() => setRecent([])}>
+                  <span>
+                    Since your move
+                    {changed.size > 0 && <span className="recent__note"> · changes outlined on the map</span>}
+                  </span>
+                  <button type="button" className="link" onClick={dismissRecent}>
                     hide
                   </button>
                 </div>

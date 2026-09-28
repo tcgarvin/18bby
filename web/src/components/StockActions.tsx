@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Action, GameState, SellAction } from "../api";
 import { corporationColor } from "../colors";
+import { useHotkeys } from "../hotkeys";
 import { findCorporation, tradeOptions } from "../selectors";
 
 interface StockActionsProps {
@@ -13,6 +14,7 @@ export function StockActions({ state, busy, onAct }: StockActionsProps) {
   const pass = state.legalActions.find((a) => a.type === "pass");
   const corpIds = state.corporations.map((c) => c.id);
   const options = tradeOptions(state);
+  useHotkeys({ p: () => (pass && !busy ? onAct(pass) : false) });
 
   return (
     <div className="actions">
@@ -47,7 +49,9 @@ export function StockActions({ state, busy, onAct }: StockActionsProps) {
       })}
       {pass && (
         <button type="button" className="btn" disabled={busy} onClick={() => onAct(pass)}>
-          Pass
+          <span>
+            Pass <kbd>P</kbd>
+          </span>
         </button>
       )}
     </div>

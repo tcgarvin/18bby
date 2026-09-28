@@ -3,13 +3,18 @@
 ``GameSession`` turns the game into a state machine: at any moment there is one phase, one
 actor, and a list of legal actions. Callers (a web API, a CLI, the bot runner) apply one
 action at a time. Seats occupied by bots are played automatically after each step.
+
+Two options serve interactive clients: ``auto_forced`` plays any move that is the only legal
+one, so a human never has to click through it, and ``record_undo`` keeps a snapshot before
+every submitted action so ``undo`` can take it back.
 """
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Any, Protocol
 
 from bby18.actions import NetworkAction, NoNetworkAction, PassStock, StockAction
 from bby18.game import Game
@@ -61,9 +66,22 @@ class _OperatingState:
 
 
 class GameSession:
-    def __init__(self, game: Game, bots: dict[str, Decider] | None = None) -> None:
+    def __init__(
+        self,
+        game: Game,
+        bots: dict[str, Decider] | None = None,
+        *,
+        auto_forced: bool = False,
+        record_undo: bool = False,
+    ) -> None:
         self.game = game
         self.bots: dict[str, Decider] = dict(bots or {})
+        self.auto_forced = auto_forced
+        self.record_undo = record_undo
+        self.automatic_log_start = 0
+        """Log entries from this index on were played automatically (by bots or as forced
+        moves) after the last submitted action."""
+        self._history: list[dict[str, Any]] = []
         self.phase = Phase.STOCK
         self._stock = _StockState(current=game.priority_player)
         self._operating = _OperatingState(index=0, queue=[])
@@ -98,19 +116,61 @@ class GameSession:
             return [Dividend.PAY, Dividend.WITHHOLD]
         return []
 
+    @property
+    def network_actions_taken(self) -> int:
+        """Network actions the operating corporation has taken this turn."""
+        return self._operating.actions_taken
+
     def waiting_on_human(self) -> bool:
         return self.phase is not Phase.GAME_OVER and self.current_player.id not in self.bots
 
     # --- stepping --------------------------------------------------------------
 
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._history)
+
     def apply(self, action: Action) -> None:
-        """Apply one action for the current actor, then let any bot seats play on."""
+        """Apply one action for the current actor, then play on any automatic moves."""
+        snapshot = self._snapshot() if self.record_undo else None
         self._apply_one(action)
+        if snapshot is not None:
+            self._history.append(snapshot)
+        self.automatic_log_start = len(self.game.log)
         self.run_bots()
 
+    def undo(self) -> None:
+        """Restore the game to just before the last submitted action.
+
+        Moves that bots or forced choices made after it are taken back too. Requires
+        ``record_undo``; raises ValueError when there is nothing to undo.
+        """
+        if not self._history:
+            raise ValueError("Nothing to undo")
+        history = self._history
+        vars(self).update(history.pop())
+        self._history = history
+
     def run_bots(self) -> None:
-        while self.phase is not Phase.GAME_OVER and self.current_player.id in self.bots:
-            self._apply_one(self._bot_choice())
+        """Play moves that need no human: bot seats, and forced moves if ``auto_forced``."""
+        while (action := self._automatic_action()) is not None:
+            self._apply_one(action)
+
+    def _automatic_action(self) -> Action | None:
+        if self.phase is Phase.GAME_OVER:
+            return None
+        if self.current_player.id in self.bots:
+            return self._bot_choice()
+        if self.auto_forced:
+            legal = self.legal_actions()
+            if len(legal) == 1:
+                return legal[0]
+        return None
+
+    def _snapshot(self) -> dict[str, Any]:
+        # One deepcopy call keeps references shared between fields (such as game and bots) intact.
+        state = {key: value for key, value in vars(self).items() if key != "_history"}
+        return copy.deepcopy(state)
 
     def _bot_choice(self) -> Action:
         bot = self.bots[self.current_player.id]

@@ -132,3 +132,29 @@
 .hexmap__target:hover {
   fill: rgba(212, 155, 18, 0.12);
 }
+
+/* Hexes other players changed since your move: a brief pulse, then a steady outline. */
+.hexmap__change {
+  fill: none;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  pointer-events: none;
+  animation: hexmap-change-pulse 0.9s ease-out 2;
+}
+
+@keyframes hexmap-change-pulse {
+  0% {
+    stroke-width: 7;
+    opacity: 0.3;
+  }
+  100% {
+    stroke-width: 3;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hexmap__change {
+    animation: none;
+  }
+}

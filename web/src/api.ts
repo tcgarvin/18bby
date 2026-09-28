@@ -137,6 +137,7 @@ export interface GameConfig {
   chartCost: number;
   upgradeCost: number;
   serviceCost: number;
+  networkActionsPerTurn: number;
   parPrices: number[];
   sharesPerCorporation: number;
   certificateLimit: number;
@@ -163,6 +164,12 @@ export interface GameState {
   /** Market rows, top (highest prices) first; lower rows may be shorter. */
   stockMarket: number[][];
   parColumn: number;
+  /** Network actions the operating corporation has already taken this turn. */
+  networkActionsTaken: number;
+  /** Whether the last submitted action can be taken back. */
+  canUndo: boolean;
+  /** Log entries with this seq or later were played automatically (bots or forced moves). */
+  automaticLogStart: number;
   config: GameConfig;
   log: LogEntry[];
 }
@@ -233,6 +240,11 @@ export function submitAction(gameId: string, action: Action): Promise<GameState>
     method: "POST",
     body: JSON.stringify({ action }),
   });
+}
+
+/** Takes back the last submitted action, and any automatic moves that followed it. */
+export function undoAction(gameId: string): Promise<GameState> {
+  return request<GameState>(`/games/${encodeURIComponent(gameId)}/undo`, { method: "POST" });
 }
 
 export function isHexAction(action: Action): action is HexAction {

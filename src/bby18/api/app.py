@@ -57,7 +57,7 @@ def create_app() -> FastAPI:
             for player, seat in zip(game.players, request.seats)
             if seat.bot
         }
-        session = GameSession(game, bots)
+        session = GameSession(game, bots, auto_forced=True, record_undo=True)
         session.run_bots()
         game_id = secrets.token_urlsafe(8)
         sessions[game_id] = session
@@ -74,6 +74,15 @@ def create_app() -> FastAPI:
             action = match_action(session.legal_actions(), request.action)
             session.apply(action)
         except (ValueError, IllegalAction) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return session_to_json(session)
+
+    @app.post("/api/games/{game_id}/undo")
+    def undo(game_id: str) -> Json:
+        session = get_session(game_id)
+        try:
+            session.undo()
+        except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return session_to_json(session)
 
