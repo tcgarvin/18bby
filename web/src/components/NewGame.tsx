@@ -48,8 +48,7 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
   }
 
   return (
-    <div className="newgame">
-      <form className="newgame__card" onSubmit={submit}>
+    <form className="newgame__card" onSubmit={submit}>
         <p className="eyebrow">18BBY · Hyperspace commerce</p>
         <h1>New game</h1>
         <p className="muted">
@@ -103,7 +102,6 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
         <button type="submit" className="btn btn--primary btn--wide" disabled={busy || !seedValid || !namesValid}>
           {busy ? "Starting…" : "Start game"}
         </button>
-      </form>
-    </div>
+    </form>
   );
 }

@@ -5,6 +5,8 @@
  * echoed back verbatim, because the server matches by structural equality.
  */
 
+import { accessToken } from "./auth";
+
 export type Axial = [number, number];
 
 export type Region = "Core" | "Mid Rim" | "Outer Rim";
@@ -196,15 +198,32 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  const token = await accessToken();
   const response = await fetch(`/api${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+      ...init?.headers,
+    },
   });
+  if (response.status === 401) {
+    // Never replace the token silently: a new account would hide this browser's saved games.
+    throw new ApiError(
+      401,
+      "This browser's saved account was not recognized, so its games cannot be loaded. " +
+        `(${await errorDetail(response)})`,
+    );
+  }
   if (!response.ok) {
     throw new ApiError(response.status, await errorDetail(response));
   }
-  return (await response.json()) as T;
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await (await send(path, init)).json()) as T;
 }
 
 async function errorDetail(response: Response): Promise<string> {
@@ -229,6 +248,24 @@ export function createGame(seats: Seat[], seed?: number): Promise<NewGameRespons
   const body: { seats: Seat[]; seed?: number } = { seats };
   if (seed !== undefined) body.seed = seed;
   return request<NewGameResponse>("/games", { method: "POST", body: JSON.stringify(body) });
+}
+
+export interface GameSummary {
+  gameId: string;
+  players: Seat[];
+  phase: Phase;
+  roundLabel: string;
+  /** ISO 8601 time of the last move. */
+  updatedAt: string;
+}
+
+/** The signed-in user's saved games, most recently played first. */
+export async function listGames(): Promise<GameSummary[]> {
+  return (await request<{ games: GameSummary[] }>("/games")).games;
+}
+
+export async function deleteGame(gameId: string): Promise<void> {
+  await send(`/games/${encodeURIComponent(gameId)}`, { method: "DELETE" });
 }
 
 export function fetchGame(gameId: string): Promise<GameState> {

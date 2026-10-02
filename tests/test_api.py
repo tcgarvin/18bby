@@ -2,11 +2,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bby18.api.app import create_app
+from bby18.api.auth import AuthError
+from bby18.api.store import MemoryStore
+
+
+class HeaderUser:
+    """Takes the caller's user id straight from the Authorization header, for ownership tests."""
+
+    def user_id(self, authorization: str) -> str:
+        if not authorization:
+            raise AuthError("no user")
+        return authorization
 
 
 @pytest.fixture
-def client():
-    return TestClient(create_app())
+def store():
+    return MemoryStore()
+
+
+@pytest.fixture
+def client(store):
+    return TestClient(create_app(store, store, HeaderUser()), headers={"Authorization": "alice"})
 
 
 def test_board_endpoint(client):
@@ -74,3 +90,140 @@ def test_undo_endpoint(client):
     assert restored["log"] == state["log"]
     assert restored["currentPlayer"] == state["currentPlayer"]
     assert not restored["canUndo"]
+
+
+def _start(client, seed=3):
+    seats = [{"name": "Me"}, {"name": "Bot", "bot": True}]
+    return client.post("/api/games", json={"seats": seats, "seed": seed}).json()
+
+
+def _first_buy(state):
+    return next(a for a in state["legalActions"] if a["type"] == "buy")
+
+
+def test_game_survives_a_new_app_instance(store):
+    first = TestClient(create_app(store, store, HeaderUser()), headers={"Authorization": "alice"})
+    body = _start(first)
+    state = first.post(
+        f"/api/games/{body['gameId']}/actions", json={"action": _first_buy(body["state"])}
+    ).json()
+    second = TestClient(create_app(store, store, HeaderUser()), headers={"Authorization": "alice"})
+    assert second.get(f"/api/games/{body['gameId']}").json() == state
+
+
+def test_requests_without_a_user_are_refused(store):
+    anonymous = TestClient(create_app(store, store, HeaderUser()))
+    assert anonymous.get("/api/games").status_code == 401
+    assert anonymous.get("/api/board").status_code == 200
+
+
+def test_other_users_games_are_invisible(client):
+    body = _start(client)
+    bob = {"Authorization": "bob"}
+    assert client.get(f"/api/games/{body['gameId']}", headers=bob).status_code == 404
+    action = {"action": _first_buy(body["state"])}
+    assert (
+        client.post(f"/api/games/{body['gameId']}/actions", json=action, headers=bob).status_code
+        == 404
+    )
+    assert client.delete(f"/api/games/{body['gameId']}", headers=bob).status_code == 404
+    assert client.get("/api/games", headers=bob).json() == {"games": []}
+
+
+def test_list_games_newest_first(client):
+    older = _start(client, seed=1)
+    newer = _start(client, seed=2)
+    client.post(
+        f"/api/games/{older['gameId']}/actions", json={"action": _first_buy(older["state"])}
+    )
+    games = client.get("/api/games").json()["games"]
+    assert [g["gameId"] for g in games] == [older["gameId"], newer["gameId"]]
+    assert games[0]["players"] == [{"name": "Me", "bot": False}, {"name": "Bot", "bot": True}]
+    assert games[0]["phase"] == "stock"
+    assert games[0]["roundLabel"] == "SR1"
+
+
+def test_delete_game(client):
+    body = _start(client)
+    assert client.delete(f"/api/games/{body['gameId']}").status_code == 204
+    assert client.get(f"/api/games/{body['gameId']}").status_code == 404
+    assert client.get("/api/games").json() == {"games": []}
+
+
+def test_write_from_a_stale_load_is_refused(client, store, monkeypatch):
+    body = _start(client)
+    game_id = body["gameId"]
+    stale = store.get("alice", game_id)
+    client.post(f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])})
+    # The next request loads the save as it was before the move above, as a second tab would.
+    monkeypatch.setattr(store, "get", lambda owner, gid: stale)
+    r = client.post(f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])})
+    assert r.status_code == 409
+
+
+def test_engine_change_replays_the_save(client, store, monkeypatch):
+    body = _start(client)
+    game_id = body["gameId"]
+    state = client.post(
+        f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])}
+    ).json()
+    monkeypatch.setattr("bby18.api.saves.CODE_VERSION", "a-newer-engine")
+    assert client.get(f"/api/games/{game_id}").json() == state
+
+
+def test_save_that_no_longer_replays_is_reported(client, store, monkeypatch):
+    body = _start(client)
+    game_id = body["gameId"]
+    saved = store.get("alice", game_id)
+    from dataclasses import replace
+
+    store._games[game_id] = replace(
+        saved, code_version="old", actions=({"type": "dividend", "choice": "pay"},)
+    )
+    r = client.get(f"/api/games/{game_id}")
+    assert r.status_code == 409
+    assert "older rules" in r.json()["detail"]
+
+
+def test_undo_takes_back_bot_replies_too(client):
+    body = _start(client)
+    game_id = body["gameId"]
+    client.post(f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])})
+    restored = client.post(f"/api/games/{game_id}/undo").json()
+    assert restored == body["state"]
+
+
+def test_settings_require_an_explicit_mode(monkeypatch):
+    from bby18.api.app import settings_from_env
+
+    monkeypatch.delenv("BBY18_MODE", raising=False)
+    with pytest.raises(RuntimeError, match="BBY18_MODE"):
+        settings_from_env()
+    monkeypatch.setenv("BBY18_MODE", "postgres")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        settings_from_env()
+    monkeypatch.setenv("BBY18_MODE", "local")
+    assert settings_from_env().mode == "local"
+
+
+def test_anonymous_account_flow():
+    """A browser creates an account, then acts with its token; other tokens are refused."""
+    from bby18.api.auth import TokenAuthenticator
+
+    memory = MemoryStore()
+    client = TestClient(create_app(memory, memory, TokenAuthenticator(memory)))
+    account = client.post("/api/accounts").json()
+    assert set(account) == {"accountId", "token"}
+    mine = {"Authorization": f"Bearer {account['token']}"}
+    assert client.get("/api/games").status_code == 401
+    assert client.get("/api/games", headers={"Authorization": "Bearer made-up"}).status_code == 401
+    body = client.post(
+        "/api/games", json={"seats": [{"name": "A"}, {"name": "B"}]}, headers=mine
+    ).json()
+    assert [g["gameId"] for g in client.get("/api/games", headers=mine).json()["games"]] == [
+        body["gameId"]
+    ]
+    other = {"Authorization": f"Bearer {client.post('/api/accounts').json()['token']}"}
+    assert client.get(f"/api/games/{body['gameId']}", headers=other).status_code == 404
+    assert client.get("/api/games", headers=other).json() == {"games": []}

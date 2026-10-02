@@ -74,11 +74,19 @@ def main() -> None:
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--reload", action="store_true")
 
+    sub.add_parser(
+        "migrate", help="create or update the saved-games tables in the database at DATABASE_URL"
+    )
+
     args = parser.parse_args()
+    if args.command == "migrate":
+        sys.exit(migrate_command())
     if args.command == "serve":
         import uvicorn
 
-        uvicorn.run("bby18.api.app:app", port=args.port, reload=args.reload)
+        # Local play by default: games in memory, one local user, no sign-in.
+        os.environ.setdefault("BBY18_MODE", "local")
+        uvicorn.run("bby18.api.main:app", port=args.port, reload=args.reload)
         return
     if args.command == "sweep":
         sys.exit(sweep_command(args))
@@ -97,6 +105,22 @@ def main() -> None:
                 f"{c.id}: price {game.price(c)}, treasury {c.treasury}, revenue {c.last_revenue}: {pairs}"
             )
         print(f"winner: {summary.winner}")
+
+
+def migrate_command() -> int:
+    from bby18.api.store import PostgresStore, StoreError
+
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url:
+        print("Set DATABASE_URL to the database to migrate.", file=sys.stderr)
+        return 2
+    try:
+        PostgresStore(database_url).migrate()
+    except StoreError as exc:
+        print(f"Migration failed: {exc}", file=sys.stderr)
+        return 1
+    print("Schema is up to date.")
+    return 0
 
 
 def sweep_command(args: argparse.Namespace) -> int:

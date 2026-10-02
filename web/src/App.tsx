@@ -3,6 +3,7 @@ import type { Board, GameState, NewGameResponse } from "./api";
 import { ApiError, fetchBoard, fetchGame } from "./api";
 import { GameScreen } from "./components/GameScreen";
 import { NewGame } from "./components/NewGame";
+import { SavedGames } from "./components/SavedGames";
 
 type View =
   | { kind: "loading" }
@@ -11,6 +12,23 @@ type View =
 
 function gameIdFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("game");
+}
+
+/** Load a saved game, or explain on the home screen why it cannot be opened. */
+async function openGame(gameId: string): Promise<View> {
+  try {
+    const state = await fetchGame(gameId);
+    setGameInUrl(gameId);
+    return { kind: "game", gameId, state };
+  } catch (err) {
+    if (!(err instanceof ApiError) || (err.status !== 404 && err.status !== 409)) throw err;
+    setGameInUrl(null);
+    const notice =
+      err.status === 404
+        ? `Game ${gameId} was not found. It may have been deleted, or started in another browser.`
+        : err.message;
+    return { kind: "new", notice };
+  }
 }
 
 function setGameInUrl(gameId: string | null) {
@@ -37,16 +55,8 @@ export function App() {
           setView({ kind: "new", notice: null });
           return;
         }
-        try {
-          const state = await fetchGame(gameId);
-          if (!cancelled) setView({ kind: "game", gameId, state });
-        } catch (err) {
-          if (!(err instanceof ApiError) || err.status !== 404) throw err;
-          setGameInUrl(null);
-          if (!cancelled) {
-            setView({ kind: "new", notice: `Game ${gameId} is not on the server (games live in memory and end when it restarts).` });
-          }
-        }
+        const opened = await openGame(gameId);
+        if (!cancelled) setView(opened);
       } catch (err) {
         if (!cancelled) setFatal(err instanceof Error ? err.message : String(err));
       }
@@ -62,6 +72,14 @@ export function App() {
     setView({ kind: "game", gameId: response.gameId, state: response.state });
   }
 
+  async function open(gameId: string) {
+    try {
+      setView(await openGame(gameId));
+    } catch (err) {
+      setFatal(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   function leave() {
     setGameInUrl(null);
     setView({ kind: "new", notice: null });
@@ -73,14 +91,23 @@ export function App() {
         <div className="newgame__card">
           <h1>Cannot reach the 18BBY server</h1>
           <p className="error">{fatal}</p>
-          <p className="muted">
-            Start the API with <code>uv run bby18 serve --port 8000</code> and reload.
-          </p>
+          {import.meta.env.DEV && (
+            <p className="muted">
+              Start the API with <code>uv run bby18 serve --port 8000</code> and reload.
+            </p>
+          )}
         </div>
       </div>
     );
   }
   if (view.kind === "loading" || board === null) return <div className="loading">Loading…</div>;
-  if (view.kind === "new") return <NewGame onCreated={created} notice={view.notice} />;
+  if (view.kind === "new") {
+    return (
+      <div className="newgame newgame--home">
+        <SavedGames onOpen={(gameId) => void open(gameId)} />
+        <NewGame onCreated={created} notice={view.notice} />
+      </div>
+    );
+  }
   return <GameScreen key={view.gameId} gameId={view.gameId} board={board} initialState={view.state} onLeave={leave} />;
 }

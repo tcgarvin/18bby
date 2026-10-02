@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "buildCommand": "cd web && npm ci && npm run build -- --outDir ../public --emptyOutDir"
+}

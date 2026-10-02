@@ -8,3 +8,6 @@ playtest-output/
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo
+public/
+.vercel/
+.env*.local

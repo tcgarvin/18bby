@@ -916,3 +916,65 @@ kbd {
   text-align: center;
   opacity: 0.55;
 }
+
+/* ---------- Saved games ---------- */
+
+.newgame--home {
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.saved__list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved__game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.saved__game:first-child {
+  border-top: none;
+}
+
+.saved__open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 4px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved__open:hover .saved__players {
+  color: var(--accent);
+}
+
+.saved__players {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.saved__meta {
+  font: 12px var(--font-mono);
+  color: var(--ink-3);
+}
+
+.saved__confirm {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.link--danger {
+  color: var(--danger);
+}

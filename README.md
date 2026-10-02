@@ -10,6 +10,7 @@ This repository holds the rules engine, a bot playtest harness, a JSON API, and 
 
 - `docs/design/` — the source design documents (economic rules, charting and service, map).
 - `docs/DECISIONS.md` — the day-one rule decisions that fill the gaps the design docs leave open.
+- `docs/DEPLOYMENT.md` — how the site is hosted: Vercel, Neon Postgres, accounts and saved games.
 - `src/bby18/` — the engine.
   - `hexgrid.py` axial hex coordinates; `board.py` the fixed map; `network.py` shared tiles and
     per-corporation service; `revenue.py` planet-pair matching; `market.py` the two-dimensional stock market;
@@ -61,5 +62,8 @@ uv run bby18 sweep --spec spec.json --out results.jsonl --summary summary.json -
 A browser UI for hotseat play lives in `web/` (Vite, React, TypeScript). Run the API with
 `uv run bby18 serve --port 8000`, then `cd web && npm install && npm run dev`, and open
 http://localhost:5173. See [`web/README.md`](web/README.md) for details.
+
+The deployed site, https://18bby.tcgarvin.com, runs the same app on Vercel with saved games and
+anonymous accounts in Neon Postgres. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ![Mid-game screenshot](docs/screenshots/game.png)

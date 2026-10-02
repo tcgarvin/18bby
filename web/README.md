@@ -30,7 +30,8 @@ npm run dev
 
 Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`.
 The current game id goes in the URL as `?game=<id>`, so a reload returns you to the same game.
-Games live in the API process's memory, so restarting the server ends them.
+The home screen lists your saved games. Locally the server keeps them in memory, so restarting
+it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`).
 
 ## Scripts
 
@@ -44,6 +45,7 @@ Games live in the API process's memory, so restarting the server ends them.
 ## Layout
 
 - `src/api.ts`: the JSON contract's types and the fetch helpers.
+- `src/auth.ts`: the anonymous account token, created on first use and kept in localStorage.
 - `src/hex.ts`: axial hex geometry, edge midpoints and region shading. Tested in `hex.test.ts`.
 - `src/selectors.ts`: small derived views of the game state (grouping legal actions, prices).
 - `src/tilediff.ts`: which hexes changed between two states, for outlining others' moves.
@@ -59,7 +61,8 @@ Games live in the API process's memory, so restarting the server ends them.
     traces stay continuous across tiles. It also draws planet badges, homeworld tags and,
     for the focused corporation, the scored pairs.
   - `NetworkActions`, `DividendActions`, `StockActions`: one control panel per phase.
-  - `CorporationsPanel`, `PlayersPanel`, `StockMarket`, `LogPanel`, `GameOver`, `NewGame`.
+  - `CorporationsPanel`, `PlayersPanel`, `StockMarket`, `LogPanel`, `GameOver`, `NewGame`,
+    `SavedGames` (the "your games" list on the home screen).
   - `GameScreen`: layout and state for one game. `App` switches between screens and restores
     the game named in the URL.
 

@@ -8,6 +8,10 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
 - Rule decisions and their rationale: `docs/DECISIONS.md`. Update it whenever a rule changes.
 - Original design docs: `docs/design/`. Do not edit these; they are the designer's source material.
 - All tunable numbers: `src/bby18/config.py`. Never hardcode a cost, value, or limit elsewhere.
+- Hosting, sign-in and saved games: `docs/DEPLOYMENT.md`. The API is stateless; games are
+  loaded from and written to a `GameStore` on every request.
+- Postgres store tests skip unless `BBY18_TEST_DATABASE_URL` names a throwaway database; see
+  `docs/DEPLOYMENT.md` for a one-line Docker Postgres.
 - Rule enforcement: `src/bby18/game.py` and `src/bby18/network.py`. Drivers and bots decide what
   to do; these modules decide whether it is legal and apply the consequences.
 
