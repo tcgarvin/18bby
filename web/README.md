@@ -55,10 +55,13 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
 - `src/logdiff.ts`: works out which log lines are new. The server sends only the last 200 lines,
   so the diff matches overlapping lines instead of comparing lengths.
 - `src/colors.ts`: corporation, region and planet-type palettes.
+- `src/terrain.ts`: seeded scatter of rocks and wisps, so an asteroid or nebula hex always draws
+  the same. The terrain itself comes from the server's per-game `terrain` list. Tested in
+  `terrain.test.ts`.
 - `src/components/`:
   - `HexMap`: the board. It draws region tints, neutral lanes for charted tiles, and a narrow
     trace per corporation on each lane it serves. Each corporation keeps its own offset, so
-    traces stay continuous across tiles. It also draws planet badges, homeworld tags and,
+    traces stay continuous across tiles. It draws asteroid fields and nebulae, planet badges, homeworld tags and,
     for the focused corporation, the scored pairs.
   - `NetworkActions`, `DividendActions`, `StockActions`: one control panel per phase.
   - `CorporationsPanel`, `PlayersPanel`, `StockMarket`, `LogPanel`, `GameOver`, `NewGame`,
