@@ -50,7 +50,7 @@ def new_session(seed: int, seats: Iterable[Seat]) -> GameSession:
     """A fresh game with any opening bot or forced moves already played."""
     seats = list(seats)
     rng = random.Random(seed)
-    game = Game.new([s.name for s in seats], DEFAULT_CONFIG)
+    game = Game.new([s.name for s in seats], DEFAULT_CONFIG, seed)
     bots: dict[str, Decider] = {
         player.id: GreedyBot(random.Random(rng.random()))
         for player, seat in zip(game.players, seats)

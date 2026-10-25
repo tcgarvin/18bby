@@ -10,6 +10,7 @@ from pathlib import Path
 
 from bby18.config import DEFAULT_CONFIG
 from bby18.playtest import BOT_KINDS, play_many, play_one, seat_kinds
+from bby18.terrain_report import terrain_report
 from bby18.sweep import SweepError, load_spec, read_rows, row_keys, run_sweep, summarize
 
 SWEEP_EPILOG = """\
@@ -54,6 +55,12 @@ def main() -> None:
     p_replay.add_argument("--bots", type=bot_kind, default="greedy", help=BOTS_HELP)
     p_replay.add_argument("--seed", type=int, default=1)
 
+    p_terrain = sub.add_parser(
+        "terrain-report",
+        help="measure, from the map alone, how terrain changes the cost of linking planets",
+    )
+    p_terrain.add_argument("--seeds", type=int, default=200)
+
     p_sweep = sub.add_parser(
         "sweep",
         help="run a parameter sweep in parallel and write one JSON row per game",
@@ -90,6 +97,10 @@ def main() -> None:
         return
     if args.command == "sweep":
         sys.exit(sweep_command(args))
+    if args.command == "terrain-report":
+        report = terrain_report(range(1, args.seeds + 1), DEFAULT_CONFIG)
+        print(json.dumps(report, indent=1))
+        return
     if args.command == "playtest":
         print(play_many(args.games, args.players, args.bots, DEFAULT_CONFIG, args.seed).report())
     elif args.command == "replay":

@@ -3,7 +3,10 @@ import random
 import pytest
 
 from bby18.actions import BuyShare, Chart, NoNetworkAction, PassStock, SellShares, ShareSource
+from dataclasses import replace
+
 from bby18.bots import GreedyBot, RandomBot
+from bby18.config import DEFAULT_CONFIG
 from bby18.game import Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
@@ -12,10 +15,13 @@ from bby18.runner import run_game
 from bby18.session import GameSession
 from bby18.state import CorpStatus
 
+OPEN_SPACE = replace(DEFAULT_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0)
+"""Rules tests that name specific hexes run on an empty sky; terrain has its own tests."""
+
 
 @pytest.fixture
 def game():
-    return Game.new(["Ann", "Bo", "Cy"])
+    return Game.new(["Ann", "Bo", "Cy"], OPEN_SPACE)
 
 
 def buy(game, player, corp_id, source=ShareSource.IPO, par=0, sold=None):

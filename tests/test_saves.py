@@ -22,10 +22,10 @@ def _play_to_end(seed: int):
 
 
 def test_replay_rebuilds_a_whole_game():
-    session, submitted = _play_to_end(11)
+    session, submitted = _play_to_end(13)
     assert session.phase is Phase.GAME_OVER
     assert any(a["type"] in ("chart", "service", "upgrade") for a in submitted)
-    assert session_to_json(replay(11, SEATS, submitted)) == session_to_json(session)
+    assert session_to_json(replay(13, SEATS, submitted)) == session_to_json(session)
 
 
 def test_snapshot_is_used_while_code_version_matches():

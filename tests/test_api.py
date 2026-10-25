@@ -64,6 +64,17 @@ def test_new_game_and_act(client):
     assert state["currentPlayer"] == "P1"  # the bot seat already acted
 
 
+def test_game_state_lists_terrain_for_its_seed(client):
+    seats = [{"name": "Me"}, {"name": "Bot", "bot": True}]
+    first = client.post("/api/games", json={"seats": seats, "seed": 5}).json()["state"]
+    again = client.post("/api/games", json={"seats": seats, "seed": 5}).json()["state"]
+    other = client.post("/api/games", json={"seats": seats, "seed": 6}).json()["state"]
+    kinds = {t["kind"] for t in first["terrain"]}
+    assert kinds == {"asteroid", "nebula"}
+    assert first["terrain"] == again["terrain"] != other["terrain"]
+    assert first["config"]["nebulaChartSurcharge"] == DEFAULT_CONFIG.nebula_chart_surcharge
+
+
 def test_illegal_action_returns_400(client):
     body = client.post("/api/games", json={"seats": [{"name": "A"}, {"name": "B"}]}).json()
     r = client.post(

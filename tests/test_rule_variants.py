@@ -246,13 +246,32 @@ def test_sweep_coerces_experimental_field_types() -> None:
         variant(DEFAULT_CONFIG, zero_revenue_moves_price=0)
 
 
-def test_default_rules_reproduce_the_reference_game() -> None:
+PRE_TERRAIN_RULES = replace(
+    DEFAULT_CONFIG, upgrade_cost=50, asteroid_fraction=0.0, nebula_fraction=0.0
+)
+"""The rules as they stood before terrain and the 70-credit upgrade (2026-10-25)."""
+
+
+def test_pre_terrain_rules_still_reproduce_the_old_reference_game() -> None:
     """Worths captured when the 2-D market and tighter capital were adopted on 2026-09-28
-    (3 greedy players, seed 1). A change here means the default rules or bot changed."""
-    game, _ = play_one(1, 3, "greedy", DEFAULT_CONFIG)
+    (3 greedy players, seed 1). Terrain at 0% and a 50 upgrade must leave play untouched, so
+    sweeps can use these settings as the baseline."""
+    game, _ = play_one(1, 3, "greedy", PRE_TERRAIN_RULES)
     assert {p.id: game.player_worth(p) for p in game.players} == {
         "P1": 3473,
         "P2": 3500,
         "P3": 3318,
     }
     assert len(game.log) == 165
+
+
+def test_default_rules_reproduce_the_reference_game() -> None:
+    """Worths captured when terrain and the 70-credit upgrade were adopted (3 greedy players,
+    seed 1). A change here means the default rules or bot changed."""
+    game, _ = play_one(1, 3, "greedy", DEFAULT_CONFIG)
+    assert {p.id: game.player_worth(p) for p in game.players} == {
+        "P1": 3846,
+        "P2": 2886,
+        "P3": 3434,
+    }
+    assert len(game.log) == 166

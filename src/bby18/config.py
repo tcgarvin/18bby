@@ -25,8 +25,18 @@ class GameConfig:
     # Network actions
     network_actions_per_turn: int = 2
     chart_cost: int = 50
-    upgrade_cost: int = 50
+    upgrade_cost: int = 70
     service_cost: int = 50
+    nebula_chart_surcharge: int = 30
+    """Extra cost to chart a nebula hex. Extending service onto one costs the usual amount."""
+
+    # Terrain (see terrain.py). Placement is deterministic from the game seed.
+    asteroid_fraction: float = 0.15
+    """Share of non-planet hexes that are asteroid fields: impassable, never charted."""
+    nebula_fraction: float = 0.15
+    """Share of non-planet hexes that are nebulae: costlier to chart, never upgraded to 3 exits."""
+    terrain_patch_size: int = 3
+    """Largest contiguous patch of one terrain type; 1 scatters single hexes."""
 
     # Economy
     typed_pair_value: int = 30
@@ -116,6 +126,15 @@ class GameConfig:
             raise ValueError("payout_step_fractions must be non-negative and ascending")
         if self.homeworld_basic_income < 0:
             raise ValueError("homeworld_basic_income cannot be negative")
+        for name in ("asteroid_fraction", "nebula_fraction"):
+            if not 0 <= getattr(self, name) <= 1:
+                raise ValueError(f"{name} must be between 0 and 1")
+        if self.asteroid_fraction + self.nebula_fraction > 1:
+            raise ValueError("asteroid_fraction + nebula_fraction cannot exceed 1")
+        if self.terrain_patch_size < 1:
+            raise ValueError("terrain_patch_size must be at least 1")
+        if self.nebula_chart_surcharge < 0:
+            raise ValueError("nebula_chart_surcharge cannot be negative")
 
     def starting_cash(self, player_count: int) -> int:
         if player_count not in self.starting_cash_by_player_count:

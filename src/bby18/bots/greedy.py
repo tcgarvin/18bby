@@ -6,6 +6,7 @@ finding comes from the game or from one bot habit. ``GreedyPolicy()`` is the ori
 
 from __future__ import annotations
 
+import heapq
 import random
 from dataclasses import dataclass
 
@@ -21,6 +22,7 @@ from bby18.actions import (
     StockAction,
     Upgrade,
 )
+from bby18.board import Planet
 from bby18.game import Game
 from bby18.hexgrid import Hex
 from bby18.revenue import compute_revenue
@@ -28,6 +30,9 @@ from bby18.state import Corporation, CorpStatus, Player
 
 START_ORDERS = ("fixed", "random", "best_home")
 PAR_CHOICES = ("min", "max", "random", "mid")
+ROUTING_MODES = ("straight", "path")
+NO_ROUTE_COST = 1000
+"""Stand-in route cost for a build that leads nowhere new; larger than any real route."""
 START_SCORE = 1.0
 """Stock score of starting a corporation, above any other buy."""
 FLOAT_SEEKING_SCORE = 0.9
@@ -65,6 +70,12 @@ class GreedyPolicy:
     """Network score penalty per credit of build cost."""
     home_radius: int = 3
     """How far from a homeworld "best_home" looks when valuing it."""
+    routing: str = "straight"
+    """How builds are ranked when they do not reach a new planet. "straight" counts hexes to the
+    nearest unreached planet as the crow flies; "path" prices the cheapest route around asteroid
+    fields and through nebulae, and judges a tile by where its far exit leads."""
+    path_cost_weight: float = 0.2
+    """With "path" routing: network score penalty per credit of remaining route cost."""
 
     def __post_init__(self) -> None:
         if self.start_order not in START_ORDERS:
@@ -73,6 +84,8 @@ class GreedyPolicy:
             raise ValueError(f"par_choice must be one of {PAR_CHOICES}, not {self.par_choice!r}")
         if self.max_presidencies < 0:
             raise ValueError("max_presidencies must be non-negative")
+        if self.routing not in ROUTING_MODES:
+            raise ValueError(f"routing must be one of {ROUTING_MODES}, not {self.routing!r}")
 
 
 class GreedyBot:
@@ -220,17 +233,21 @@ class GreedyBot:
         current = game.revenue(corp).total
         reach = game.reachable(corp)
         unreached = [p for p in game.board.planets if p.hex not in reach]
+        to_go = self._route_costs(game, corp, unreached) if self.policy.routing == "path" else {}
         best: tuple[float, NetworkAction] | None = None
         for action in candidates:
             gain = self._revenue_after(game, corp, action, reach) - current
-            if isinstance(action, (Chart, ExtendService)):
-                position: Hex = action.hex
+            if self.policy.routing == "path":
+                remaining = self._remaining_route_cost(game, action, reach, to_go)
+                progress_penalty = remaining * self.policy.path_cost_weight
             else:
-                position = action.hex.neighbor(action.new_exit)
-            distance = min((p.hex.distance(position) for p in unreached), default=0)
+                progress_penalty = (
+                    self._straight_distance(action, unreached)
+                    * self.policy.lookahead_distance_weight
+                )
             score = (
                 gain * 100
-                - distance * self.policy.lookahead_distance_weight
+                - progress_penalty
                 - action.cost * self.policy.cost_weight
                 + self.rng.random()
             )
@@ -240,6 +257,77 @@ class GreedyBot:
         if best[0] < -50 and corp.treasury < game.config.chart_cost * 2:
             return NoNetworkAction()
         return best[1]
+
+    @staticmethod
+    def _straight_distance(action: NetworkAction, unreached: list[Planet]) -> int:
+        """Hexes from where ``action`` builds to the nearest unreached planet, ignoring terrain."""
+        if isinstance(action, (Chart, ExtendService)):
+            position: Hex = action.hex
+        else:
+            assert isinstance(action, Upgrade)
+            position = action.hex.neighbor(action.new_exit)
+        return min((p.hex.distance(position) for p in unreached), default=0)
+
+    @staticmethod
+    def _route_costs(game: Game, corp: Corporation, unreached: list[Planet]) -> dict[Hex, int]:
+        """Cheapest cost to build from each hex to some unreached planet, charged per hex entered.
+
+        Open space costs the chart cost, a nebula adds its surcharge, a tile someone already
+        charted costs the service cost, and the corporation's own service is free. Asteroid
+        fields are not on the board's adjacency, so routes go around them.
+        """
+        board, net = game.board, game.network
+        served = net.service_of(corp.id)
+
+        def entry_cost(hex: Hex) -> int:
+            if board.is_planet(hex) or hex in served:
+                return 0
+            if net.is_charted(hex):
+                return game.config.service_cost
+            return game.chart_cost(hex)
+
+        dist: dict[Hex, int] = {p.hex: 0 for p in unreached}
+        heap = [(0, h) for h in dist]
+        heapq.heapify(heap)
+        while heap:
+            d, hex = heapq.heappop(heap)
+            if d > dist.get(hex, d):
+                continue
+            for _, nxt in board.neighbors(hex):
+                nd = d + entry_cost(nxt)
+                if nd < dist.get(nxt, nd + 1):
+                    dist[nxt] = nd
+                    heapq.heappush(heap, (nd, nxt))
+        return dist
+
+    @staticmethod
+    def _remaining_route_cost(
+        game: Game, action: NetworkAction, reach: frozenset[Hex], to_go: dict[Hex, int]
+    ) -> int:
+        """Route cost still to pay beyond ``action``, judged by the hexes its far exits lead to.
+
+        Exits that lead back into the corporation's own network make no progress, so a build
+        with only such exits scores as if no route remained.
+        """
+        board = game.board
+        if isinstance(action, Chart):
+            exits = action.exits
+            origin = action.hex
+        elif isinstance(action, Upgrade):
+            exits = frozenset({action.new_exit})
+            origin = action.hex
+        else:
+            assert isinstance(action, ExtendService)
+            tile = game.network.tile_at(action.hex)
+            assert tile is not None
+            exits = tile.exits
+            origin = action.hex
+        far = [
+            origin.neighbor(d)
+            for d in exits
+            if origin.neighbor(d) in board.hexes and origin.neighbor(d) not in reach
+        ]
+        return min((to_go[h] for h in far if h in to_go), default=NO_ROUTE_COST)
 
     def _revenue_after(
         self, game: Game, corp: Corporation, action: NetworkAction, reach: frozenset[Hex]

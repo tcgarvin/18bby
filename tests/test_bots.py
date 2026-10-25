@@ -14,7 +14,7 @@ from bby18.sweep import GameTask, run_task, validate_tasks
 
 def _play(seed: int, policy: GreedyPolicy | None) -> Game:
     """A 3-player greedy game seeded like ``play_one``; ``None`` omits the policy argument."""
-    game = Game.new([f"Player {i + 1}" for i in range(3)])
+    game = Game.new([f"Player {i + 1}" for i in range(3)], DEFAULT_CONFIG, seed)
     rng = random.Random(seed)
     deciders = {
         p.id: (

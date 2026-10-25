@@ -184,6 +184,10 @@ def session_to_json(session: GameSession) -> Json:
         "corporations": [_corp_to_json(game, c) for c in game.corporations],
         "operatingOrder": [c.id for c in game.operating_order()],
         "tiles": tiles,
+        "terrain": [
+            {"hex": hex_to_json(h), "kind": kind.value}
+            for h, kind in sorted(game.board.terrain.items())
+        ],
         "stockMarket": [list(row) for row in game.config.stock_market],
         "parColumn": game.config.par_column,
         "networkActionsTaken": session.network_actions_taken,
@@ -193,6 +197,7 @@ def session_to_json(session: GameSession) -> Json:
             "chartCost": game.config.chart_cost,
             "upgradeCost": game.config.upgrade_cost,
             "serviceCost": game.config.service_cost,
+            "nebulaChartSurcharge": game.config.nebula_chart_surcharge,
             "networkActionsPerTurn": game.config.network_actions_per_turn,
             "parPrices": list(game.config.par_prices),
             "sharesPerCorporation": game.config.shares_per_corporation,
@@ -219,6 +224,9 @@ def rules_to_json(config: GameConfig) -> Json:
         "chartCost": config.chart_cost,
         "upgradeCost": config.upgrade_cost,
         "serviceCost": config.service_cost,
+        "nebulaChartSurcharge": config.nebula_chart_surcharge,
+        "asteroidFraction": config.asteroid_fraction,
+        "nebulaFraction": config.nebula_fraction,
         "typedPairValue": config.typed_pair_value,
         "typedPairs": sorted(sorted(pair) for pair in config.typed_pairs),
         "regionalBonus": config.regional_bonus,

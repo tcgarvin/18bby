@@ -22,13 +22,14 @@ from bby18.actions import (
     StockAction,
     Upgrade,
 )
-from bby18.board import Board, Planet, load_board
+from bby18.board import Board, Planet, Terrain, load_board
 from bby18.config import DEFAULT_CONFIG, GameConfig
 from bby18.hexgrid import Hex
 from bby18.market import StockMarket
 from bby18.network import HyperspaceNetwork, IllegalAction
 from bby18.revenue import RevenueResult, compute_revenue
 from bby18.state import NO_PLAYER, Corporation, CorpStatus, Player
+from bby18.terrain import generate_terrain
 
 
 @dataclass
@@ -58,9 +59,13 @@ class Game:
     _floats: int = 0
 
     @classmethod
-    def new(cls, player_names: list[str], config: GameConfig = DEFAULT_CONFIG) -> Game:
+    def new(
+        cls, player_names: list[str], config: GameConfig = DEFAULT_CONFIG, seed: int = 0
+    ) -> Game:
+        """A fresh game. ``seed`` fixes the terrain layout; the same seed gives the same sky."""
         config.validate_rule_variants()
         board = load_board(config.map_file)
+        board = board.with_terrain(generate_terrain(board, seed, config))
         cash = config.starting_cash(len(player_names))
         players = [Player(f"P{i + 1}", name, cash) for i, name in enumerate(player_names)]
         corporations = {}
@@ -109,6 +114,13 @@ class Game:
         if self.config.homeworld_basic_income > 0:
             result = replace(result, floor=self.config.homeworld_basic_income)
         return result
+
+    def chart_cost(self, hex: Hex) -> int:
+        """What charting ``hex`` costs: nebulae carry a surcharge."""
+        cost = self.config.chart_cost
+        if self.board.terrain_at(hex) is Terrain.NEBULA:
+            cost += self.config.nebula_chart_surcharge
+        return cost
 
     def ipo_price(self, corp: Corporation) -> int:
         """What one IPO share of a started corporation costs now."""
@@ -303,12 +315,12 @@ class Game:
                         actions.append(ExtendService(hex, cfg.service_cost))
                     except IllegalAction:
                         pass
-            elif corp.treasury >= cfg.chart_cost:
+            elif corp.treasury >= self.chart_cost(hex):
                 for pair in combinations(sorted(net.legal_exits(hex)), 2):
                     exits = frozenset(pair)
                     try:
                         net.check_chart(corp.id, hex, exits, reach)
-                        actions.append(Chart(hex, exits, cfg.chart_cost))
+                        actions.append(Chart(hex, exits, self.chart_cost(hex)))
                     except IllegalAction:
                         pass
         if corp.treasury >= cfg.upgrade_cost:
@@ -330,7 +342,7 @@ class Game:
             return
         reach = self.reachable(corp)
         if isinstance(action, Chart):
-            cost = self.config.chart_cost
+            cost = self.chart_cost(action.hex)
             self._require_treasury(corp, cost)
             self.network.chart(corp.id, action.hex, action.exits, reach)
         elif isinstance(action, Upgrade):

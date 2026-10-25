@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 
-from bby18.board import Board
+from bby18.board import Board, Terrain
 from bby18.hexgrid import Direction, Hex
 
 _OPPOSITE: dict[Direction, Direction] = {d: d.opposite for d in Direction}
@@ -105,6 +105,8 @@ class HyperspaceNetwork:
             raise IllegalAction(f"{hex} is off the board")
         if self.board.is_planet(hex):
             raise IllegalAction(f"{hex} is a planet and cannot be charted")
+        if self.board.terrain_at(hex) is Terrain.ASTEROID:
+            raise IllegalAction(f"{hex} is an asteroid field and cannot be charted")
         if hex in self._tiles:
             raise IllegalAction(f"{hex} is already charted")
         if len(exits) != 2:
@@ -123,6 +125,8 @@ class HyperspaceNetwork:
             raise IllegalAction(f"{hex} is not charted")
         if len(tile.exits) >= self.MAX_EXITS:
             raise IllegalAction(f"{hex} already has {self.MAX_EXITS} exits")
+        if self.board.terrain_at(hex) is Terrain.NEBULA:
+            raise IllegalAction(f"{hex} is a nebula and cannot be upgraded")
         if new_exit in tile.exits:
             raise IllegalAction(f"{hex} already has exit {new_exit.name}")
         if new_exit not in self.legal_exits(hex):

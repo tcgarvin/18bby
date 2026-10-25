@@ -6,12 +6,16 @@ share purchases, idle turns) are recovered from the log text written by ``game.p
 
 from __future__ import annotations
 
+import heapq
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import combinations
 from statistics import mean, pstdev
 
 from bby18.game import Game, LogEntry
+from bby18.hexgrid import Hex
+from bby18.revenue import compute_revenue
 from bby18.state import CorpStatus
 
 _PAYS = re.compile(r"^pays \d+ .*; price (\d+)$")
@@ -21,6 +25,12 @@ _STARTS = re.compile(r"^starts (\S+) at par \d+$")
 _SELLS = re.compile(r"^sells (\d+) (\S+) for \d+; price \d+$")
 _NO_NETWORK = "takes no network action"
 _SOLD_OUT = re.compile(r"^is sold out; price \d+$")
+_CHART = re.compile(r"^chart \S+ exits \S+ for (\d+)$")
+
+NEAR_PAIR_DISTANCE = 3
+"""Planet pairs this many hexes apart or fewer count as near neighbors."""
+AFFORDABLE_FRONTIER = 150
+"""Cost of three ordinary builds: unreached planets cheaper than this are within easy reach."""
 
 
 @dataclass
@@ -39,12 +49,21 @@ class CorpMetrics:
     withholds: int = 0
     no_network_actions: int = 0
     charts: int = 0
+    nebula_charts: int = 0
+    """Charts that paid the nebula surcharge."""
+    chart_spend: int = 0
     upgrades: int = 0
     services: int = 0
     top_price_turns: int = 0
     """Operating turns that ended with the price at the top of the stock market."""
     sold_out: int = 0
     """Stock rounds that ended with every share in players' hands."""
+    unreached_planets: int = 0
+    """Planets outside the corporation's final network (floated corporations only)."""
+    next_planet_cost: int = 0
+    """Cheapest build cost from the final network to any unreached planet; 0 if none is left."""
+    cheap_unreached: int = 0
+    """Unreached planets whose cheapest route costs under ``AFFORDABLE_FRONTIER``."""
 
 
 @dataclass
@@ -63,20 +82,23 @@ class LogCounts:
     stock: StockCounts = field(default_factory=StockCounts)
 
 
-def count_log(log: list[LogEntry], corp_ids: list[str], top_price: int) -> LogCounts:
-    """Tally dividend, network and stock decisions from the game log."""
+def count_log(
+    log: list[LogEntry], corp_ids: list[str], top_price: int, chart_cost: int
+) -> LogCounts:
+    """Tally dividend, network and stock decisions from the game log. ``chart_cost`` is the
+    open-space price, so a dearer chart is known to be a nebula chart."""
     counts = LogCounts(corps={c: CorpMetrics() for c in corp_ids})
     for entry in log:
         text = entry.text
         corp = counts.corps.get(entry.actor)
         if corp is not None:
-            _count_corp_entry(corp, text, top_price)
+            _count_corp_entry(corp, text, top_price, chart_cost)
             continue
         _count_player_entry(counts.stock, text)
     return counts
 
 
-def _count_corp_entry(corp: CorpMetrics, text: str, top_price: int) -> None:
+def _count_corp_entry(corp: CorpMetrics, text: str, top_price: int, chart_cost: int) -> None:
     dividend = _PAYS.match(text) or _WITHHOLDS.match(text)
     if dividend is not None:
         corp.operating_turns += 1
@@ -92,6 +114,11 @@ def _count_corp_entry(corp: CorpMetrics, text: str, top_price: int) -> None:
         corp.no_network_actions += 1
     elif text.startswith("chart "):
         corp.charts += 1
+        charted = _CHART.match(text)
+        if charted is not None:
+            paid = int(charted.group(1))
+            corp.chart_spend += paid
+            corp.nebula_charts += int(paid > chart_cost)
     elif text.startswith("upgrade "):
         corp.upgrades += 1
     elif text.startswith("service "):
@@ -117,7 +144,9 @@ def _count_player_entry(stock: StockCounts, text: str) -> None:
 
 def corporation_metrics(game: Game) -> LogCounts:
     """Log-derived counts plus each corporation's final state."""
-    counts = count_log(game.log, list(game.corporations), game.market.top_price())
+    counts = count_log(
+        game.log, list(game.corporations), game.market.top_price(), game.config.chart_cost
+    )
     for corp in game.corporations.values():
         metrics = counts.corps[corp.id]
         metrics.floated = corp.floated
@@ -128,7 +157,86 @@ def corporation_metrics(game: Game) -> LogCounts:
             metrics.final_price = game.price(corp)
         if corp.floated:
             metrics.planets_reached = len(game.reachable_planets(corp))
+            costs = frontier_costs(game, corp.id, game.reachable(corp))
+            metrics.unreached_planets = len(costs)
+            metrics.next_planet_cost = min(costs.values(), default=0)
+            metrics.cheap_unreached = sum(1 for c in costs.values() if c < AFFORDABLE_FRONTIER)
     return counts
+
+
+def frontier_costs(game: Game, corp_id: str, reach: frozenset[Hex]) -> dict[str, int]:
+    """Cheapest cost for ``corp_id`` to build from its network to each planet outside ``reach``.
+
+    Costs are charged per hex entered: the corporation's own service is free, a tile someone
+    else charted costs the service price, open space the chart price, and nebulae their
+    surcharge. Asteroid fields are impassable. Tile exits are ignored, so this is a lower bound.
+    """
+    board, net = game.board, game.network
+    served = net.service_of(corp_id)
+
+    def entry_cost(hex: Hex) -> int:
+        if board.is_planet(hex) or hex in served:
+            return 0
+        return game.config.service_cost if net.is_charted(hex) else game.chart_cost(hex)
+
+    dist: dict[Hex, int] = {h: 0 for h in reach}
+    heap = [(0, h) for h in dist]
+    heapq.heapify(heap)
+    while heap:
+        d, hex = heapq.heappop(heap)
+        if d > dist[hex]:
+            continue
+        for _, nxt in board.neighbors(hex):
+            nd = d + entry_cost(nxt)
+            if nd < dist.get(nxt, nd + 1):
+                dist[nxt] = nd
+                heapq.heappush(heap, (nd, nxt))
+    return {p.name: dist[p.hex] for p in board.planets if p.hex not in reach and p.hex in dist}
+
+
+@dataclass(frozen=True)
+class PlanetMetrics:
+    reached_by: int
+    """Floated corporations whose final network reaches the planet."""
+    value: int
+    """Revenue the planet adds, summed over the corporations that reach it: each one's revenue
+    minus what it would earn with the planet removed from its network."""
+
+
+def planet_metrics(game: Game) -> dict[str, PlanetMetrics]:
+    """How much each planet is worth at the end of the game, and how many reach it."""
+    reached_by: Counter[str] = Counter()
+    value: Counter[str] = Counter()
+    for corp in game.corporations.values():
+        if not corp.floated:
+            continue
+        planets = game.reachable_planets(corp)
+        total = compute_revenue(planets, game.config).total
+        for planet in planets:
+            others = [p for p in planets if p is not planet]
+            reached_by[planet.name] += 1
+            value[planet.name] += total - compute_revenue(others, game.config).total
+    return {p.name: PlanetMetrics(reached_by[p.name], value[p.name]) for p in game.board.planets}
+
+
+def near_pair_links(game: Game) -> tuple[int, int, int]:
+    """Planet pairs within ``NEAR_PAIR_DISTANCE`` hexes of each other, as the crow flies.
+
+    Returns the number of such pairs, how many have both planets in one floated corporation's
+    network, and how many have at least one planet that no floated corporation reaches.
+    """
+    reaches = [
+        {p.name for p in game.reachable_planets(c)} for c in game.corporations.values() if c.floated
+    ]
+    covered = set().union(*reaches) if reaches else set()
+    total = linked = stranded = 0
+    for a, b in combinations(game.board.planets, 2):
+        if a.hex.distance(b.hex) > NEAR_PAIR_DISTANCE:
+            continue
+        total += 1
+        linked += int(any(a.name in r and b.name in r for r in reaches))
+        stranded += int(a.name not in covered or b.name not in covered)
+    return total, linked, stranded
 
 
 def final_revenue_split(game: Game) -> tuple[int, int]:

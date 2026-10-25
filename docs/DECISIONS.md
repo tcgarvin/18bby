@@ -46,10 +46,11 @@ Each operating turn a corporation, in order:
 
 1. Takes **up to two network actions** (placeholder allowance): chart an uncharted hex,
    upgrade a charted tile it has service on to three exits, or extend service onto one
-   already-charted tile adjacent to its network. Each costs **50**. Passing ends the
-   corporation's network actions for the turn. (History: one action at cost 20 until
-   2026-09-28; service was 10 until 2026-09-27, when bot playtests showed nearly every tile
-   shared.)
+   already-charted tile adjacent to its network. Charting and service cost **50**; an
+   upgrade costs **70** (see "Terrain and expansion cost"). Passing ends the corporation's
+   network actions for the turn. (History: one action at cost 20 until 2026-09-28; service
+   was 10 until 2026-09-27, when bot playtests showed nearly every tile shared; upgrades cost
+   50 until 2026-10-25.)
 2. Has its **revenue** computed automatically (see Economy).
 3. Chooses to **pay** the full revenue as dividends or **withhold** it into the treasury.
 
@@ -128,7 +129,40 @@ and still builds almost every action. Slightly over-tight is acceptable: a slow 
 room for later features that inject money. Player starting cash was left alone because it
 did not bind corporate spending in any tested setting.
 
+## Terrain and expansion cost (decided 2026-10-25)
+
+The starlane game was too easy: with every hex alike and every build 50, the only decision
+was which planets to link. Two changes make routing a puzzle. Both are tunable in
+`config.py`, and sweeps can switch either off to compare.
+
+- **Asteroid fields** (15% of non-planet hexes) are impassable. They cannot be charted, and
+  no tile may have an exit facing one, so routes bend around them.
+- **Nebulae** (15% of non-planet hexes) cost **+30** to chart (80 instead of 50). Extending
+  service onto an existing nebula tile costs the usual 50, so the first company through
+  pays and rivals ride cheaply. A nebula tile can **never be upgraded** to three exits.
+- **Placement is seeded.** The game seed alone fixes the layout (`terrain.py`), so a seed
+  always gives the same sky and a saved game's replay rebuilds it. Terrain comes in random
+  patches of up to three hexes (`terrain_patch_size`; 1 scatters single hexes). Asteroids are
+  placed first, and a hex that would cut any planet off from the rest is skipped, so the
+  planets always form one connected whole. Planet hexes never carry terrain. Symmetry between
+  seats is not required: players choose corporations, not positions.
+- **Charting is exploration, the 2-to-3-exit upgrade is expansion.** Charting places a
+  two-exit tile for **50**; the only upgrade, to three exits, now costs **70** (was 50).
+  Upgrades in open space otherwise work as before.
+- **Existing saved games** replay from their seed, so they now rebuild with terrain and the
+  70 upgrade. A save whose recorded moves are no longer legal is reported as outdated.
+
+Terrain is measured by the sweep harness, not decided by it: `bby18 terrain-report` prices
+planet pairs on the map alone, and sweep rows carry per-planet value and reach, near-pair
+links and frontier costs. The `greedy-path` bot prices routes around terrain; the original
+`greedy` bot measures straight-line hexes and does not.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,
 four-exit tiles, tile capacity limits, and any builder benefit beyond first service.
+
+Also deferred, from the 2026-10-25 terrain discussion: **piracy** on the busiest hex at the
+end of a turn (a traffic-based tax or raid; it needs rules for ties, who pays, and who
+controls the pirates), and a player-run pirate faction such as the Black Sun as an expansion.
+Terrain concentrates traffic into chokepoints, so it should come first.

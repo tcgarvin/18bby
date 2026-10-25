@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import Enum
 from importlib import resources
 
 from bby18.hexgrid import Direction, Hex, hexes_within_radius
+
+
+class Terrain(Enum):
+    """What fills a non-planet hex. Planets have no terrain."""
+
+    SPACE = "space"
+    ASTEROID = "asteroid"
+    """Impassable: never charted, and no tile may have an exit facing it."""
+    NEBULA = "nebula"
+    """Costs extra to chart and can never be upgraded to three exits."""
 
 
 @dataclass(frozen=True)
@@ -20,10 +32,19 @@ class Planet:
 class Board:
     """Immutable board geometry with planet lookups by hex and by name."""
 
-    def __init__(self, radius: int, hexes: frozenset[Hex], planets: tuple[Planet, ...]) -> None:
+    def __init__(
+        self,
+        radius: int,
+        hexes: frozenset[Hex],
+        planets: tuple[Planet, ...],
+        terrain: Mapping[Hex, Terrain] | None = None,
+    ) -> None:
         self.radius = radius
         self.hexes = hexes
         self.planets = planets
+        self.terrain: dict[Hex, Terrain] = {
+            h: t for h, t in (terrain or {}).items() if t is not Terrain.SPACE
+        }
         self._by_hex: dict[Hex, Planet] = {}
         self._by_name: dict[str, Planet] = {}
         for planet in planets:
@@ -35,9 +56,17 @@ class Board:
                 raise ValueError(f"Duplicate planet name {planet.name}")
             self._by_hex[planet.hex] = planet
             self._by_name[planet.name] = planet
-        # Geometry never changes, so on-board adjacency is computed once for fast searches.
+        for hex, kind in self.terrain.items():
+            if hex not in hexes:
+                raise ValueError(f"{kind.value} at {hex} is off the board")
+            if hex in self._by_hex:
+                raise ValueError(f"{kind.value} at {hex} shares a hex with a planet")
+        self._asteroids = frozenset(h for h, t in self.terrain.items() if t is Terrain.ASTEROID)
+        # Geometry never changes, so adjacency is computed once for fast searches. Asteroid
+        # fields are not neighbors of anything: nothing can be charted there or routed through.
         self._neighbors: dict[Hex, tuple[tuple[Direction, Hex], ...]] = {
-            h: tuple((d, n) for d, n in h.neighbors() if n in hexes) for h in hexes
+            h: tuple((d, n) for d, n in h.neighbors() if n in hexes and n not in self._asteroids)
+            for h in hexes
         }
         self._exits: dict[Hex, frozenset[Direction]] = {
             h: frozenset(d for d, _ in pairs) for h, pairs in self._neighbors.items()
@@ -50,11 +79,14 @@ class Board:
         """Adjacent hexes that are on the board, with the direction to each."""
         pairs = self._neighbors.get(hex)
         if pairs is None:
-            return tuple((d, n) for d, n in hex.neighbors() if n in self.hexes)
+            return tuple(
+                (d, n) for d, n in hex.neighbors() if n in self.hexes and n not in self._asteroids
+            )
         return pairs
 
     def on_board_directions(self, hex: Hex) -> frozenset[Direction]:
-        """Directions from ``hex`` that face an on-board hex."""
+        """Directions from ``hex`` that face a hex a tile could connect to: on the board and not
+        an asteroid field."""
         exits = self._exits.get(hex)
         if exits is None:
             return frozenset(d for d, _ in self.neighbors(hex))
@@ -62,6 +94,13 @@ class Board:
 
     def is_planet(self, hex: Hex) -> bool:
         return hex in self._by_hex
+
+    def terrain_at(self, hex: Hex) -> Terrain:
+        return self.terrain.get(hex, Terrain.SPACE)
+
+    def with_terrain(self, terrain: Mapping[Hex, Terrain]) -> Board:
+        """The same board with ``terrain`` laid over its space hexes."""
+        return Board(self.radius, self.hexes, self.planets, terrain)
 
     def planet_at(self, hex: Hex) -> Planet:
         try:

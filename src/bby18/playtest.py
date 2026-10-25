@@ -8,15 +8,19 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from statistics import mean
 
+from bby18.board import Terrain
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.config import GameConfig
 from bby18.game import Game
 from bby18.metrics import (
     CorpMetrics,
     StockCounts,
+    PlanetMetrics,
     corporation_metrics,
     final_revenue_split,
+    near_pair_links,
     planet_coverage,
+    planet_metrics,
     worth_spread,
 )
 from bby18.runner import run_game
@@ -49,6 +53,15 @@ class GameSummary:
     """Planets reached by at least one floated corporation."""
     region_reached: dict[str, int]
     region_total: dict[str, int]
+    planets: dict[str, PlanetMetrics]
+    near_pairs: int
+    """Planet pairs within a few hexes of each other (a fixed property of the board)."""
+    near_pairs_linked: int
+    """Near pairs that one floated corporation's final network connects."""
+    near_pairs_stranded: int
+    """Near pairs with a planet that no floated corporation reaches."""
+    asteroid_hexes: int
+    nebula_hexes: int
 
     @property
     def planets_reached_fraction(self) -> float:
@@ -81,6 +94,14 @@ class GameSummary:
             row[f"region_reached.{region}"] = count
         for region, count in self.region_total.items():
             row[f"region_total.{region}"] = count
+        for name, planet in self.planets.items():
+            row[f"planet.{name}.reached_by"] = planet.reached_by
+            row[f"planet.{name}.value"] = planet.value
+        row["near_pairs"] = self.near_pairs
+        row["near_pairs_linked"] = self.near_pairs_linked
+        row["near_pairs_stranded"] = self.near_pairs_stranded
+        row["asteroid_hexes"] = self.asteroid_hexes
+        row["nebula_hexes"] = self.nebula_hexes
         return row
 
 
@@ -119,6 +140,7 @@ def _greedy(policy: GreedyPolicy) -> Callable[[random.Random], Decider]:
 BOT_KINDS: dict[str, Callable[[random.Random], Decider]] = {
     "greedy": _greedy(GreedyPolicy()),
     "random": RandomBot,
+    "greedy-path": _greedy(GreedyPolicy(routing="path")),
     "greedy-rs": _greedy(
         GreedyPolicy(start_order="random", par_choice="random", max_presidencies=2)
     ),
@@ -156,7 +178,7 @@ def play_one(
     seed: int, player_count: int, kind: str, config: GameConfig
 ) -> tuple[Game, GameSummary]:
     rng = random.Random(seed)
-    game = Game.new([f"Player {i + 1}" for i in range(player_count)], config)
+    game = Game.new([f"Player {i + 1}" for i in range(player_count)], config, seed)
     run_game(game, make_deciders(game, kind, rng))
     return game, summarize_game(game, seed)
 
@@ -170,6 +192,8 @@ def summarize_game(game: Game, seed: int) -> GameSummary:
     typed, basic = final_revenue_split(game)
     coverage = planet_coverage(game)
     counts = corporation_metrics(game)
+    near_pairs, near_linked, near_stranded = near_pair_links(game)
+    terrain = game.board.terrain.values()
     return GameSummary(
         seed=seed,
         winner=winner,
@@ -193,6 +217,12 @@ def summarize_game(game: Game, seed: int) -> GameSummary:
         planets_reached=coverage.planets_reached,
         region_reached=coverage.region_reached,
         region_total=coverage.region_total,
+        planets=planet_metrics(game),
+        near_pairs=near_pairs,
+        near_pairs_linked=near_linked,
+        near_pairs_stranded=near_stranded,
+        asteroid_hexes=sum(1 for t in terrain if t is Terrain.ASTEROID),
+        nebula_hexes=sum(1 for t in terrain if t is Terrain.NEBULA),
     )
 
 
