@@ -1,0 +1,14 @@
+{"variants": {
+  "old":      {"upgrade_cost": 50, "asteroid_fraction": 0.0, "nebula_fraction": 0.0},
+  "cost70":   {"asteroid_fraction": 0.0, "nebula_fraction": 0.0},
+  "terrain":  {"upgrade_cost": 50},
+  "new":      {},
+  "patch5":   {"terrain_patch_size": 5},
+  "dense":    {"asteroid_fraction": 0.25, "nebula_fraction": 0.25},
+  "heavy":    {"asteroid_fraction": 0.35, "nebula_fraction": 0.20, "terrain_patch_size": 5},
+  "up60":     {"upgrade_cost": 60},
+  "up90":     {"upgrade_cost": 90},
+  "act1":     {"network_actions_per_turn": 1},
+  "act3":     {"network_actions_per_turn": 3}
+ },
+ "seeds": [1, 300], "players": [3], "bots": ["greedy-path", "greedy"]}
