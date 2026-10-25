@@ -377,7 +377,12 @@ class Game:
         if result.total == 0 or not pay:
             corp.treasury += result.total
             self.bank -= result.total
-            if result.total > 0 or self.config.zero_revenue_moves_price:
+            moves = (
+                self.config.withhold_moves_price
+                if result.total > 0
+                else self.config.zero_revenue_moves_price
+            )
+            if moves:
                 corp.market_cell = self.market.left(corp.market_cell)
             self._log(corp.id, f"withholds {result.total}; price {self.price(corp)}")
             return result
@@ -412,8 +417,15 @@ class Game:
     def player_worth(self, player: Player) -> int:
         worth = player.cash
         for corp_id, n in player.shares.items():
-            worth += n * self.price(self.corp(corp_id))
+            worth += n * self.share_value(self.corp(corp_id))
         return worth
+
+    def share_value(self, corp: Corporation) -> int:
+        """What one share counts for in player worth: its price, plus a share of the treasury
+        under the experimental ``treasury_in_final_worth`` rule."""
+        fraction = self.config.treasury_in_final_worth
+        claim = fraction * corp.treasury / self.config.shares_per_corporation
+        return self.price(corp) + int(claim)
 
     def is_over(self) -> bool:
         return self.round_number >= self.config.total_rounds

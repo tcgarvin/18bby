@@ -19,9 +19,11 @@ from pathlib import Path
 from statistics import mean, pstdev
 from typing import IO, Any, get_args, get_origin, get_type_hints
 
+from bby18.bots.stable import STABLE
 from bby18.config import DEFAULT_CONFIG, CorporationSpec, GameConfig
 from bby18.game import Game
 from bby18.playtest import play_one, seat_kinds
+from bby18.tournament import tournament_bots
 
 META_KEYS = ("variant", "overrides", "player_count", "bot", "seed")
 """Row keys that identify a game rather than measure it."""
@@ -170,10 +172,12 @@ class SweepSpec:
 
 def parse_spec(data: Mapping[str, Any]) -> SweepSpec:
     """Validate and expand a sweep spec (see ``bby18 sweep --help``)."""
-    allowed = {"variants", "grid", "seeds", "players", "bots"}
+    allowed = {"variants", "grid", "seeds", "players", "bots", "tournament"}
     unknown = sorted(set(data) - allowed)
     if unknown:
         raise ValueError(f"Unknown spec keys: {', '.join(unknown)}")
+    if "tournament" in data and "bots" in data:
+        raise ValueError("Give 'bots' or 'tournament', not both")
     variants: dict[str, GameConfig] = {}
     for name, overrides in data.get("variants", {}).items():
         if not isinstance(overrides, Mapping):
@@ -190,12 +194,28 @@ def parse_spec(data: Mapping[str, Any]) -> SweepSpec:
     if not (isinstance(seeds, list) and len(seeds) == 2 and all(isinstance(s, int) for s in seeds)):
         raise ValueError("'seeds' must be [start, count]")
     players = data.get("players", [3])
-    bots = data.get("bots", ["greedy"])
     if not players or not all(isinstance(p, int) for p in players):
         raise ValueError("'players' must be a non-empty list of player counts")
+    if "tournament" in data:
+        bots = _tournament_bots(data["tournament"], players)
+    else:
+        bots = data.get("bots", ["greedy"])
     if not bots or not all(isinstance(b, str) for b in bots):
         raise ValueError("'bots' must be a non-empty list of bot kinds")
     return SweepSpec(variants, range(seeds[0], seeds[0] + seeds[1]), list(players), list(bots))
+
+
+def _tournament_bots(strategies: Any, players: list[int]) -> list[str]:
+    """Every seating of a strategy tournament. Seatings fill every seat, so one player count."""
+    if len(players) != 1:
+        raise ValueError("A tournament spec takes exactly one player count")
+    if strategies == "stable":
+        strategies = list(STABLE)
+    if not (
+        isinstance(strategies, list) and strategies and all(isinstance(s, str) for s in strategies)
+    ):
+        raise ValueError("'tournament' must be \"stable\" or a non-empty list of bot kinds")
+    return tournament_bots(strategies, players[0])
 
 
 def load_spec(path: Path) -> SweepSpec:

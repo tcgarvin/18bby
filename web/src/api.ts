@@ -89,6 +89,10 @@ export interface PlayerState {
   worth: number;
   shares: Record<string, number>;
   isBot: boolean;
+  /** A bot seat's difficulty; empty for humans and for bots from before difficulties. */
+  difficulty: string;
+  /** The bot character's strategy in plain words, revealed when the game is over; else empty. */
+  plan: string;
   certificates: number;
 }
 
@@ -191,6 +195,8 @@ export interface GameState {
 export interface Seat {
   name: string;
   bot: boolean;
+  /** For a bot seat, the difficulty; the server picks a named character to fill it. */
+  difficulty?: string;
 }
 
 export interface NewGameResponse {

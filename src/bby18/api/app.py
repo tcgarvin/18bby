@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bby18.api.auth import (
     AuthError,
@@ -28,6 +28,7 @@ from bby18.api.saves import (
     CODE_VERSION,
     SaveOutdated,
     apply_submitted,
+    bot_seats,
     load_session,
     new_session,
     replay,
@@ -45,9 +46,10 @@ from bby18.api.store import (
     StaleSave,
 )
 from bby18.board import load_board
+from bby18.bots.roster import DIFFICULTIES, PLANS, character_named
 from bby18.config import DEFAULT_CONFIG
 from bby18.network import IllegalAction
-from bby18.session import GameSession
+from bby18.session import GameSession, Phase
 
 LOCAL_USER = "local"
 FRONTEND_DIRECTORY = "public"
@@ -56,6 +58,17 @@ FRONTEND_DIRECTORY = "public"
 class SeatSpec(BaseModel):
     name: str = Field(min_length=1, max_length=40)
     bot: bool = False
+    difficulty: str = ""
+    """For a bot seat: a roster difficulty, and the server picks a named character. Empty
+    seats the original bot under the given name."""
+
+    @model_validator(mode="after")
+    def _check_difficulty(self) -> SeatSpec:
+        if self.difficulty and not self.bot:
+            raise ValueError("Only bot seats take a difficulty")
+        if self.difficulty and self.difficulty not in DIFFICULTIES:
+            raise ValueError(f"Unknown difficulty {self.difficulty!r}; choose from {DIFFICULTIES}")
+        return self
 
 
 class NewGameRequest(BaseModel):
@@ -132,7 +145,9 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
     @app.post("/api/games")
     def new_game(request: NewGameRequest, user: str = Depends(current_user)) -> Json:
         seed = request.seed if request.seed is not None else secrets.randbits(32)
-        seats = tuple(Seat(name=s.name, bot=s.bot) for s in request.seats)
+        seats = bot_seats(
+            seed, (Seat(name=s.name, bot=s.bot, difficulty=s.difficulty) for s in request.seats)
+        )
         session = new_session(seed, seats)
         saved = SavedGame(
             id=secrets.token_urlsafe(8),
@@ -192,8 +207,16 @@ def _with_session(saved: SavedGame, actions: tuple[Json, ...], session: GameSess
 
 
 def _state_json(saved: SavedGame, session: GameSession) -> Json:
+    state = session_to_json(session)
+    over = session.phase is Phase.GAME_OVER
+    # Players are listed in seat order. A character's strategy stays hidden until the end.
+    for player, seat in zip(state["players"], saved.seats):
+        player["difficulty"] = seat.difficulty
+        player["plan"] = (
+            PLANS[character_named(seat.character).strategy] if over and seat.character else ""
+        )
     # Undo replays the save without its last action, so it is available whenever there is one.
-    return {**session_to_json(session), "canUndo": bool(saved.actions)}
+    return {**state, "canUndo": bool(saved.actions)}
 
 
 @dataclass(frozen=True)

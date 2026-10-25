@@ -8,12 +8,16 @@ interface NewGameProps {
   notice: string | null;
 }
 
-const DEFAULT_SEATS: Seat[] = [
-  { name: "You", bot: false },
-  { name: "Bot Tarkin", bot: true },
-  { name: "Bot Organa", bot: true },
-];
-const BOT_NAMES = ["Bot Tarkin", "Bot Organa", "Bot Mon Mothma", "Bot Jabba"];
+/** Difficulties offered for bot seats, easiest first. More will be added as they are tuned. */
+const DIFFICULTIES = [{ value: "easy", label: "Easy" }];
+/** Sent as a bot seat's name; the server replaces it with the character it picks. */
+const BOT_PLACEHOLDER = "Random opponent";
+
+function botSeat(): Seat {
+  return { name: BOT_PLACEHOLDER, bot: true, difficulty: DIFFICULTIES[0].value };
+}
+
+const DEFAULT_SEATS: Seat[] = [{ name: "You", bot: false }, botSeat(), botSeat()];
 
 export function NewGame({ onCreated, notice }: NewGameProps) {
   const [seats, setSeats] = useState<Seat[]>(DEFAULT_SEATS);
@@ -23,14 +27,18 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
 
   const seedValue = seed.trim() === "" ? undefined : Number(seed);
   const seedValid = seedValue === undefined || (Number.isInteger(seedValue) && seedValue >= 0);
-  const namesValid = seats.every((s) => s.name.trim().length > 0 && s.name.trim().length <= 40);
+  const namesValid = seats.every((s) => s.bot || (s.name.trim().length > 0 && s.name.trim().length <= 40));
 
   function update(index: number, patch: Partial<Seat>) {
     setSeats((current) => current.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   }
 
   function addSeat() {
-    setSeats((current) => [...current, { name: BOT_NAMES[current.length % BOT_NAMES.length], bot: true }]);
+    setSeats((current) => [...current, botSeat()]);
+  }
+
+  function setBot(index: number, bot: boolean) {
+    update(index, bot ? botSeat() : { name: `Player ${index + 1}`, bot: false, difficulty: undefined });
   }
 
   async function submit(event: FormEvent) {
@@ -52,7 +60,8 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
         <p className="eyebrow">18BBY · Hyperspace commerce</p>
         <h1>New game</h1>
         <p className="muted">
-          Two to four seats at one screen. Bot seats play automatically whenever it is their turn.
+          Two to four seats at one screen. Bot seats are filled with a random named opponent at the
+          difficulty you pick; you learn each opponent's strategy when the game ends.
         </p>
         {notice && <div className="notice">{notice}</div>}
 
@@ -60,14 +69,31 @@ export function NewGame({ onCreated, notice }: NewGameProps) {
           {seats.map((seat, i) => (
             <li key={i} className="seat">
               <span className="seat__num">{i + 1}</span>
-              <input
-                aria-label={`Seat ${i + 1} name`}
-                value={seat.name}
-                maxLength={40}
-                onChange={(e) => update(i, { name: e.target.value })}
-              />
+              {seat.bot ? (
+                <span className="seat__bot">
+                  Random opponent
+                  <select
+                    aria-label={`Seat ${i + 1} difficulty`}
+                    value={seat.difficulty}
+                    onChange={(e) => update(i, { difficulty: e.target.value })}
+                  >
+                    {DIFFICULTIES.map((d) => (
+                      <option key={d.value} value={d.value}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              ) : (
+                <input
+                  aria-label={`Seat ${i + 1} name`}
+                  value={seat.name}
+                  maxLength={40}
+                  onChange={(e) => update(i, { name: e.target.value })}
+                />
+              )}
               <label className="toggle">
-                <input type="checkbox" checked={seat.bot} onChange={(e) => update(i, { bot: e.target.checked })} />
+                <input type="checkbox" checked={seat.bot} onChange={(e) => setBot(i, e.target.checked)} />
                 <span>Bot</span>
               </label>
               <button

@@ -5,11 +5,12 @@ from __future__ import annotations
 import random
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from statistics import mean
 
 from bby18.board import Terrain
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
+from bby18.bots.stable import STABLE
 from bby18.config import GameConfig
 from bby18.game import Game
 from bby18.metrics import (
@@ -148,10 +149,31 @@ BOT_KINDS: dict[str, Callable[[random.Random], Decider]] = {
     "greedy-hold": _greedy(GreedyPolicy(withhold_when_revenue_below=60, pay_threshold=4)),
     "greedy-sell": _greedy(GreedyPolicy(sell_losers=True, start_order="random")),
     "greedy-max": _greedy(GreedyPolicy(par_choice="max", start_order="random", max_presidencies=2)),
+    **{name: _greedy(policy) for name, policy in STABLE.items()},
 }
 """Named bot kinds for playtests and sweeps. Each builds one seat's decider from its own rng."""
 
 MIX_PREFIX = "mix:"
+NOISE_SEPARATOR = "~"
+"""``"baron~0.3"`` is the stable strategy ``baron`` with ``noise=0.3``."""
+
+
+def bot_factory(kind: str) -> Callable[[random.Random], Decider]:
+    """The decider factory for a bot kind: a ``BOT_KINDS`` name, or a stable strategy with a
+    noise level (``"baron~0.3"``). Unknown kinds raise ``ValueError``."""
+    if kind in BOT_KINDS:
+        return BOT_KINDS[kind]
+    base, separator, level = kind.partition(NOISE_SEPARATOR)
+    if separator and base in STABLE:
+        try:
+            noise = float(level)
+        except ValueError:
+            raise ValueError(f"Bad noise level in bot kind {kind!r}") from None
+        return _greedy(replace(STABLE[base], noise=noise))
+    raise ValueError(
+        f"Unknown bot kind {kind!r}; choose from {', '.join(BOT_KINDS)}, "
+        f"or a stable strategy with a noise level such as baron{NOISE_SEPARATOR}0.3"
+    )
 
 
 def seat_kinds(bot: str, player_count: int) -> list[str]:
@@ -163,15 +185,14 @@ def seat_kinds(bot: str, player_count: int) -> list[str]:
             raise ValueError(f"Bad mixed bot string {bot!r}; use mix:kind1,kind2,...")
     else:
         kinds = [bot]
-    unknown = [k for k in kinds if k not in BOT_KINDS]
-    if unknown:
-        raise ValueError(f"Unknown bot kind {unknown[0]!r}; choose from {', '.join(BOT_KINDS)}")
+    for kind in kinds:
+        bot_factory(kind)
     return [kinds[i % len(kinds)] for i in range(player_count)]
 
 
 def make_deciders(game: Game, kind: str, rng: random.Random) -> dict[str, Decider]:
     kinds = seat_kinds(kind, len(game.players))
-    return {p.id: BOT_KINDS[k](random.Random(rng.random())) for p, k in zip(game.players, kinds)}
+    return {p.id: bot_factory(k)(random.Random(rng.random())) for p, k in zip(game.players, kinds)}
 
 
 def play_one(

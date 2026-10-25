@@ -31,7 +31,7 @@ export function PlayersPanel({ state }: { state: GameState }) {
               <td>
                 <span className="player-name">
                   {p.name}
-                  {p.isBot && <span className="badge">bot</span>}
+                  {p.isBot && <span className="badge">{botLabel(p.difficulty)}</span>}
                   {state.phase === "stock" && p.id === state.priorityPlayer && (
                     <span className="badge badge--priority" title="Priority deal">
                       PD
@@ -62,4 +62,9 @@ export function PlayersPanel({ state }: { state: GameState }) {
       </table>
     </section>
   );
+}
+
+/** The badge text for a bot seat: its difficulty when it has one. */
+export function botLabel(difficulty: string): string {
+  return difficulty ? `${difficulty} bot` : "bot";
 }

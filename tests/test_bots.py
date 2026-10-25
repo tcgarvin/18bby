@@ -177,6 +177,70 @@ def test_hold_policy_withholds_low_revenue():
     assert bot.choose_pay_dividends(game, corp, 60)
 
 
+def _started_cec() -> tuple[Game, Player]:
+    game = Game.new(["a", "b", "c"])
+    p1 = game.players[0]
+    game.apply_stock_action(p1, BuyShare("CEC", ShareSource.IPO, 100), set())
+    return game, p1
+
+
+def test_targeted_withholding_withholds_only_for_an_unaffordable_gaining_build():
+    game, _ = _started_cec()
+    corp = game.corp("CEC")
+    bot = GreedyBot(random.Random(1), GreedyPolicy(withhold_for_builds=True))
+    corp.treasury = 0
+    assert not bot.choose_pay_dividends(game, corp, 30)
+    corp.treasury = 10**6
+    assert bot.choose_pay_dividends(game, corp, 30)
+
+
+def test_withhold_until_round_withholds_early_then_pays():
+    game, _ = _started_cec()
+    corp = game.corp("CEC")
+    corp.treasury = 1000
+    bot = GreedyBot(random.Random(1), GreedyPolicy(withhold_until_round=2, pay_threshold=0))
+    game.round_number = 1
+    assert not bot.choose_pay_dividends(game, corp, 50)
+    game.round_number = 2
+    assert bot.choose_pay_dividends(game, corp, 50)
+
+
+def test_pay_when_steps_pays_a_big_payout_despite_withholding_early():
+    game, _ = _started_cec()
+    corp = game.corp("CEC")
+    policy = GreedyPolicy(withhold_until_round=3, pay_when_steps=2)
+    bot = GreedyBot(random.Random(1), policy)
+    price = game.price(corp)
+    assert bot.choose_pay_dividends(game, corp, 2 * price)
+    assert not bot.choose_pay_dividends(game, corp, price)
+
+
+def test_last_start_round_stops_starting_corporations():
+    game = Game.new(["a", "b", "c"])
+    player = game.players[0]
+    game.round_number = 3
+    bot = GreedyBot(random.Random(1), GreedyPolicy(last_start_round=2))
+    action = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
+    assert action == PassStock()
+
+
+def test_dump_rivals_sells_the_richer_leaders_corporation():
+    game, p2 = _losing_position(stock_rounds_played=1)
+    game.players[0].cash += 1000
+    bot = GreedyBot(random.Random(1), GreedyPolicy(dump_rivals=True))
+    assert bot.choose_stock_action(game, p2, game.legal_stock_actions(p2, set())) == SellShares(
+        "CEC", 1
+    )
+
+
+def test_dump_rivals_leaves_a_poorer_president_alone():
+    game, p2 = _losing_position(stock_rounds_played=1)
+    p2.cash += 1000
+    bot = GreedyBot(random.Random(1), GreedyPolicy(dump_rivals=True))
+    action = bot.choose_stock_action(game, p2, game.legal_stock_actions(p2, set()))
+    assert not isinstance(action, SellShares)
+
+
 def test_invalid_policy_rejected():
     with pytest.raises(ValueError):
         GreedyPolicy(start_order="alphabetical")
@@ -261,3 +325,25 @@ def test_max_par_falls_back_to_highest_affordable_when_none_floats_alone():
     bot = GreedyBot(random.Random(1), GreedyPolicy(par_choice="max"))
     choice = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
     assert isinstance(choice, BuyShare) and choice.par == 100
+
+
+def test_noise_free_policy_plays_identically_with_an_explicit_zero():
+    assert _log(_play(3, GreedyPolicy(noise=0.0))) == _log(_play(3, None))
+
+
+def test_noisy_bot_plays_differently_and_legally():
+    game = _play(3, GreedyPolicy(noise=0.5))
+    assert game.is_over()
+    assert _log(game) != _log(_play(3, None))
+
+
+def test_noise_out_of_range_rejected():
+    with pytest.raises(ValueError):
+        GreedyPolicy(noise=1.5)
+
+
+def test_noisy_kind_string_builds_a_noisy_stable_bot():
+    game, _ = play_one(2, 3, "mix:baron~0.4,builder", DEFAULT_CONFIG)
+    assert game.is_over()
+    with pytest.raises(ValueError):
+        seat_kinds("baron~lots", 3)

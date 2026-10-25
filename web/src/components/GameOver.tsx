@@ -1,4 +1,5 @@
 import type { GameState } from "../api";
+import { botLabel } from "./PlayersPanel";
 
 export function GameOver({ state, onNewGame }: { state: GameState; onNewGame: () => void }) {
   const ranking = [...state.players].sort((a, b) => b.worth - a.worth);
@@ -11,7 +12,8 @@ export function GameOver({ state, onNewGame }: { state: GameState; onNewGame: ()
             <span className="ranking__place">{i + 1}</span>
             <span>
               {p.name}
-              {p.isBot && <span className="badge">bot</span>}
+              {p.isBot && <span className="badge">{botLabel(p.difficulty)}</span>}
+              {p.plan && <span className="ranking__plan">Played to {p.plan}.</span>}
             </span>
             <span className="num">{p.worth}</span>
           </li>

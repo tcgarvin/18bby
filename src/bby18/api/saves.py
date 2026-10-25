@@ -18,11 +18,13 @@ import pickle
 import random
 import zlib
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 
 from bby18.api.serialize import Json, match_action
 from bby18.api.store import Seat, SavedGame
 from bby18.bots import GreedyBot
+from bby18.bots.roster import character_named, character_policy, draw_characters
 from bby18.config import DEFAULT_CONFIG
 from bby18.game import Game
 from bby18.network import IllegalAction
@@ -52,13 +54,30 @@ def new_session(seed: int, seats: Iterable[Seat]) -> GameSession:
     rng = random.Random(seed)
     game = Game.new([s.name for s in seats], DEFAULT_CONFIG, seed)
     bots: dict[str, Decider] = {
-        player.id: GreedyBot(random.Random(rng.random()))
+        player.id: _bot_for(seat, random.Random(rng.random()))
         for player, seat in zip(game.players, seats)
         if seat.bot
     }
     session = GameSession(game, bots, auto_forced=True)
     session.run_bots()
     return session
+
+
+def _bot_for(seat: Seat, rng: random.Random) -> Decider:
+    """A roster character at its difficulty, or the original bot for a seat without one."""
+    if not seat.difficulty:
+        return GreedyBot(rng)
+    return GreedyBot(rng, character_policy(character_named(seat.character), seat.difficulty))
+
+
+def bot_seats(seed: int, seats: Iterable[Seat]) -> tuple[Seat, ...]:
+    """``seats`` with each bot seat that has a difficulty given a character drawn from the
+    seed, named after it."""
+    seats = list(seats)
+    wanted = [i for i, s in enumerate(seats) if s.bot and s.difficulty]
+    for i, character in zip(wanted, draw_characters(seed, len(wanted))):
+        seats[i] = replace(seats[i], name=character.name, character=character.name)
+    return tuple(seats)
 
 
 def apply_submitted(session: GameSession, submitted: Json) -> None:

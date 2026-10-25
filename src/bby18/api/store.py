@@ -45,6 +45,11 @@ class StoreError(Exception):
 class Seat:
     name: str
     bot: bool
+    difficulty: str = ""
+    """For a bot seat, the roster difficulty it plays at. Empty means the original bot, which
+    every save from before difficulties keeps."""
+    character: str = ""
+    """For a roster bot, the character's name (see ``bby18.bots.roster``)."""
 
 
 @dataclass(frozen=True)
@@ -292,7 +297,7 @@ def _to_params(game: SavedGame) -> tuple[Any, ...]:
         game.id,
         game.owner,
         game.seed,
-        Jsonb([{"name": s.name, "bot": s.bot} for s in game.seats]),
+        Jsonb([_seat_to_json(s) for s in game.seats]),
         Jsonb(list(game.actions)),
         game.code_version,
         game.snapshot,
@@ -303,8 +308,26 @@ def _to_params(game: SavedGame) -> tuple[Any, ...]:
     )
 
 
+def _seat_to_json(seat: Seat) -> Json:
+    return {
+        "name": seat.name,
+        "bot": seat.bot,
+        "difficulty": seat.difficulty,
+        "character": seat.character,
+    }
+
+
 def _seats_from_json(seats: list[Json]) -> tuple[Seat, ...]:
-    return tuple(Seat(name=s["name"], bot=s["bot"]) for s in seats)
+    # Saves from before difficulties have neither field.
+    return tuple(
+        Seat(
+            name=s["name"],
+            bot=s["bot"],
+            difficulty=s.get("difficulty", ""),
+            character=s.get("character", ""),
+        )
+        for s in seats
+    )
 
 
 def _from_row(row: DictRow) -> SavedGame:

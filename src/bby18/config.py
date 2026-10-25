@@ -111,6 +111,12 @@ class GameConfig:
     homeworld_basic_income: int = 0
     """EXPERIMENTAL. Minimum revenue per operating turn for a floated corporation, even with no
     planet pairs: revenue = max(pair revenue, homeworld_basic_income). 0 disables the floor."""
+    withhold_moves_price: bool = True
+    """EXPERIMENTAL. When False, withholding positive revenue leaves the price unchanged. A
+    zero-revenue turn still follows ``zero_revenue_moves_price``."""
+    treasury_in_final_worth: float = 0.0
+    """EXPERIMENTAL. Each share is worth its price plus this fraction of its corporation's
+    treasury divided by shares_per_corporation, in player worth and so in final score."""
 
     def validate_rule_variants(self) -> None:
         """Raise ``ValueError`` if an experimental rule field names an unknown rule."""
@@ -126,6 +132,8 @@ class GameConfig:
             raise ValueError("payout_step_fractions must be non-negative and ascending")
         if self.homeworld_basic_income < 0:
             raise ValueError("homeworld_basic_income cannot be negative")
+        if not 0 <= self.treasury_in_final_worth <= 1:
+            raise ValueError("treasury_in_final_worth must be between 0 and 1")
         for name in ("asteroid_fraction", "nebula_fraction"):
             if not 0 <= getattr(self, name) <= 1:
                 raise ValueError(f"{name} must be between 0 and 1")
@@ -150,3 +158,29 @@ DEFAULT_CONFIG = GameConfig()
 # Harness settings (not game rules).
 REVENUE_CACHE_SIZE = 1 << 16
 """Bound on memoized revenue matchings kept per process."""
+
+# AI difficulty for the web app's named opponents (see bby18.bots.roster).
+DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.45}
+"""Per difficulty, the worth share a reference player (the stable's ``builder``) should take
+when seated with two bots of any one strategy. A fair share at three players is 0.333; the
+original web bot gives about 0.40. At the 1.0 noise maximum every strategy gives about 0.50."""
+BOT_NOISE: dict[str, dict[str, float]] = {
+    # Calibrated 2026-10-25 for DIFFICULTY_TARGET_SHARE (docs/sweeps/difficulty-2026-10-25).
+    "easy": {
+        "baron": 0.91,
+        "baron-prestige": 0.71,
+        "baron-tycoon": 0.9,
+        "builder": 0.88,
+        "churner": 0.56,
+        "diversifier": 0.3,
+        "early-builder": 0.92,
+        "hoarder": 0.91,
+        "prestige": 0.54,
+        "spoiler": 0.89,
+        "straight": 0.47,
+        "targeted": 0.91,
+        "tycoon": 0.75,
+    },
+}
+"""Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the
+target, the rules or a strategy changes."""

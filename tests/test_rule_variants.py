@@ -280,3 +280,48 @@ def test_default_rules_reproduce_the_reference_game() -> None:
         "P3": 1712,
     }
     assert len(game.log) == 166
+
+
+# --- withhold_moves_price -----------------------------------------------------------------
+
+
+def test_withholding_leaves_price_when_disabled() -> None:
+    game = new_game(withhold_moves_price=False)
+    corp = float_corp(game, par=100)
+    start = corp.market_cell
+    fix_revenue(game, 40)
+    game.settle_revenue(corp, pay=False)
+    assert corp.market_cell == start
+    assert corp.treasury == 8 * 100 + 40
+
+
+def test_zero_revenue_still_drops_price_when_withholding_is_free() -> None:
+    game = new_game(withhold_moves_price=False)
+    corp = float_corp(game, par=100)
+    start = corp.market_cell
+    fix_revenue(game, 0)
+    game.settle_revenue(corp, pay=True)
+    assert corp.market_cell == game.market.left(start)
+
+
+# --- treasury_in_final_worth --------------------------------------------------------------
+
+
+def test_treasury_counts_toward_share_value_when_enabled() -> None:
+    game = new_game(treasury_in_final_worth=0.5)
+    corp = float_corp(game, par=100)
+    corp.treasury = 400
+    assert game.share_value(corp) == game.price(corp) + 20
+    holder = game.players[1]
+    assert game.player_worth(holder) == holder.cash + 2 * (game.price(corp) + 20)
+
+
+def test_treasury_does_not_count_by_default() -> None:
+    game = new_game()
+    corp = float_corp(game, par=100)
+    assert game.share_value(corp) == game.price(corp)
+
+
+def test_treasury_fraction_out_of_range_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        new_game(treasury_in_final_worth=1.5)

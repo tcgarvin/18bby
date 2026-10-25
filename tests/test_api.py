@@ -253,3 +253,39 @@ def test_anonymous_account_flow():
     other = {"Authorization": f"Bearer {client.post('/api/accounts').json()['token']}"}
     assert client.get(f"/api/games/{body['gameId']}", headers=other).status_code == 404
     assert client.get("/api/games", headers=other).json() == {"games": []}
+
+
+def test_easy_bot_seats_get_distinct_named_characters(client):
+    seats = [{"name": "Me"}] + [{"name": "x", "bot": True, "difficulty": "easy"}] * 2
+    state = client.post("/api/games", json={"seats": seats, "seed": 9}).json()["state"]
+    me, *bots = state["players"]
+    assert me["difficulty"] == "" and me["plan"] == ""
+    names = {b["name"] for b in bots}
+    assert len(names) == 2 and "x" not in names
+    assert all(b["difficulty"] == "easy" and b["plan"] == "" for b in bots)
+
+
+def test_same_seed_draws_the_same_characters(client):
+    seats = [{"name": "Me"}, {"name": "x", "bot": True, "difficulty": "easy"}]
+    first = client.post("/api/games", json={"seats": seats, "seed": 3}).json()["state"]
+    second = client.post("/api/games", json={"seats": seats, "seed": 3}).json()["state"]
+    assert first["players"][1]["name"] == second["players"][1]["name"]
+
+
+def test_bot_plans_are_revealed_when_the_game_ends(client):
+    seats = [{"name": "x", "bot": True, "difficulty": "easy"}] * 2 + [{"name": "Old", "bot": True}]
+    state = client.post("/api/games", json={"seats": seats, "seed": 4}).json()["state"]
+    assert state["phase"] == "game_over"
+    roster_bots, classic = state["players"][:2], state["players"][2]
+    assert all(b["plan"] for b in roster_bots)
+    assert classic["name"] == "Old" and classic["plan"] == "" and classic["difficulty"] == ""
+
+
+@pytest.mark.parametrize(
+    "seat",
+    [{"name": "Me", "difficulty": "easy"}, {"name": "B", "bot": True, "difficulty": "brutal"}],
+    ids=["human-with-difficulty", "unknown-difficulty"],
+)
+def test_bad_difficulty_is_rejected(client, seat):
+    seats = [seat, {"name": "B2", "bot": True}]
+    assert client.post("/api/games", json={"seats": seats}).status_code == 422

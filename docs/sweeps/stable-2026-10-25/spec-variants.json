@@ -1,0 +1,14 @@
+{
+  "variants": {
+    "float4": {"float_capital_shares": 4},
+    "free_withhold": {"withhold_moves_price": false},
+    "treasury50": {"treasury_in_final_worth": 0.5},
+    "dearer": {"chart_cost": 90, "service_cost": 90, "upgrade_cost": 120, "nebula_chart_surcharge": 45}
+  },
+  "seeds": [1, 6],
+  "players": [3],
+  "tournament": [
+    "baron", "builder", "early-builder", "targeted", "hoarder",
+    "investor", "tycoon", "prestige", "baron-tycoon", "baron-prestige"
+  ]
+}

@@ -12,6 +12,8 @@ from bby18.config import DEFAULT_CONFIG
 from bby18.playtest import BOT_KINDS, play_many, play_one, seat_kinds
 from bby18.terrain_report import terrain_report
 from bby18.sweep import SweepError, load_spec, read_rows, row_keys, run_sweep, summarize
+from bby18.tournament import report as tournament_report
+from bby18.tournament import table_results
 
 SWEEP_EPILOG = """\
 spec.json:
@@ -77,6 +79,14 @@ def main() -> None:
     )
     mode.add_argument("--overwrite", action="store_true", help="replace an existing --out")
 
+    p_tournament = sub.add_parser(
+        "tournament-report",
+        help="analyze a tournament sweep: shares, best responses, equilibria",
+    )
+    p_tournament.add_argument("--rows", type=Path, required=True, help="sweep results JSONL")
+    p_tournament.add_argument("--variant", help="only this variant (required if several)")
+    p_tournament.add_argument("--bootstrap", type=int, default=40)
+
     p_serve = sub.add_parser("serve", help="run the HTTP API for the web frontend")
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--reload", action="store_true")
@@ -97,6 +107,8 @@ def main() -> None:
         return
     if args.command == "sweep":
         sys.exit(sweep_command(args))
+    if args.command == "tournament-report":
+        sys.exit(tournament_command(args))
     if args.command == "terrain-report":
         report = terrain_report(range(1, args.seeds + 1), DEFAULT_CONFIG)
         print(json.dumps(report, indent=1))
@@ -175,6 +187,25 @@ def sweep_command(args: argparse.Namespace) -> int:
         summary = summarize(existing + rows)
         args.summary.write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     return status
+
+
+def tournament_command(args: argparse.Namespace) -> int:
+    rows = read_rows(args.rows)
+    variants = sorted({str(r["variant"]) for r in rows})
+    if args.variant is None and len(variants) > 1:
+        print(
+            f"Several variants in {args.rows}; pick one of {', '.join(variants)}", file=sys.stderr
+        )
+        return 2
+    name = args.variant or variants[0]
+    rows = [r for r in rows if r["variant"] == name]
+    counts = sorted({int(r["player_count"]) for r in rows})
+    if len(counts) != 1:
+        print(f"Variant {name!r} mixes player counts {counts}", file=sys.stderr)
+        return 2
+    print(f"variant {name}")
+    print(tournament_report(table_results(rows), counts[0], bootstrap_runs=args.bootstrap))
+    return 0
 
 
 if __name__ == "__main__":

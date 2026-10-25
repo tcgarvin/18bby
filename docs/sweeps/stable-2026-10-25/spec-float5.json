@@ -1,0 +1,11 @@
+{
+  "variants": {
+    "float5": {"float_capital_shares": 5}
+  },
+  "seeds": [1, 6],
+  "players": [3],
+  "tournament": [
+    "baron", "builder", "early-builder", "targeted", "hoarder",
+    "investor", "tycoon", "prestige", "baron-tycoon", "baron-prestige"
+  ]
+}

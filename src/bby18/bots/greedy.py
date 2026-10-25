@@ -6,6 +6,7 @@ finding comes from the game or from one bot habit. ``GreedyPolicy()`` is the ori
 
 from __future__ import annotations
 
+import copy
 import heapq
 import random
 from dataclasses import dataclass
@@ -35,6 +36,10 @@ NO_ROUTE_COST = 1000
 """Stand-in route cost for a build that leads nowhere new; larger than any real route."""
 START_SCORE = 1.0
 """Stock score of starting a corporation, above any other buy."""
+CARELESS_BUILD_CHOICES = 3
+"""A careless build is one of this many runners-up by score."""
+CARELESS_DIVIDEND_FRACTION = 0.5
+"""A noisy bot flips its dividend decision at this fraction of its noise rate."""
 FLOAT_SEEKING_SCORE = 0.9
 """Stock score of an IPO buy toward floating one's own corporation: below starting one, above
 ordinary buys, and above the cash-reserve cutoff so the bot never passes instead."""
@@ -76,6 +81,30 @@ class GreedyPolicy:
     fields and through nebulae, and judges a tile by where its far exit leads."""
     path_cost_weight: float = 0.2
     """With "path" routing: network score penalty per credit of remaining route cost."""
+    own_share_bonus: float = 1.5
+    """Multiplier on the buy score of shares in corporations this player presides over."""
+    cash_reserve: int = 200
+    """Pass rather than make a weak buy (score below ``reserve_min_score``) while cash is below
+    this."""
+    reserve_min_score: float = 0.02
+    """The buy score below which a buy counts as weak for ``cash_reserve``."""
+    last_start_round: int = 1_000
+    """Start no corporation after this round (0-based stock-round cycle)."""
+    withhold_until_round: int = 0
+    """Withhold every turn before this round (0-based), then follow the other dividend knobs."""
+    withhold_for_builds: bool = False
+    """Withhold exactly when a revenue-gaining build exists that the treasury cannot afford;
+    otherwise pay. Replaces ``pay_threshold`` and ``withhold_when_revenue_below``."""
+    pay_when_steps: int = 0
+    """Pay whenever paying would move the price at least this many columns, before the other
+    dividend knobs are consulted (0 = off)."""
+    dump_rivals: bool = False
+    """In stock rounds, sell one share of a corporation presided over by the richest other
+    player, when that player is richer than this one."""
+    noise: float = 0.0
+    """Carelessness, 0 to 1: the chance that a stock decision is a random pass or buy and that
+    a build is one of the next few by score instead of the best. Dividends flip at
+    ``CARELESS_DIVIDEND_FRACTION`` of this rate. 0 plays exactly as without the knob."""
 
     def __post_init__(self) -> None:
         if self.start_order not in START_ORDERS:
@@ -84,6 +113,8 @@ class GreedyPolicy:
             raise ValueError(f"par_choice must be one of {PAR_CHOICES}, not {self.par_choice!r}")
         if self.max_presidencies < 0:
             raise ValueError("max_presidencies must be non-negative")
+        if not 0 <= self.noise <= 1:
+            raise ValueError("noise must be between 0 and 1")
         if self.routing not in ROUTING_MODES:
             raise ValueError(f"routing must be one of {ROUTING_MODES}, not {self.routing!r}")
 
@@ -99,9 +130,20 @@ class GreedyBot:
 
     # --- stock round ---------------------------------------------------------
 
+    def _slips(self, chance: float) -> bool:
+        """Whether this decision is a mistake. Draws from the rng only for a noisy policy, so
+        a noise-free bot's games are unchanged."""
+        return self.policy.noise > 0 and self.rng.random() < chance
+
     def choose_stock_action(
         self, game: Game, player: Player, legal: list[StockAction]
     ) -> StockAction:
+        if self._slips(self.policy.noise):
+            return self._careless_stock_action(game, legal)
+        if self.policy.dump_rivals:
+            sale = self._rival_sale(game, player, legal)
+            if sale is not None:
+                return sale
         if self.policy.sell_losers:
             sale = self._loser_sale(game, player, legal)
             if sale is not None:
@@ -127,16 +169,27 @@ class GreedyBot:
                 continue
             cost = game.ipo_price(corp) if action.source is ShareSource.IPO else game.price(corp)
             expected = max(corp.last_revenue, 10) / game.config.shares_per_corporation
-            own_bonus = 1.5 if corp.president == player.id else 1.0
+            own_bonus = self.policy.own_share_bonus if corp.president == player.id else 1.0
             scored.append((own_bonus * expected / cost, action))
         if not scored:
             return PassStock()
         scored.sort(key=lambda t: -t[0])
         best_score = scored[0][0]
         # Keep a cash reserve unless the deal is clearly good.
-        if best_score < 0.02 and player.cash < 200:
+        if best_score < self.policy.reserve_min_score and player.cash < self.policy.cash_reserve:
             return PassStock()
         return scored[0][1]
+
+    def _careless_stock_action(self, game: Game, legal: list[StockAction]) -> StockAction:
+        """A random pass or buy in an already started corporation: a plausible slip, never a
+        sale or a new start, which would change the strategy rather than its execution."""
+        options: list[StockAction] = [PassStock()]
+        options += [
+            a
+            for a in legal
+            if isinstance(a, BuyShare) and game.corp(a.corp_id).status is not CorpStatus.UNSTARTED
+        ]
+        return self.rng.choice(options)
 
     @staticmethod
     def _helps_own_float(corp: Corporation, player: Player, action: BuyShare) -> bool:
@@ -149,6 +202,8 @@ class GreedyBot:
 
     def _start_options(self, game: Game, player: Player, buys: list[BuyShare]) -> list[BuyShare]:
         """One start action per startable corporation, in the order this policy prefers."""
+        if game.round_number > self.policy.last_start_round:
+            return []
         presided = [c for c in game.corporations.values() if c.president == player.id]
         if len(presided) >= self.policy.max_presidencies:
             return []
@@ -222,6 +277,23 @@ class GreedyBot:
                 worst = (ratio, action)
         return None if worst is None else worst[1]
 
+    @staticmethod
+    def _rival_sale(game: Game, player: Player, legal: list[StockAction]) -> SellShares | None:
+        """A legal one-share sale of a corporation the richest other player presides over,
+        if that player is richer than this one."""
+        rivals = [p for p in game.players if p.id != player.id]
+        if not rivals:
+            return None
+        leader = max(rivals, key=game.player_worth)
+        if game.player_worth(leader) <= game.player_worth(player):
+            return None
+        for action in legal:
+            if not isinstance(action, SellShares) or action.count != 1:
+                continue
+            if game.corp(action.corp_id).president == leader.id:
+                return action
+        return None
+
     # --- operating round -----------------------------------------------------
 
     def choose_network_action(
@@ -234,7 +306,7 @@ class GreedyBot:
         reach = game.reachable(corp)
         unreached = [p for p in game.board.planets if p.hex not in reach]
         to_go = self._route_costs(game, corp, unreached) if self.policy.routing == "path" else {}
-        best: tuple[float, NetworkAction] | None = None
+        scored: list[tuple[float, NetworkAction]] = []
         for action in candidates:
             gain = self._revenue_after(game, corp, action, reach) - current
             if self.policy.routing == "path":
@@ -251,11 +323,15 @@ class GreedyBot:
                 - action.cost * self.policy.cost_weight
                 + self.rng.random()
             )
-            if best is None or score > best[0]:
-                best = (score, action)
-        assert best is not None
+            scored.append((score, action))
+        # max() keeps the first of equal scores, as the original strict-greater scan did.
+        best = max(scored, key=lambda t: t[0])
         if best[0] < -50 and corp.treasury < game.config.chart_cost * 2:
             return NoNetworkAction()
+        if len(scored) > 1 and self._slips(self.policy.noise):
+            # A near miss: one of the next few builds by score, never an arbitrary one.
+            runners_up = sorted(scored, key=lambda t: -t[0])[1 : 1 + CARELESS_BUILD_CHOICES]
+            return self.rng.choice(runners_up)[1]
         return best[1]
 
     @staticmethod
@@ -345,9 +421,34 @@ class GreedyBot:
         return compute_revenue(planets, game.config).total
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool:
+        intended = self._intended_dividend(game, corp, revenue)
+        if self._slips(self.policy.noise * CARELESS_DIVIDEND_FRACTION):
+            return not intended
+        return intended
+
+    def _intended_dividend(self, game: Game, corp: Corporation, revenue: int) -> bool:
+        steps = self.policy.pay_when_steps
+        if steps and game.payout_steps(revenue, game.price(corp)) >= steps:
+            return True
+        if game.round_number < self.policy.withhold_until_round:
+            return False
+        if self.policy.withhold_for_builds:
+            return not self._needs_cash_to_build(game, corp)
         if revenue < self.policy.withhold_when_revenue_below:
             return False
         return corp.treasury >= game.config.chart_cost * self.policy.pay_threshold
+
+    def _needs_cash_to_build(self, game: Game, corp: Corporation) -> bool:
+        """Whether some build would raise revenue but costs more than the treasury holds."""
+        unlimited = copy.copy(corp)
+        unlimited.treasury = 10**9
+        reach = game.reachable(corp)
+        current = game.revenue(corp).total
+        return any(
+            action.cost > corp.treasury and self._revenue_after(game, corp, action, reach) > current
+            for action in game.legal_network_actions(unlimited)
+            if not isinstance(action, NoNetworkAction)
+        )
 
 
 def _is_first_par(action: BuyShare, buys: list[BuyShare]) -> bool:
