@@ -215,7 +215,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           </div>
         )}
 
-        <main className={`stage stage--${display.phase}`}>
+        <main className={`stage stage--${display.phase}${replaying ? " stage--replaying" : ""}`}>
           {/* The replay caption: the move being animated, with speed and Skip. */}
           <div className="caption-slot" aria-live="polite">
             {step && (

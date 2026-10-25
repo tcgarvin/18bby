@@ -100,24 +100,6 @@ export function dividendSplit(state: GameState, corp: CorporationState, total: n
   return { perShare, payouts, bankKeeps: total - paid };
 }
 
-export interface OwnershipSlice {
-  /** A player id, or "ipo" / "pool". */
-  owner: string;
-  count: number;
-}
-
-/** How a corporation's shares split among players (president first), the IPO and the pool. */
-export function ownership(state: GameState, corp: CorporationState): OwnershipSlice[] {
-  const holders = state.players
-    .filter((p) => (p.shares[corp.id] ?? 0) > 0)
-    .sort((a, b) => Number(b.id === corp.president) - Number(a.id === corp.president));
-  return [
-    ...holders.map((p) => ({ owner: p.id, count: p.shares[corp.id] ?? 0 })),
-    { owner: "pool", count: corp.poolShares },
-    { owner: "ipo", count: corp.ipoShares },
-  ].filter((slice) => slice.count > 0);
-}
-
 /**
  * The market cell showing `price` nearest to `from`, preferring the same row. Used only to
  * point at where a dividend preview price sits on the grid; the server decides the move.

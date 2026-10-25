@@ -246,6 +246,12 @@
   display: none;
 }
 
+/* The stock view's corporation list runs to the bottom of the stage, so a replay reserves room
+   for the caption instead of covering the last corporation. */
+.stage--stock.stage--replaying {
+  padding-bottom: 72px;
+}
+
 /* ---------- Shared view pieces ---------- */
 
 .view {
@@ -391,43 +397,10 @@
 .pcard__holdings {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  min-height: 20px;
+  align-items: flex-end;
+  gap: 6px 12px;
+  min-height: 22px;
   font-size: 12px;
-}
-
-.holding {
-  --corp: #888;
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid var(--corp);
-  border-radius: 4px;
-  overflow: hidden;
-  font: 600 10.5px/18px var(--font-mono);
-}
-
-.holding__id {
-  padding: 0 4px;
-  background: var(--corp);
-  color: #fff;
-}
-
-.holding__count {
-  min-width: 18px;
-  padding: 0 5px;
-  text-align: center;
-  color: var(--ink);
-}
-
-.holding--president {
-  box-shadow: 0 0 0 1px var(--corp);
-}
-
-.holding--president .holding__count::after {
-  content: "★";
-  margin-left: 2px;
-  font-size: 9px;
-  color: var(--corp);
 }
 
 .pstrip--compact {
@@ -562,7 +535,7 @@
 
 .ccard__top {
   display: grid;
-  grid-template-columns: minmax(180px, 0.85fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
@@ -607,8 +580,8 @@
 
 .ccard__stats {
   display: grid;
-  grid-template-columns: 1.25fr 0.9fr 0.6fr 0.9fr 1.2fr;
-  gap: 10px;
+  grid-template-columns: minmax(96px, max-content) minmax(64px, max-content) minmax(80px, max-content);
+  gap: 18px;
   margin: 0;
 }
 
@@ -624,8 +597,7 @@
   line-height: 1.2;
 }
 
-.ccard__par,
-.ccard__at {
+.ccard__par {
   margin-left: 4px;
   font-size: 11px;
   font-weight: 400;
@@ -633,6 +605,7 @@
 }
 
 .ccard__president dd {
+  max-width: 150px;
   overflow: hidden;
   font-family: var(--font-sans);
   text-overflow: ellipsis;
@@ -645,67 +618,34 @@
   gap: 8px 14px;
 }
 
-.obar {
+.ccard__certs {
   display: flex;
-  flex: 1 1 220px;
-  gap: 2px;
-  height: 22px;
-  min-width: 180px;
+  align-items: flex-end;
+  gap: 18px;
 }
 
-.obar__seg {
-  display: flex;
+/* A certificate stack with its label underneath: "IPO @100", "Pool @80". */
+.certpile {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.certpile__label {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
   gap: 4px;
-  min-width: 0;
-  padding: 0 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  line-height: 1;
-  overflow: hidden;
-  white-space: nowrap;
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.obar__seg--player {
-  background: var(--corp);
-  color: #fff;
-  font-weight: 500;
-}
-
-.obar__seg--president {
-  background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
-}
-
-.obar__seg--pool {
-  background: #e3e6eb;
+.certpile__price {
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--ink-2);
-}
-
-.obar__seg--ipo {
-  background: repeating-linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--corp) 14%, #fff) 0 5px,
-    color-mix(in srgb, var(--corp) 6%, #fff) 5px 10px
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--corp) 45%, #fff);
-  color: color-mix(in srgb, var(--corp) 80%, #000);
-}
-
-.obar__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.obar__count {
-  flex: none;
-  font-weight: 600;
-}
-
-.obar__label:empty + .obar__count {
-  margin: 0 auto;
 }
 
 .trade {
@@ -1524,10 +1464,10 @@
 
 .payouts li {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
+  padding: 3px 9px;
+  border-radius: 6px;
   background: #eef6f0;
 }
 
@@ -1932,6 +1872,10 @@
 
   .topbar__id {
     display: none;
+  }
+
+  .ccard__top {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ccard__stats {

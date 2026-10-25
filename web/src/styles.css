@@ -421,24 +421,32 @@ kbd {
   color: var(--accent-ink);
 }
 
+/*
+ * The popover lives in a portal on <body> and is placed with fixed coordinates by Help.tsx, so
+ * it sets every text property itself rather than inheriting them from wherever the "?" sits.
+ * It stacks above overlays (40) and the playback flight layer (1000).
+ */
 .help__pop {
-  position: absolute;
-  z-index: 50;
-  top: calc(100% + 6px);
-  left: -8px;
+  position: fixed;
+  z-index: 1100;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 260px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: 0 6px 20px rgba(27, 35, 48, 0.18);
   color: var(--ink);
-  font-size: 12.5px;
-  line-height: 1.45;
+  font: 400 12.5px / 1.45 var(--font-sans);
+  letter-spacing: normal;
   text-align: left;
+  text-transform: none;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .help__term {
@@ -594,9 +602,4 @@ kbd {
   .rules__toc {
     position: static;
   }
-}
-
-.help__pop--right {
-  right: -8px;
-  left: auto;
 }

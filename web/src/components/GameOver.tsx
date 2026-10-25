@@ -1,5 +1,6 @@
 import type { GameState } from "../api";
 import { corpColor } from "../selectors";
+import { CertStack } from "./CertStack";
 import { botLabel } from "./PlayerStrip";
 
 /** Players ranked by final worth, each with their holdings and (for bots) the plan they played. */
@@ -22,10 +23,13 @@ export function GameOver({ state, onNewGame }: { state: GameState; onNewGame: ()
                 {state.corporations
                   .filter((c) => (p.shares[c.id] ?? 0) > 0)
                   .map((c) => (
-                    <span key={c.id} className="holding" style={{ ["--corp" as string]: corpColor(state, c.id) }}>
-                      <span className="holding__id">{c.id}</span>
-                      <span className="holding__count num">{p.shares[c.id]}</span>
-                    </span>
+                    <CertStack
+                      key={c.id}
+                      corpId={c.id}
+                      color={corpColor(state, c.id)}
+                      shares={p.shares[c.id] ?? 0}
+                      president={c.president === p.id}
+                    />
                   ))}
               </span>
               {p.plan && <span className="ranking__plan">Played to {p.plan}.</span>}

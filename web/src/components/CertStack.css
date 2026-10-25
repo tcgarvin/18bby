@@ -1,0 +1,115 @@
+/*
+ * A pile of share certificates. The top certificate sits at the bottom left; the ones beneath
+ * peek out up and to the right, one --d step each. The playback flight layer builds the same
+ * markup for a share flying between a corporation and a player.
+ */
+
+.cert {
+  --corp: #888;
+  --layers: 0;
+  --d: 2px;
+  --w: 24px;
+  --h: 16px;
+  --fs: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.cert--md {
+  --d: 3px;
+  --w: 34px;
+  --h: 22px;
+  --fs: 10px;
+  gap: 6px;
+}
+
+.cert__pile {
+  position: relative;
+  display: inline-flex;
+  padding-top: calc(var(--layers) * var(--d));
+  padding-right: calc(var(--layers) * var(--d));
+}
+
+.cert__card,
+.cert__layer {
+  width: var(--w);
+  height: var(--h);
+  border-radius: 3px;
+}
+
+.cert__card {
+  position: relative;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: var(--corp);
+  box-shadow: 0 1px 2px rgba(27, 35, 48, 0.28);
+  outline: 1px solid rgba(255, 255, 255, 0.6);
+  outline-offset: -3px;
+  color: #fff;
+  font: 600 var(--fs) / 1 var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.cert--sm .cert__card {
+  outline-offset: -2px;
+}
+
+/* The president's certificate is worth several shares: wider, with a gold frame and a star. */
+.cert__card--president {
+  width: calc(var(--w) * 1.42);
+  outline: 1.5px solid #ffd76a;
+}
+
+.cert__star {
+  color: #ffd76a;
+  font-size: 0.9em;
+}
+
+.cert__layer {
+  position: absolute;
+  bottom: calc(var(--i) * var(--d));
+  left: calc(var(--i) * var(--d));
+  z-index: calc(10 - var(--i));
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: color-mix(in srgb, var(--corp) 82%, #fff);
+  box-shadow: 0 0 0 0.5px rgba(27, 35, 48, 0.35);
+}
+
+.cert--empty .cert__card {
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  box-shadow: none;
+  outline: none;
+  color: var(--ink-3);
+}
+
+.cert__count {
+  min-width: 1ch;
+  font: 600 11px / 1 var(--font-mono);
+  color: var(--ink);
+}
+
+.cert--md .cert__count {
+  font-size: 13px;
+}
+
+.cert--empty .cert__count {
+  color: var(--ink-3);
+}
+
+/* A certificate in flight (built by src/playback/FlightLayer.tsx). */
+.cert--flying {
+  filter: drop-shadow(0 4px 8px rgba(27, 35, 48, 0.3));
+}
+
+.cert--flying .cert__count {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #fff;
+}

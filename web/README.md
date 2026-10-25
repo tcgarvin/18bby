@@ -48,7 +48,7 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
 - `src/auth.ts`: the anonymous account token, created on first use and kept in localStorage.
 - `src/hex.ts`: axial hex geometry, edge midpoints and region shading. Tested in `hex.test.ts`.
 - `src/selectors.ts`: derived views of the game state: legal trades per corporation, the
-  round stepper, the operating order with who is done, dividend payouts, share ownership.
+  round stepper, the operating order with who is done, dividend payouts.
   Tested in `selectors.test.ts`.
 - `src/tilediff.ts`: which hexes changed between two states, for outlining others' moves.
   Tested in `tilediff.test.ts`.
@@ -73,7 +73,7 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   - `usePlayback.ts`: the hook GameScreen uses: `enqueue(before, after)`, `display`, `current`,
     `skip`, `setSpeed`.
   - `FlightLayer.tsx`, `flight.ts`, `choreography.ts`, `StepEffects.tsx`: an overlay that flies
-    share chips and coins between the anchors below, pops labels and rings highlights;
+    share certificates and coins between the anchors below, pops labels and rings highlights;
     `choreography.ts` says which effects each kind of move plays. Tested in `flight.test.ts`.
   - `ReplayBar.tsx` (caption, counter, speed, Skip; the round banner), `Ticker.tsx` (numbers
     that tick to a new value), `useSettled.ts` (show a "before" value for one frame so a newly
@@ -90,7 +90,10 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   - `TopBar` (round stepper, who is acting, overlay toggles, Undo), `RecentMoves` (the ribbon),
     `Overlay` and `MapOverlay` (the map, market and log over any view).
   - `PlayerStrip` (player cards, or a compact cash strip), `CorporationBoard` (corporation cards
-    with ownership bars and the inline buy, sell and par buttons), `StockMarket` (the grid, or a
+    with IPO and pool certificate stacks and the inline buy, sell and par buttons), `CertStack`
+    (a small pile of share certificates with its share count; the president's certificate is
+    wider, gold-framed and starred; used on corporation and player cards, dividend payouts and
+    the final standings, and copied by the flight layer for a share in flight), `StockMarket` (the grid, or a
     slice of it, with tokens positioned from their cell so they can slide), `OperatingRail` (the
     operating order, with the current corporation's panel), `NetworkActions`, `GameOver`.
   - `HexMap`: the board. It draws region tints, neutral lanes for charted tiles, and a narrow
@@ -98,22 +101,27 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
     traces stay continuous across tiles. It draws asteroid fields and nebulae, planet badges,
     homeworld tags and, for the focused corporation, the scored pairs. It can zoom to a set of
     hexes (`fitHexes`). `MapLegend`, `MapThumbnail` and `TilePreview` go with it.
-  - `LogPanel`, `Help`, `NewGame`, `SavedGames` (the "your games" list on the home screen),
+  - `Help`: the "?" glossary popover. It renders in a portal on `document.body` with fixed
+    coordinates from the trigger (`src/popover.ts`, tested in `popover.test.ts`): below the
+    "?", flipped above when there is no room, clamped inside the window, and above overlays and
+    the flight layer, so no panel can clip it.
+  - `LogPanel`, `NewGame`, `SavedGames` (the "your games" list on the home screen),
     `RulesPage`.
 
 ### Animation anchors
 
 The views mark the things that change with `data-*` attributes, which the replay engine looks
 up (`src/playback/flight.ts`): `data-player-id` (player card), `data-cash-for` (a player's cash),
-`data-corp-id` (corporation card, or its operating-order entry), `data-ipo-for`, `data-pool-for`,
-`data-treasury-for`, `data-market-token` (a corporation's stock market token),
+`data-corp-id` (corporation card, or its operating-order entry), `data-ipo-for` (the IPO
+certificate stack), `data-pool-for` (the pool stack, present only while the pool holds shares;
+effects fall back to the corporation card), `data-treasury-for`, `data-market-token` (a corporation's stock market token),
 `data-order-corp` (operating-order entry) and `data-hex="q,r"` (a map hex). Each appears at most
 once per view; second copies in overlays leave them off. The `caption-slot` at the bottom of
 the stage holds the replay caption.
 
-What each kind of move animates (`src/playback/choreography.ts`): a buy flies a share chip from
-the IPO or pool to the buyer and pops the cost at their cash (and the treasury gain when it
-floats); a sale flies the shares to the pool and lights the market token; a build flies a coin
+What each kind of move animates (`src/playback/choreography.ts`): a buy flies a share certificate
+(the president's certificate when it starts a corporation) from the IPO or pool to the buyer and pops the cost at their cash (and the treasury gain when it
+floats); a sale flies the certificates to the pool and lights the market token; a build flies a coin
 from the treasury to the hex, where the new lane draws in and glows in the builder's colour; a
 dividend flies a coin to each paid player's cash, or pops the withheld sum at the treasury, and
 lights the market token. Cash, treasury and prices tick to their new values, and market tokens
@@ -125,7 +133,8 @@ The screen changes with the phase; the top bar shows where you are (e.g. SR4 ›
 and who is acting.
 
 - **Stock round:** the players and what they hold across the top, the corporations below with
-  their price, IPO and pool shares, treasury, president and an ownership bar. On your turn each
+  their price, treasury and president, and stacks of the certificates for sale in the IPO and
+  the pool. Each player card shows the certificates that player holds. On your turn each
   corporation shows the buys, sells and pars you may make, and **Pass** sits at the top. The
   stock market sits beside them, and a small map opens the full map.
 - **Operating, building:** the map fills the screen. The operating order runs down the right,
@@ -140,7 +149,7 @@ and who is acting.
   along with every bot move and forced move that followed it. It goes back as far as the game
   began; in a hotseat game it takes back whoever moved last.
 - **Opponents' moves replay.** After your move, each bot or forced move plays out in turn on the
-  view for its phase: share chips and coins fly, new lanes draw in, and a bot's dividend shows
+  view for its phase: share certificates and coins fly, new lanes draw in, and a bot's dividend shows
   the card it chose. A caption at the bottom says what happened, with a counter. Pick the speed
   there (1×, 2×, 4× or Off, which shows the result at once); the choice is remembered.
   **Skip** (<kbd>Space</kbd> or <kbd>Esc</kbd>) jumps to the end. Other shortcuts and Undo are

@@ -4,6 +4,7 @@ import type { Action, Axial, Board, CorporationState, DividendAction, GameState 
 import { useHotkeys } from "../../hotkeys";
 import { useSettled } from "../../playback/useSettled";
 import { corpColor, dividendSplit, findCorporation, nearestCellWithPrice, playerName, terrainByKey } from "../../selectors";
+import { CertStack } from "../CertStack";
 import { Help } from "../Help";
 import { HexMap } from "../HexMap";
 import { OperatingRail } from "../OperatingRail";
@@ -177,16 +178,28 @@ function Decision({ state, marketState, corp, choices, chosen, interactive, busy
               .map((p) => (
                 <li key={p.playerId}>
                   <span className="payouts__name">{playerName(state, p.playerId)}</span>
-                  <span className="payouts__shares num">{p.shares} sh</span>
+                  <CertStack
+                    corpId={corp.id}
+                    color={corpColor(state, corp.id)}
+                    shares={p.shares}
+                    president={p.playerId === corp.president}
+                  />
                   <span className="payouts__amount num">+{p.amount}</span>
                 </li>
               ))}
             {split.bankKeeps > 0 && (
               <li className="payouts__bank">
                 <span className="payouts__name">Bank keeps</span>
-                <span className="payouts__shares num">
-                  {corp.ipoShares + corp.poolShares > 0 ? `${corp.ipoShares + corp.poolShares} unheld` : "remainder"}
-                </span>
+                {corp.ipoShares + corp.poolShares > 0 ? (
+                  <CertStack
+                    corpId={corp.id}
+                    color={corpColor(state, corp.id)}
+                    shares={corp.ipoShares + corp.poolShares}
+                    title={`${corp.ipoShares + corp.poolShares} unheld shares (IPO and pool) earn nothing`}
+                  />
+                ) : (
+                  <span className="payouts__shares">remainder</span>
+                )}
                 <span className="payouts__amount num">{split.bankKeeps}</span>
               </li>
             )}

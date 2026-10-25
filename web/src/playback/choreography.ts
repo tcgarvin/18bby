@@ -38,7 +38,15 @@ export function effectsFor(kind: MoveKind, durationMs: number, color: (corpId: s
       const source = kind.source === "ipo" ? anchor.ipo(kind.corp) : anchor.pool(kind.corp);
       const label = kind.shares > 1 ? `${kind.corp} ×${kind.shares}` : kind.corp;
       const effects: Effect[] = [
-        { effect: "fly", from: [source, anchor.corp(kind.corp)], to: anchor.player(kind.player), label, color: color(kind.corp), durationMs: travel },
+        {
+          effect: "fly",
+          from: [source, anchor.corp(kind.corp)],
+          to: anchor.player(kind.player),
+          label,
+          certificate: { corpId: kind.corp, shares: kind.shares, president: kind.par !== undefined },
+          color: color(kind.corp),
+          durationMs: travel,
+        },
         money([anchor.cash(kind.player), anchor.player(kind.player)], -kind.cost),
       ];
       if (kind.par !== undefined) {
@@ -51,7 +59,15 @@ export function effectsFor(kind: MoveKind, durationMs: number, color: (corpId: s
     }
     case "sell":
       return [
-        { effect: "fly", from: anchor.player(kind.player), to: [anchor.pool(kind.corp), anchor.corp(kind.corp)], label: `${kind.corp} ×${kind.count}`, color: color(kind.corp), durationMs: travel },
+        {
+          effect: "fly",
+          from: anchor.player(kind.player),
+          to: [anchor.pool(kind.corp), anchor.corp(kind.corp)],
+          label: `${kind.corp} ×${kind.count}`,
+          certificate: { corpId: kind.corp, shares: kind.count, president: false },
+          color: color(kind.corp),
+          durationMs: travel,
+        },
         money([anchor.cash(kind.player), anchor.player(kind.player)], kind.proceeds, later),
         { effect: "highlight", target: anchor.marketToken(kind.corp), color: LOSS, durationMs: settle, delayMs: later },
       ];

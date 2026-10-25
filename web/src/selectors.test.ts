@@ -14,7 +14,6 @@ import {
   hexActionsByKey,
   nearestCellWithPrice,
   operatingQueue,
-  ownership,
   phaseSteps,
   terrainByKey,
 } from "./selectors";
@@ -176,22 +175,6 @@ describe("dividendSplit", () => {
     expect(split.perShare).toBe(12);
     expect(split.payouts.map((p) => p.amount)).toEqual([60, 24, 0]);
     expect(split.bankKeeps).toBe(41);
-  });
-});
-
-describe("ownership", () => {
-  it("lists the president first, then other holders, the pool and the IPO", () => {
-    const corp = corporation("CEC", { president: "b", ipoShares: 3, poolShares: 1 });
-    const state = gameState({
-      corporations: [corp],
-      players: [player("a", { CEC: 2 }), player("b", { CEC: 4 })],
-    });
-    expect(ownership(state, corp)).toEqual([
-      { owner: "b", count: 4 },
-      { owner: "a", count: 2 },
-      { owner: "pool", count: 1 },
-      { owner: "ipo", count: 3 },
-    ]);
   });
 });
 

@@ -1,7 +1,8 @@
 import type { Action, CorporationState, GameState, SellAction } from "../api";
-import { corpColor, ownership, playerName, tradeOptionsFor } from "../selectors";
+import { corpColor, playerName, tradeOptionsFor } from "../selectors";
 import type { CorpTradeOptions } from "../selectors";
 import { Ticker } from "../playback/Ticker";
+import { CertStack } from "./CertStack";
 import { Help } from "./Help";
 
 interface CorporationBoardProps {
@@ -13,9 +14,10 @@ interface CorporationBoardProps {
 }
 
 /**
- * One card per corporation: identity, price and par, IPO, pool, treasury, president and how
- * its shares are split, with the legal trades for it inline. Animation anchors: data-corp-id,
- * data-ipo-for, data-pool-for, data-treasury-for.
+ * One card per corporation: identity, price and par, treasury, president, and the certificates
+ * left in the IPO and the pool, with the legal trades for it inline. Animation anchors:
+ * data-corp-id, data-ipo-for (the IPO stack), data-pool-for (the pool stack, present only when
+ * the pool holds shares), data-treasury-for.
  */
 export function CorporationBoard({ state, interactive, busy, onAct }: CorporationBoardProps) {
   return (
@@ -80,23 +82,6 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
               {started && <span className="ccard__par">par {corp.par}</span>}
             </dd>
           </div>
-          <div data-ipo-for={corp.id}>
-            <dt>
-              IPO
-              {explain && <Help topic="ipo" />}
-            </dt>
-            <dd className="num">
-              {corp.ipoShares}
-              {started && corp.ipoShares > 0 && <span className="ccard__at">@{corp.ipoPrice}</span>}
-            </dd>
-          </div>
-          <div data-pool-for={corp.id}>
-            <dt>
-              Pool
-              {explain && <Help topic="pool" />}
-            </dt>
-            <dd className="num">{corp.poolShares}</dd>
-          </div>
           <div data-treasury-for={corp.id}>
             <dt>
               Treasury
@@ -117,40 +102,42 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
       </div>
 
       <div className="ccard__foot">
-        <OwnershipBar state={state} corp={corp} />
+        <div className="ccard__certs">
+          <div className="certpile" data-ipo-for={corp.id}>
+            <CertStack
+              corpId={corp.id}
+              color={color}
+              shares={corp.ipoShares}
+              president={!started}
+              size="md"
+              title={`${corp.ipoShares} ${corp.id} shares in the IPO`}
+            />
+            <span className="certpile__label">
+              IPO
+              {explain && <Help topic="ipo" />}
+              {started && corp.ipoShares > 0 && <span className="num certpile__price">@{corp.ipoPrice}</span>}
+            </span>
+          </div>
+          {corp.poolShares > 0 && (
+            <div className="certpile" data-pool-for={corp.id}>
+              <CertStack
+                corpId={corp.id}
+                color={color}
+                shares={corp.poolShares}
+                size="md"
+                title={`${corp.poolShares} ${corp.id} shares in the pool`}
+              />
+              <span className="certpile__label">
+                Pool
+                {explain && <Help topic="pool" />}
+                <span className="num certpile__price">@{corp.price}</span>
+              </span>
+            </div>
+          )}
+        </div>
         {options && <TradeControls corp={corp} options={options} explain={explain} busy={busy} onAct={onAct} />}
       </div>
     </article>
-  );
-}
-
-/** The corporation's shares as one bar: each holder's run (president first), then the pool and the IPO. */
-function OwnershipBar({ state, corp }: { state: GameState; corp: CorporationState }) {
-  const total = state.config.sharesPerCorporation;
-  const slices = ownership(state, corp);
-  return (
-    <div className="obar" aria-label={`${corp.id} ownership`}>
-      {slices.map((slice) => {
-        const kind = slice.owner === "ipo" ? "ipo" : slice.owner === "pool" ? "pool" : "player";
-        const name =
-          kind === "ipo" ? (corp.status === "unstarted" ? "Unstarted" : "IPO") : kind === "pool" ? "Pool" : playerName(state, slice.owner);
-        const president = slice.owner === corp.president;
-        return (
-          <span
-            key={slice.owner}
-            className={`obar__seg obar__seg--${kind}${president ? " obar__seg--president" : ""}`}
-            style={{ flexGrow: slice.count, flexBasis: 0, ["--n" as string]: slice.count }}
-            data-share-owner={slice.owner}
-            title={`${name}: ${slice.count} of ${total}${president ? " (president)" : ""}`}
-          >
-            <span className="obar__label">
-              {slice.count >= 3 || (kind === "player" && slice.count >= 2) ? name : ""}
-            </span>
-            <span className="obar__count num">{slice.count}</span>
-          </span>
-        );
-      })}
-    </div>
   );
 }
 

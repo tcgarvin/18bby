@@ -1,6 +1,7 @@
 import type { GameState, PlayerState } from "../api";
 import { corpColor } from "../selectors";
 import { Ticker } from "../playback/Ticker";
+import { CertStack } from "./CertStack";
 import { Help } from "./Help";
 
 interface PlayerStripProps {
@@ -98,20 +99,15 @@ function PlayerCard({ state, player, acting, explain }: PlayerCardProps) {
       </dl>
       <div className="pcard__holdings">
         {holdings.length === 0 && <span className="muted">No shares</span>}
-        {holdings.map((corp) => {
-          const president = corp.president === player.id;
-          return (
-            <span
-              key={corp.id}
-              className={`holding${president ? " holding--president" : ""}`}
-              style={{ ["--corp" as string]: corpColor(state, corp.id) }}
-              title={`${player.shares[corp.id]} ${corp.id} shares${president ? " (president)" : ""}`}
-            >
-              <span className="holding__id">{corp.id}</span>
-              <span className="holding__count num">{player.shares[corp.id]}</span>
-            </span>
-          );
-        })}
+        {holdings.map((corp) => (
+          <CertStack
+            key={corp.id}
+            corpId={corp.id}
+            color={corpColor(state, corp.id)}
+            shares={player.shares[corp.id] ?? 0}
+            president={corp.president === player.id}
+          />
+        ))}
       </div>
     </li>
   );

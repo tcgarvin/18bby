@@ -10,15 +10,26 @@ import { createPortal } from "react-dom";
 import type { AnchorTarget } from "./flight";
 import { flightKeyframes, highlightKeyframes, popKeyframes, rectCenter, resolveAnchor } from "./flight";
 import { prefersReducedMotion } from "./timing";
+import "../components/CertStack.css";
 
 /** What a flying or popping token looks like. */
 export type TokenVariant = "chip" | "coin" | "label";
+
+/** Shares to draw as a certificate pile (the "chip" variant), like the views' CertStack. */
+export interface FlyingCertificate {
+  corpId: string;
+  shares: number;
+  /** The pile is the president's certificate. */
+  president: boolean;
+}
 
 export interface FlyOptions {
   /** Where the token starts; a list is a series of fallbacks. */
   from: AnchorTarget | AnchorTarget[];
   to: AnchorTarget | AnchorTarget[];
   label: string;
+  /** For a chip: draw it as share certificates instead of a plain label. */
+  certificate?: FlyingCertificate;
   /** Background for chips, text colour for coins and labels. */
   color?: string;
   variant?: TokenVariant;
@@ -97,6 +108,50 @@ function token(label: string, variant: TokenVariant, color: string, left: number
   return element;
 }
 
+/** Certificates drawn behind the top one in a flying pile. */
+const MAX_FLYING_LAYERS = 3;
+
+/**
+ * A flying pile of share certificates, built with the same classes as `CertStack` (see
+ * components/CertStack.css) so a share in flight looks like the ones on the cards.
+ */
+function certificateToken(certificate: FlyingCertificate, label: string, color: string, left: number, top: number): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "cert cert--md cert--flying";
+  root.setAttribute("aria-label", label);
+  const certificates = certificate.president ? 1 : certificate.shares;
+  const layers = Math.max(0, Math.min(certificates - 1, MAX_FLYING_LAYERS));
+  Object.assign(root.style, { position: "fixed", left: `${left}px`, top: `${top}px`, pointerEvents: "none", willChange: "transform, opacity", opacity: "0" });
+  root.style.setProperty("--corp", color);
+  root.style.setProperty("--layers", String(layers));
+  const pile = document.createElement("span");
+  pile.className = "cert__pile";
+  for (let i = layers; i >= 1; i -= 1) {
+    const layer = document.createElement("span");
+    layer.className = "cert__layer";
+    layer.style.setProperty("--i", String(i));
+    pile.appendChild(layer);
+  }
+  const card = document.createElement("span");
+  card.className = certificate.president ? "cert__card cert__card--president" : "cert__card";
+  if (certificate.president) {
+    const star = document.createElement("span");
+    star.className = "cert__star";
+    star.textContent = "★";
+    card.appendChild(star);
+  }
+  card.appendChild(document.createTextNode(certificate.corpId));
+  pile.appendChild(card);
+  root.appendChild(pile);
+  if (certificate.shares > 1) {
+    const count = document.createElement("span");
+    count.className = "cert__count";
+    count.textContent = String(certificate.shares);
+    root.appendChild(count);
+  }
+  return root;
+}
+
 /** Provides `useFlight` to its children and draws the effects above everything else. */
 export function FlightLayer({ children }: { children: ReactNode }) {
   const overlay = useRef<HTMLDivElement>(null);
@@ -119,13 +174,16 @@ export function FlightLayer({ children }: { children: ReactNode }) {
   const api = useMemo<FlightApi>(() => {
     if (prefersReducedMotion()) return NO_FLIGHTS;
     return {
-      fly({ from, to, label, color = "var(--accent, #1f5fa8)", variant = "chip", durationMs = 700, delayMs = 0 }) {
+      fly({ from, to, label, certificate, color = "var(--accent, #1f5fa8)", variant = "chip", durationMs = 700, delayMs = 0 }) {
         const start = resolveAnchor(from);
         const end = resolveAnchor(to);
         if (!start || !end) return done;
         const a = start.getBoundingClientRect();
         const center = rectCenter(a);
-        const element = token(label, variant, color, center.x, center.y);
+        const element =
+          variant === "chip" && certificate
+            ? certificateToken(certificate, label, color, center.x, center.y)
+            : token(label, variant, color, center.x, center.y);
         return run(element, flightKeyframes(a, end.getBoundingClientRect()), durationMs, delayMs);
       },
       pop({ at, label, color = "var(--ink, #1b2330)", variant = "label", durationMs = 900, delayMs = 0 }) {
