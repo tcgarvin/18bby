@@ -134,7 +134,7 @@ def test_game_survives_a_new_app_instance(store):
         f"/api/games/{body['gameId']}/actions", json={"action": _first_buy(body["state"])}
     ).json()
     second = TestClient(create_app(store, store, HeaderUser()), headers={"Authorization": "alice"})
-    assert second.get(f"/api/games/{body['gameId']}").json() == state
+    assert second.get(f"/api/games/{body['gameId']}").json() == {**state, "moves": []}
 
 
 def test_requests_without_a_user_are_refused(store):
@@ -194,7 +194,7 @@ def test_engine_change_replays_the_save(client, store, monkeypatch):
         f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])}
     ).json()
     monkeypatch.setattr("bby18.api.saves.CODE_VERSION", "a-newer-engine")
-    assert client.get(f"/api/games/{game_id}").json() == state
+    assert client.get(f"/api/games/{game_id}").json() == {**state, "moves": []}
 
 
 def test_save_that_no_longer_replays_is_reported(client, store, monkeypatch):
@@ -289,3 +289,75 @@ def test_bot_plans_are_revealed_when_the_game_ends(client):
 def test_bad_difficulty_is_rejected(client, seat):
     seats = [seat, {"name": "B2", "bot": True}]
     assert client.post("/api/games", json={"seats": seats}).status_code == 422
+
+
+def test_action_response_lists_the_submitted_move_then_bot_replies(client):
+    body = _start(client)
+    start = _first_buy(body["state"])
+    state = client.post(f"/api/games/{body['gameId']}/actions", json={"action": start}).json()
+    first, *replies = state["moves"]
+    assert first["action"] == start
+    assert not first["automatic"]
+    assert first["actor"] == "P1"
+    assert first["phase"] == "stock" and first["roundLabel"] == "SR1"
+    assert first["corporation"] is None
+    assert replies and all(m["automatic"] for m in replies)
+    assert replies[0]["actor"] == "P2"
+    # Each frame's turn fields show who acts next, which is who makes the following move.
+    for move, following in zip(state["moves"], replies):
+        assert move["after"]["currentPlayer"] == following["actor"]
+    assert state["moves"][-1]["after"]["currentPlayer"] == state["currentPlayer"] == "P1"
+
+
+def test_frame_logs_are_the_state_log_lines_the_request_wrote(client):
+    body = _start(client)
+    state = client.post(
+        f"/api/games/{body['gameId']}/actions", json={"action": _first_buy(body["state"])}
+    ).json()
+    frame_log = [entry for move in state["moves"] for entry in move["log"]]
+    assert all(move["log"] for move in state["moves"])
+    assert frame_log == state["log"][len(body["state"]["log"]) :]
+    assert frame_log[len(state["moves"][0]["log"])]["seq"] == state["automaticLogStart"]
+
+
+def test_network_frame_lists_only_the_charted_tile(client):
+    body = client.post(
+        "/api/games", json={"seats": [{"name": "A"}, {"name": "B"}], "seed": 1}
+    ).json()
+    game_id, state = body["gameId"], body["state"]
+    while state["phase"] != "network":
+        legal = state["legalActions"]
+        action = next((a for a in legal if a["type"] == "buy"), None) or next(
+            a for a in legal if a["type"] == "pass"
+        )
+        state = client.post(f"/api/games/{game_id}/actions", json={"action": action}).json()
+    corp = state["currentCorporation"]
+    chart = next(a for a in state["legalActions"] if a["type"] == "chart")
+    state = client.post(f"/api/games/{game_id}/actions", json={"action": chart}).json()
+    (move,) = state["moves"]
+    assert move["phase"] == "network" and move["corporation"] == corp
+    assert move["revenue"] == 0
+    tile = next(t for t in state["tiles"] if t["hex"] == chart["hex"])
+    assert move["after"]["tiles"] == [tile]
+    assert move["after"]["networkActionsTaken"] == 1
+
+
+def test_new_game_with_a_bot_first_returns_its_opening_moves(client):
+    seats = [{"name": "Bot", "bot": True, "difficulty": "easy"}, {"name": "Me"}]
+    state = client.post("/api/games", json={"seats": seats, "seed": 3}).json()["state"]
+    assert state["moves"]
+    assert all(m["automatic"] and m["actor"] == "P1" for m in state["moves"])
+    assert [e for m in state["moves"] for e in m["log"]] == state["log"]
+    assert state["moves"][-1]["after"]["currentPlayer"] == state["currentPlayer"] == "P2"
+
+
+def test_new_game_with_a_human_first_has_no_moves(client):
+    assert _start(client)["state"]["moves"] == []
+
+
+def test_load_and_undo_return_no_moves(client):
+    body = _start(client)
+    game_id = body["gameId"]
+    client.post(f"/api/games/{game_id}/actions", json={"action": _first_buy(body["state"])})
+    assert client.get(f"/api/games/{game_id}").json()["moves"] == []
+    assert client.post(f"/api/games/{game_id}/undo").json()["moves"] == []

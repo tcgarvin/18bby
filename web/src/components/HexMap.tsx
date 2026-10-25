@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   Axial,
   Board,
@@ -53,6 +53,10 @@ interface HexMapProps {
   /** Hexes changed by others since your move, with the corporations that gained service there. */
   changedHexes: Map<string, string[]>;
   onHexClick: (hex: Axial) => void;
+  /** Zoom to these hexes (with a margin) instead of showing the whole board. */
+  fitHexes?: Axial[];
+  /** Accessible name for the map. */
+  label?: string;
 }
 
 interface Segment {
@@ -133,14 +137,45 @@ function regionBoundaries(board: Board, regions: Map<string, Region>): string {
   return parts.join("");
 }
 
-function viewBox(board: Board): string {
-  const points = board.hexes.map((h) => hexToPixel(h, S));
+/** The smallest number of hex rows a zoomed map shows, so a one-planet network keeps context. */
+const MIN_FIT_SPAN = S * 9;
+
+function viewBox(hexes: Axial[], minSpan = 0): string {
+  const points = hexes.map((h) => hexToPixel(h, S));
   const pad = S * 1.3;
-  const minX = Math.min(...points.map((p) => p.x)) - pad;
-  const maxX = Math.max(...points.map((p) => p.x)) + pad;
-  const minY = Math.min(...points.map((p) => p.y)) - pad;
-  const maxY = Math.max(...points.map((p) => p.y)) + pad;
+  let minX = Math.min(...points.map((p) => p.x)) - pad;
+  let maxX = Math.max(...points.map((p) => p.x)) + pad;
+  let minY = Math.min(...points.map((p) => p.y)) - pad;
+  let maxY = Math.max(...points.map((p) => p.y)) + pad;
+  const grow = (low: number, high: number): [number, number] => {
+    const extra = Math.max(0, minSpan - (high - low)) / 2;
+    return [low - extra, high + extra];
+  };
+  [minX, maxX] = grow(minX, maxX);
+  [minY, maxY] = grow(minY, maxY);
   return `${minX.toFixed(1)} ${minY.toFixed(1)} ${(maxX - minX).toFixed(1)} ${(maxY - minY).toFixed(1)}`;
+}
+
+const NO_KEYS = new Set<string>();
+
+/**
+ * Keys that appeared in `keys` since it last changed (none on the first render), for drawing
+ * newly built lanes in. They stay fresh until `keys` changes again, so re-renders in between
+ * do not cut the animation short.
+ */
+function useFreshKeys(keys: string[]): Set<string> {
+  const previous = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(NO_KEYS);
+  const signature = keys.join("|");
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = new Set(keys);
+    if (before === null) return;
+    const added = keys.filter((key) => !before.has(key));
+    setFresh(added.length > 0 ? new Set(added) : NO_KEYS);
+    // `signature` stands in for `keys`, which is rebuilt on every render.
+  }, [signature]);
+  return fresh;
 }
 
 function line(from: Point, to: Point): string {
@@ -170,17 +205,29 @@ export function HexMap(props: HexMapProps) {
     preview,
     changedHexes,
     onHexClick,
+    fitHexes,
+    label = "Galaxy map",
   } = props;
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
   const boundaries = useMemo(() => regionBoundaries(board, regions), [board, regions]);
-  const box = useMemo(() => viewBox(board), [board]);
+  const fitKey = fitHexes ? fitHexes.map(hexKey).join(" ") : "";
+  const box = useMemo(
+    () => (fitHexes && fitHexes.length > 0 ? viewBox(fitHexes, MIN_FIT_SPAN) : viewBox(board.hexes)),
+    // fitKey stands in for fitHexes, which callers rebuild on every render.
+    [board, fitKey],
+  );
   const planetsByKey = useMemo(
     () => new Map(board.planets.map((p) => [hexKey(p.hex), p] as const)),
     [board],
   );
   const planetsByName = useMemo(() => new Map(board.planets.map((p) => [p.name, p] as const)), [board]);
   const segments = useMemo(() => buildSegments(tiles, planetsByKey), [tiles, planetsByKey]);
+  const builtKeys = useMemo(
+    () => segments.flatMap((seg) => [seg.key, ...seg.service.map((corpId) => `${seg.key}:${corpId}`)]),
+    [segments],
+  );
+  const fresh = useFreshKeys(builtKeys);
   const terrainCells = useMemo(
     () =>
       board.hexes.flatMap((hex) => {
@@ -202,7 +249,7 @@ export function HexMap(props: HexMapProps) {
   }
 
   return (
-    <svg className={`hexmap${focus ? " hexmap--focused" : ""}`} viewBox={box} role="img" aria-label="Galaxy map">
+    <svg className={`hexmap${focus ? " hexmap--focused" : ""}`} viewBox={box} role="img" aria-label={label}>
       <defs>
         <radialGradient id="hexmap-nebula-haze">
           <stop offset="0%" className="hexmap__haze-core" />
@@ -217,7 +264,13 @@ export function HexMap(props: HexMapProps) {
         {board.hexes.map((hex) => {
           const region = regions.get(hexKey(hex)) ?? "Outer Rim";
           return (
-            <path key={hexKey(hex)} d={cornersToPath(hexToPixel(hex, S), S)} fill={REGION_FILL[region]} className="hexmap__cell" />
+            <path
+              key={hexKey(hex)}
+              data-hex={hexKey(hex)}
+              d={cornersToPath(hexToPixel(hex, S), S)}
+              fill={REGION_FILL[region]}
+              className="hexmap__cell"
+            />
           );
         })}
       </g>
@@ -239,22 +292,45 @@ export function HexMap(props: HexMapProps) {
 
       <g className="hexmap__lanes">
         {segments.map((seg) => (
-          <path key={seg.key} d={line(seg.from, seg.to)} strokeWidth={LANE_WIDTH} className="hexmap__lane" />
+          <path
+            key={seg.key}
+            d={line(seg.from, seg.to)}
+            strokeWidth={LANE_WIDTH}
+            className={`hexmap__lane${fresh.has(seg.key) ? " hexmap__lane--fresh" : ""}`}
+            pathLength={fresh.has(seg.key) ? 1 : undefined}
+          />
         ))}
       </g>
 
       <g className="hexmap__traces">
+        {/* A glow in the builder's colour behind lanes and service that just appeared. */}
+        {segments.flatMap((seg) =>
+          seg.service
+            .filter((corpId) => fresh.has(`${seg.key}:${corpId}`))
+            .map((corpId) => (
+              <path
+                key={`${seg.key}:${corpId}:glow`}
+                d={line(seg.from, seg.to)}
+                stroke={corporationColor(corpId, corpIds)}
+                strokeWidth={LANE_WIDTH * 1.5}
+                className="hexmap__glow"
+              />
+            )),
+        )}
         {segments.flatMap((seg) =>
           seg.service.map((corpId) => {
+            const key = `${seg.key}:${corpId}`;
             const offset = slotOffset(corpId);
             const dimmed = focus !== null && corpId !== focus.id;
+            const isFresh = fresh.has(key);
             return (
               <path
-                key={`${seg.key}:${corpId}`}
+                key={key}
                 d={line(add(seg.from, seg.normal, offset), add(seg.to, seg.normal, offset))}
                 stroke={corporationColor(corpId, corpIds)}
                 strokeWidth={focus?.id === corpId ? TRACE_WIDTH * 1.35 : TRACE_WIDTH}
-                className={`hexmap__trace${dimmed ? " hexmap__trace--dimmed" : ""}`}
+                className={`hexmap__trace${dimmed ? " hexmap__trace--dimmed" : ""}${isFresh ? " hexmap__trace--fresh" : ""}`}
+                pathLength={isFresh ? 1 : undefined}
               />
             );
           }),

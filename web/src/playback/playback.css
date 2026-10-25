@@ -1,0 +1,153 @@
+/* Replay controls: the caption pill, the round banner and the speed picker. */
+
+.replay {
+  --actor: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--actor);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 4px 14px rgb(20 30 45 / 0.16);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  white-space: nowrap;
+  animation: replay-in 180ms ease-out;
+}
+
+.replay__count {
+  flex: none;
+  min-width: 34px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--actor);
+  color: #fff;
+  font: 600 11px var(--font-mono);
+  text-align: center;
+}
+
+.replay__caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  animation: replay-caption-in 220ms ease-out;
+}
+
+.replay__skip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.replay__skip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.replay__skip kbd {
+  font-size: 10px;
+}
+
+.speed {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.speed__opt {
+  padding: 3px 9px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 500 12px var(--font-mono);
+  cursor: pointer;
+}
+
+.speed__opt + .speed__opt {
+  border-left: 1px solid var(--line);
+}
+
+.speed__opt:hover {
+  color: var(--ink);
+}
+
+.speed__opt--on {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.speed__opt--on:hover {
+  color: var(--surface);
+}
+
+.speed--compact .speed__opt {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+/* A round title across the stage, over whatever view the round opens on. */
+.phase-banner {
+  position: absolute;
+  z-index: 25;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.phase-banner__text {
+  padding: 14px 34px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  color: var(--surface);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 30px rgb(20 30 45 / 0.3);
+  animation: phase-banner-in 260ms cubic-bezier(0.2, 0.8, 0.3, 1.2);
+}
+
+@keyframes replay-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes replay-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes phase-banner-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .replay,
+  .replay__caption,
+  .phase-banner__text {
+    animation: none;
+  }
+}

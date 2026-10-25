@@ -1,8 +1,146 @@
 /** Small derived views of GameState used by several components. */
 
-import type { Action, BuyAction, CorporationState, GameState, HexAction, SellAction, TerrainHex, TerrainKind } from "./api";
+import type {
+  Action,
+  BuyAction,
+  CorporationState,
+  GameState,
+  HexAction,
+  LogEntry,
+  SellAction,
+  TerrainHex,
+  TerrainKind,
+} from "./api";
 import { isHexAction } from "./api";
+import { corporationColor } from "./colors";
 import { hexKey } from "./hex";
+
+/** Corporation ids in table order, for `corporationColor`. */
+export function corpIds(state: Pick<GameState, "corporations">): string[] {
+  return state.corporations.map((c) => c.id);
+}
+
+/** A corporation's color, looked up against the state's own corporation list. */
+export function corpColor(state: Pick<GameState, "corporations">, corpId: string): string {
+  return corporationColor(corpId, corpIds(state));
+}
+
+export type StepStage = "done" | "current" | "upcoming";
+
+export interface PhaseStep {
+  label: string;
+  stage: StepStage;
+}
+
+/**
+ * The rounds of the current game round, e.g. SR4 › OR4.1 › OR4.2, with the one in play lit.
+ * `roundLabel` is the server's label: "SR<n>", "OR<n>.<i>", "end" or "setup".
+ */
+export function phaseSteps(roundLabel: string, operatingRoundsPerStockRound: number, totalRounds: number): PhaseStep[] {
+  const stock = /^SR(\d+)$/.exec(roundLabel);
+  const operating = /^OR(\d+)\.(\d+)$/.exec(roundLabel);
+  const round = stock ? Number(stock[1]) : operating ? Number(operating[1]) : totalRounds;
+  const position = stock ? 0 : operating ? Number(operating[2]) : operatingRoundsPerStockRound + 1;
+  const labels = [`SR${round}`];
+  for (let i = 1; i <= operatingRoundsPerStockRound; i += 1) labels.push(`OR${round}.${i}`);
+  return labels.map((label, i) => ({
+    label,
+    stage: i < position ? "done" : i === position ? "current" : "upcoming",
+  }));
+}
+
+export interface QueueEntry {
+  corpId: string;
+  stage: StepStage;
+  /** What the corporation did in this operating round, from the log (empty until it operates). */
+  log: LogEntry[];
+}
+
+/**
+ * The operating round's corporations in the order they operate, with who is done. The server's
+ * `operatingOrder` is the round's fixed queue: those before the operating corporation are done,
+ * those after it are still to come.
+ */
+export function operatingQueue(state: GameState): QueueEntry[] {
+  if (state.phase !== "network" && state.phase !== "dividend") return [];
+  const thisRound = state.log.filter((entry) => entry.round === state.roundLabel);
+  const currentAt = state.currentCorporation === null ? -1 : state.operatingOrder.indexOf(state.currentCorporation);
+  return state.operatingOrder.map((corpId, i) => {
+    const stage: StepStage = currentAt < 0 || i > currentAt ? "upcoming" : i === currentAt ? "current" : "done";
+    const log = stage === "upcoming" ? [] : thisRound.filter((entry) => entry.actor === corpId);
+    return { corpId, stage, log };
+  });
+}
+
+export interface Payout {
+  playerId: string;
+  shares: number;
+  amount: number;
+}
+
+export interface DividendSplit {
+  perShare: number;
+  /** Every player, including those who hold none and receive nothing. */
+  payouts: Payout[];
+  /** Revenue that stays with the bank: unheld (IPO and pool) shares and the rounding remainder. */
+  bankKeeps: number;
+}
+
+/**
+ * Who receives what if the corporation pays `total`. Mirrors `Game.settle_revenue`: each
+ * player-held share gets `total // sharesPerCorporation`; IPO and pool shares earn nothing.
+ */
+export function dividendSplit(state: GameState, corp: CorporationState, total: number): DividendSplit {
+  const perShare = Math.floor(total / state.config.sharesPerCorporation);
+  const payouts = state.players.map((p) => {
+    const shares = p.shares[corp.id] ?? 0;
+    return { playerId: p.id, shares, amount: shares * perShare };
+  });
+  const paid = payouts.reduce((sum, p) => sum + p.amount, 0);
+  return { perShare, payouts, bankKeeps: total - paid };
+}
+
+export interface OwnershipSlice {
+  /** A player id, or "ipo" / "pool". */
+  owner: string;
+  count: number;
+}
+
+/** How a corporation's shares split among players (president first), the IPO and the pool. */
+export function ownership(state: GameState, corp: CorporationState): OwnershipSlice[] {
+  const holders = state.players
+    .filter((p) => (p.shares[corp.id] ?? 0) > 0)
+    .sort((a, b) => Number(b.id === corp.president) - Number(a.id === corp.president));
+  return [
+    ...holders.map((p) => ({ owner: p.id, count: p.shares[corp.id] ?? 0 })),
+    { owner: "pool", count: corp.poolShares },
+    { owner: "ipo", count: corp.ipoShares },
+  ].filter((slice) => slice.count > 0);
+}
+
+/**
+ * The market cell showing `price` nearest to `from`, preferring the same row. Used only to
+ * point at where a dividend preview price sits on the grid; the server decides the move.
+ */
+export function nearestCellWithPrice(
+  market: number[][],
+  from: [number, number],
+  price: number,
+): [number, number] | null {
+  let best: [number, number] | null = null;
+  let bestScore = Infinity;
+  market.forEach((row, r) =>
+    row.forEach((value, c) => {
+      if (value !== price) return;
+      const score = Math.abs(r - from[0]) * 100 + Math.abs(c - from[1]);
+      if (score < bestScore) {
+        best = [r, c];
+        bestScore = score;
+      }
+    }),
+  );
+  return best;
+}
 
 export function playerName(state: GameState, playerId: string | null): string {
   if (!playerId) return "—";
@@ -36,23 +174,24 @@ export interface CorpTradeOptions {
   sells: SellAction[];
 }
 
-/** Legal stock actions grouped by corporation, in corporation order. */
-export function tradeOptions(state: GameState): CorpTradeOptions[] {
-  return state.corporations
-    .map((corp) => {
-      const ipoBuys: BuyAction[] = [];
-      let poolBuy: BuyAction | null = null;
-      const sells: SellAction[] = [];
-      for (const action of state.legalActions) {
-        if (action.type === "buy" && action.corp === corp.id) {
-          if (action.source === "ipo") ipoBuys.push(action);
-          else poolBuy = action;
-        } else if (action.type === "sell" && action.corp === corp.id) {
-          sells.push(action);
-        }
-      }
-      sells.sort((a, b) => a.count - b.count);
-      return { corpId: corp.id, ipoBuys, poolBuy, sells };
-    })
-    .filter((o) => o.ipoBuys.length > 0 || o.poolBuy !== null || o.sells.length > 0);
+/** The legal stock actions for one corporation (all empty when it has none). */
+export function tradeOptionsFor(state: GameState, corpId: string): CorpTradeOptions {
+  const ipoBuys: BuyAction[] = [];
+  let poolBuy: BuyAction | null = null;
+  const sells: SellAction[] = [];
+  for (const action of state.legalActions) {
+    if (action.type === "buy" && action.corp === corpId) {
+      if (action.source === "ipo") ipoBuys.push(action);
+      else poolBuy = action;
+    } else if (action.type === "sell" && action.corp === corpId) {
+      sells.push(action);
+    }
+  }
+  sells.sort((a, b) => a.count - b.count);
+  return { corpId, ipoBuys, poolBuy, sells };
+}
+
+/** The label for whoever made a log entry: a corporation id, or a player's name. */
+export function actorLabel(state: GameState, actor: string): string {
+  return state.corporations.some((c) => c.id === actor) ? actor : playerName(state, actor);
 }

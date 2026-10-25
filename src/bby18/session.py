@@ -7,11 +7,16 @@ action at a time. Seats occupied by bots are played automatically after each ste
 Two options serve interactive clients: ``auto_forced`` plays any move that is the only legal
 one, so a human never has to click through it, and ``record_undo`` keeps a snapshot before
 every submitted action so ``undo`` can take it back.
+
+``apply`` and ``run_bots`` take an optional observer, called after each move with a
+``PlayedMove`` describing it. The observer is a call argument, never stored on the session, so
+saved (pickled) sessions and undo snapshots stay free of it.
 """
 
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
@@ -48,6 +53,30 @@ class Dividend(Enum):
 
 
 Action = StockAction | NetworkAction | Dividend
+
+
+@dataclass(frozen=True)
+class PlayedMove:
+    """One move as an observer sees it. Every field but ``action`` and ``automatic`` describes
+    the game as it stood just before the move."""
+
+    action: Action
+    automatic: bool
+    """False for the action passed to ``apply``; true for bot and forced moves."""
+    phase: Phase
+    round_label: str
+    actor: str
+    """Player id of whoever made the move (the operating corporation's president)."""
+    corporation: str
+    """The operating corporation's id; empty in a stock round."""
+    log_start: int
+    """Index in ``game.log`` of the first entry this move wrote."""
+    revenue: int
+    """For a dividend move, the corporation's revenue total being paid or withheld; else 0."""
+
+
+MoveObserver = Callable[["GameSession", PlayedMove], None]
+"""Called with the session (already updated) and the move just played."""
 
 
 @dataclass
@@ -117,6 +146,17 @@ class GameSession:
         return []
 
     @property
+    def operating_queue(self) -> list[str]:
+        """Corporation ids in the order they operate.
+
+        During an operating round this is the queue fixed when the round began, which stays put
+        even when prices change mid-round. Otherwise it is the order the next round would use.
+        """
+        if self.phase in (Phase.NETWORK, Phase.DIVIDEND):
+            return list(self._operating.queue)
+        return [c.id for c in self.game.operating_order()]
+
+    @property
     def network_actions_taken(self) -> int:
         """Network actions the operating corporation has taken this turn."""
         return self._operating.actions_taken
@@ -130,14 +170,17 @@ class GameSession:
     def can_undo(self) -> bool:
         return bool(self._history)
 
-    def apply(self, action: Action) -> None:
-        """Apply one action for the current actor, then play on any automatic moves."""
+    def apply(self, action: Action, observer: MoveObserver | None = None) -> None:
+        """Apply one action for the current actor, then play on any automatic moves.
+
+        ``observer``, if given, is called after the action and after each automatic move.
+        """
         snapshot = self._snapshot() if self.record_undo else None
-        self._apply_one(action)
+        self._play(action, automatic=False, observer=observer)
         if snapshot is not None:
             self._history.append(snapshot)
         self.automatic_log_start = len(self.game.log)
-        self.run_bots()
+        self.run_bots(observer)
 
     def undo(self) -> None:
         """Restore the game to just before the last submitted action.
@@ -151,10 +194,42 @@ class GameSession:
         vars(self).update(history.pop())
         self._history = history
 
-    def run_bots(self) -> None:
-        """Play moves that need no human: bot seats, and forced moves if ``auto_forced``."""
+    def run_bots(self, observer: MoveObserver | None = None) -> None:
+        """Play moves that need no human: bot seats, and forced moves if ``auto_forced``.
+
+        ``observer``, if given, is called after each move.
+        """
         while (action := self._automatic_action()) is not None:
+            self._play(action, automatic=True, observer=observer)
+
+    def _play(self, action: Action, *, automatic: bool, observer: MoveObserver | None) -> None:
+        # Describing a move costs a revenue calculation, so it is skipped when nobody watches;
+        # replaying a long save stays fast.
+        if observer is None:
             self._apply_one(action)
+            return
+        move = self._describe(action, automatic)
+        self._apply_one(action)
+        observer(self, move)
+
+    def _describe(self, action: Action, automatic: bool) -> PlayedMove:
+        operating = self.phase in (Phase.NETWORK, Phase.DIVIDEND)
+        corp = self.current_corporation if operating else None
+        return PlayedMove(
+            action=action,
+            automatic=automatic,
+            phase=self.phase,
+            round_label=self.game.round_label,
+            actor=self.current_player.id,
+            corporation=corp.id if corp is not None else "",
+            log_start=len(self.game.log),
+            # Captured before settling, which can change what the corporation earns.
+            revenue=(
+                self.game.revenue(corp).total
+                if corp is not None and self.phase is Phase.DIVIDEND
+                else 0
+            ),
+        )
 
     def _automatic_action(self) -> Action | None:
         if self.phase is Phase.GAME_OVER:

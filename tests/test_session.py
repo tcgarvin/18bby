@@ -129,3 +129,19 @@ def test_auto_forced_plays_single_legal_moves():
     assert session.phase is Phase.NETWORK
     assert game.round_label == "OR1.2"
     assert game.log[session.automatic_log_start].text.startswith("withholds")
+
+
+def test_operating_queue_stays_fixed_when_prices_change_mid_round():
+    game = Game.new(["Bot1", "Bot2", "Bot3"])
+    bots = {p.id: GreedyBot(random.Random(i)) for i, p in enumerate(game.players)}
+    session = GameSession(game, bots)
+    # Step the bots one move at a time until an operating round has two corporations queued.
+    while not (session.phase is Phase.NETWORK and len(session.operating_queue) >= 2):
+        assert session.phase is not Phase.GAME_OVER, "no operating round with two corporations"
+        session._apply_one(session._bot_choice())
+    queue = session.operating_queue
+    first = game.corp(queue[0])
+    # Drop the first corporation to the bottom of the market, as a withhold streak would.
+    first.market_cell = game.market.down(game.market.left(first.market_cell, 20), 20)
+    assert [c.id for c in game.operating_order()] != queue
+    assert session.operating_queue == queue

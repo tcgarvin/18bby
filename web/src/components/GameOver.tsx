@@ -1,21 +1,36 @@
 import type { GameState } from "../api";
-import { botLabel } from "./PlayersPanel";
+import { corpColor } from "../selectors";
+import { botLabel } from "./PlayerStrip";
 
+/** Players ranked by final worth, each with their holdings and (for bots) the plan they played. */
 export function GameOver({ state, onNewGame }: { state: GameState; onNewGame: () => void }) {
   const ranking = [...state.players].sort((a, b) => b.worth - a.worth);
   return (
-    <div className="actions">
-      <p className="actions__lead">Game over. Final worth is cash plus shares at market price.</p>
+    <div className="final">
+      <p className="final__lead">Final worth is cash plus shares at market price.</p>
       <ol className="ranking">
         {ranking.map((p, i) => (
-          <li key={p.id} className={i === 0 ? "ranking__winner" : ""}>
+          <li key={p.id} data-player-id={p.id} className={i === 0 ? "ranking__winner" : ""}>
             <span className="ranking__place">{i + 1}</span>
-            <span>
-              {p.name}
-              {p.isBot && <span className="badge">{botLabel(p.difficulty)}</span>}
+            <span className="ranking__who">
+              <span className="ranking__name">
+                {p.name}
+                {p.isBot && <span className="badge">{botLabel(p.difficulty)}</span>}
+              </span>
+              <span className="ranking__detail">
+                cash <span className="num" data-cash-for={p.id}>{p.cash}</span>
+                {state.corporations
+                  .filter((c) => (p.shares[c.id] ?? 0) > 0)
+                  .map((c) => (
+                    <span key={c.id} className="holding" style={{ ["--corp" as string]: corpColor(state, c.id) }}>
+                      <span className="holding__id">{c.id}</span>
+                      <span className="holding__count num">{p.shares[c.id]}</span>
+                    </span>
+                  ))}
+              </span>
               {p.plan && <span className="ranking__plan">Played to {p.plan}.</span>}
             </span>
-            <span className="num">{p.worth}</span>
+            <span className="ranking__worth num">{p.worth}</span>
           </li>
         ))}
       </ol>

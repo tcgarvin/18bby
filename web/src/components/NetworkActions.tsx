@@ -1,8 +1,7 @@
 import type { Action, Axial, CorporationState, GameState, HexAction, TileState } from "../api";
-import { corporationColor } from "../colors";
 import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
-import { hexActionsByKey, terrainByKey } from "../selectors";
+import { corpColor, hexActionsByKey, playerName, terrainByKey } from "../selectors";
 import { TilePreview } from "./TilePreview";
 import { Help } from "./Help";
 
@@ -10,7 +9,10 @@ interface NetworkActionsProps {
   state: GameState;
   corp: CorporationState;
   selectedHex: Axial | null;
+  /** Offer the hex options and "No network action"; false shows a read-only summary. */
+  interactive: boolean;
   busy: boolean;
+  keyboard: boolean;
   onSelectHex: (hex: Axial | null) => void;
   onPreview: (action: HexAction | null) => void;
   onAct: (action: Action) => void;
@@ -22,13 +24,15 @@ function describe(action: HexAction): string {
   return "Extend service";
 }
 
-export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, onPreview, onAct }: NetworkActionsProps) {
+/** The operating corporation's network step: actions left, costs, and the picked hex's options. */
+export function NetworkActions(props: NetworkActionsProps) {
+  const { state, corp, selectedHex, interactive, busy, keyboard, onSelectHex, onPreview, onAct } = props;
   const byKey = hexActionsByKey(state.legalActions);
   const terrain = terrainByKey(state.terrain);
   const hasNebula = state.terrain.some((t) => t.kind === "nebula");
   const noAction = state.legalActions.find((a) => a.type === "no_action");
-  const color = corporationColor(corp.id, state.corporations.map((c) => c.id));
-  const options = selectedHex ? (byKey.get(hexKey(selectedHex)) ?? []) : [];
+  const color = corpColor(state, corp.id);
+  const options = interactive && selectedHex ? (byKey.get(hexKey(selectedHex)) ?? []) : [];
   const tile: TileState | undefined = selectedHex
     ? state.tiles.find((t) => hexKey(t.hex) === hexKey(selectedHex))
     : undefined;
@@ -38,33 +42,60 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
   options.slice(0, 9).forEach((action, i) => {
     keys[String(i + 1)] = () => (busy ? false : onAct(action));
   });
-  useHotkeys(keys);
+  useHotkeys(keys, interactive && keyboard);
   const counts = { chart: 0, upgrade: 0, service: 0 };
   for (const actions of byKey.values()) {
     for (const a of actions) counts[a.type] += 1;
   }
+  const perTurn = state.config.networkActionsPerTurn;
 
   return (
-    <div className="actions">
-      <p className="actions__lead">
-        Network action {state.networkActionsTaken + 1} of {state.config.networkActionsPerTurn} for{" "}
-        <strong style={{ color }}>{corp.id}</strong>. Treasury{" "}
-        <strong className="num">{corp.treasury}</strong>. Chart {state.config.chartCost}
-        {hasNebula && ` (+${state.config.nebulaChartSurcharge} in a nebula)`} · Upgrade {state.config.upgradeCost} ·
-        Service {state.config.serviceCost}.
-        <Help topic="networkAction" />
-      </p>
-      <p className="actions__hint">
-        Chart <Help topic="chart" /> · Upgrade <Help topic="upgrade" /> · Service <Help topic="service" /> · Exits{" "}
-        <Help topic="lanes" />
-      </p>
-      <p className="actions__hint">
-        {byKey.size > 0
-          ? `Click a highlighted hex on the map (${byKey.size} hexes: ${counts.chart} chart, ${counts.upgrade} upgrade, ${counts.service} service options).`
-          : "No affordable or connected network actions."}
-      </p>
+    <div className="netpanel">
+      <div className="netpanel__steps" aria-label={`Network action ${state.networkActionsTaken + 1} of ${perTurn}`}>
+        <span className="netpanel__label">
+          Network action
+          <Help topic="networkAction" />
+        </span>
+        {Array.from({ length: perTurn }, (_, i) => (
+          <span
+            key={i}
+            className={`netpanel__pip${i < state.networkActionsTaken ? " netpanel__pip--used" : ""}${i === state.networkActionsTaken ? " netpanel__pip--now" : ""}`}
+          />
+        ))}
+        <span className="netpanel__count num">
+          {Math.min(state.networkActionsTaken + 1, perTurn)} of {perTurn}
+        </span>
+      </div>
+      <dl className="netpanel__costs">
+        <div>
+          <dt>
+            Chart
+            <Help topic="chart" />
+          </dt>
+          <dd className="num">
+            {state.config.chartCost}
+            {hasNebula && <span className="netpanel__nebula">+{state.config.nebulaChartSurcharge} nebula</span>}
+          </dd>
+        </div>
+        <div>
+          <dt>
+            Upgrade
+            <Help topic="upgrade" />
+          </dt>
+          <dd className="num">{state.config.upgradeCost}</dd>
+        </div>
+        <div>
+          <dt>
+            Service
+            <Help topic="service" />
+          </dt>
+          <dd className="num">{state.config.serviceCost}</dd>
+        </div>
+      </dl>
 
-      {selectedHex && options.length > 0 && (
+      {!interactive ? (
+        <p className="netpanel__hint">{playerName(state, corp.president)} is choosing where to build…</p>
+      ) : selectedHex && options.length > 0 ? (
         <div className="hex-options">
           <div className="hex-options__head">
             <span>
@@ -110,10 +141,22 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
             ))}
           </div>
         </div>
+      ) : (
+        <p className="netpanel__hint">
+          {byKey.size > 0 ? (
+            <>
+              Pick a highlighted hex on the map: <strong>{byKey.size}</strong> hexes with {counts.chart} chart,{" "}
+              {counts.upgrade} upgrade and {counts.service} service options.
+              <Help topic="lanes" />
+            </>
+          ) : (
+            "No affordable or connected network actions."
+          )}
+        </p>
       )}
 
-      {noAction && (
-        <button type="button" className="btn" disabled={busy} onClick={() => onAct(noAction)}>
+      {interactive && noAction && (
+        <button type="button" className="btn btn--block" disabled={busy} onClick={() => onAct(noAction)}>
           <span>
             {state.networkActionsTaken > 0 ? "End network actions" : "No network action"} <kbd>P</kbd>
           </span>

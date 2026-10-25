@@ -175,6 +175,10 @@ export interface GameState {
   players: PlayerState[];
   priorityPlayer: string;
   corporations: CorporationState[];
+  /**
+   * Corporation ids in operating order. During an operating round it is the queue fixed when
+   * the round began (it does not re-sort as prices move); otherwise, the next round's order.
+   */
   operatingOrder: string[];
   tiles: TileState[];
   /** Asteroid fields and nebulae; hexes not listed are plain space. */
@@ -190,6 +194,50 @@ export interface GameState {
   automaticLogStart: number;
   config: GameConfig;
   log: LogEntry[];
+  /**
+   * Every move played by the request that produced this state, in order: the submitted move
+   * first (automatic: false), then each bot or forced move after it. Empty on a plain load or
+   * an undo; on a new game it holds any opening bot moves. Clients replay these to animate
+   * what opponents did.
+   */
+  moves: MoveFrame[];
+}
+
+/** One move, and the parts of the game state it can change, as they stood just after it. */
+export interface MoveFrame {
+  /** The phase the move was made in, and the round label then. */
+  phase: Exclude<Phase, "game_over">;
+  roundLabel: string;
+  /** Player id of whoever made the move (a corporation's president in operating rounds). */
+  actor: string;
+  /** The operating corporation for network and dividend moves; null in a stock round. */
+  corporation: string | null;
+  action: Action;
+  /** False for the move the client submitted; true for bot and forced moves. */
+  automatic: boolean;
+  /** Log lines this move wrote (usually one). */
+  log: LogEntry[];
+  /** For a dividend move: the revenue the corporation earned. 0 otherwise. */
+  revenue: number;
+  /** The game just after the move. */
+  after: FrameState;
+}
+
+export interface FrameState {
+  phase: Phase;
+  roundLabel: string;
+  roundNumber: number;
+  currentPlayer: string | null;
+  currentCorporation: string | null;
+  priorityPlayer: string;
+  operatingOrder: string[];
+  networkActionsTaken: number;
+  /** Same fields as PlayerState except name, isBot, difficulty and plan. */
+  players: Pick<PlayerState, "id" | "cash" | "worth" | "shares" | "certificates">[];
+  /** Full corporation views, as in GameState. */
+  corporations: CorporationState[];
+  /** Only the tiles this move changed (empty for non-map moves). Merge by hex. */
+  tiles: TileState[];
 }
 
 export interface Seat {

@@ -28,7 +28,7 @@ from bby18.bots.roster import character_named, character_policy, draw_characters
 from bby18.config import DEFAULT_CONFIG
 from bby18.game import Game
 from bby18.network import IllegalAction
-from bby18.session import Decider, GameSession
+from bby18.session import Decider, GameSession, MoveObserver
 
 
 class SaveOutdated(Exception):
@@ -48,8 +48,13 @@ def _code_version() -> str:
 CODE_VERSION = _code_version()
 
 
-def new_session(seed: int, seats: Iterable[Seat]) -> GameSession:
-    """A fresh game with any opening bot or forced moves already played."""
+def new_session(
+    seed: int, seats: Iterable[Seat], observer: MoveObserver | None = None
+) -> GameSession:
+    """A fresh game with any opening bot or forced moves already played.
+
+    ``observer`` sees each of those opening moves (see ``GameSession.run_bots``).
+    """
     seats = list(seats)
     rng = random.Random(seed)
     game = Game.new([s.name for s in seats], DEFAULT_CONFIG, seed)
@@ -59,7 +64,7 @@ def new_session(seed: int, seats: Iterable[Seat]) -> GameSession:
         if seat.bot
     }
     session = GameSession(game, bots, auto_forced=True)
-    session.run_bots()
+    session.run_bots(observer)
     return session
 
 
@@ -80,12 +85,17 @@ def bot_seats(seed: int, seats: Iterable[Seat]) -> tuple[Seat, ...]:
     return tuple(seats)
 
 
-def apply_submitted(session: GameSession, submitted: Json) -> None:
-    """Apply a client-submitted action dict. Raises ValueError or IllegalAction if not legal."""
-    session.apply(match_action(session.legal_actions(), submitted))
+def apply_submitted(
+    session: GameSession, submitted: Json, observer: MoveObserver | None = None
+) -> None:
+    """Apply a client-submitted action dict, and the automatic moves after it, each seen by
+    ``observer`` if given. Raises ValueError or IllegalAction if not legal."""
+    session.apply(match_action(session.legal_actions(), submitted), observer)
 
 
 def replay(seed: int, seats: Iterable[Seat], actions: Iterable[Json]) -> GameSession:
+    """Rebuild a game from its seed, seats and submitted actions. Nothing observes the moves,
+    which keeps replaying a whole game fast."""
     session = new_session(seed, seats)
     for number, submitted in enumerate(actions, start=1):
         try:

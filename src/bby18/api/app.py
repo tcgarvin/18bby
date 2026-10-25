@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Annotated, Any
 
@@ -34,7 +35,14 @@ from bby18.api.saves import (
     replay,
     snapshot,
 )
-from bby18.api.serialize import Json, board_to_json, rules_to_json, session_to_json
+from bby18.api.serialize import (
+    Json,
+    MoveRecorder,
+    board_to_json,
+    rules_to_json,
+    session_to_json,
+    tile_map,
+)
 from bby18.api.store import (
     AccountStore,
     GameNotFound,
@@ -102,7 +110,12 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
                 detail=f"This game was saved under older rules and cannot be resumed. {exc}",
             ) from exc
 
-    def write(saved: SavedGame, actions: tuple[Json, ...], session: GameSession) -> Json:
+    def write(
+        saved: SavedGame,
+        actions: tuple[Json, ...],
+        session: GameSession,
+        moves: Sequence[Json] = (),
+    ) -> Json:
         try:
             saved = store.update(_with_session(saved, actions, session))
         except StaleSave as exc:
@@ -110,7 +123,7 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
                 status_code=409,
                 detail="This game was changed elsewhere (another tab?). Reload to continue.",
             ) from exc
-        return _state_json(saved, session)
+        return _state_json(saved, session, moves)
 
     @app.post("/api/accounts")
     def new_account() -> Json:
@@ -148,7 +161,9 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
         seats = bot_seats(
             seed, (Seat(name=s.name, bot=s.bot, difficulty=s.difficulty) for s in request.seats)
         )
-        session = new_session(seed, seats)
+        # A new game has no tiles yet, so every tile an opening move charts is a change.
+        recorder = MoveRecorder(tiles_before={})
+        session = new_session(seed, seats, recorder)
         saved = SavedGame(
             id=secrets.token_urlsafe(8),
             owner=user,
@@ -161,7 +176,11 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
             round_label=session.game.round_label,
         )
         store.create(saved)
-        return {"gameId": saved.id, "seed": seed, "state": _state_json(saved, session)}
+        return {
+            "gameId": saved.id,
+            "seed": seed,
+            "state": _state_json(saved, session, recorder.frames),
+        }
 
     @app.get("/api/games/{game_id}")
     def get_game(game_id: str, user: str = Depends(current_user)) -> Json:
@@ -171,11 +190,12 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
     @app.post("/api/games/{game_id}/actions")
     def act(game_id: str, request: ActionRequest, user: str = Depends(current_user)) -> Json:
         saved, session = load(user, game_id)
+        recorder = MoveRecorder(tile_map(session.game))
         try:
-            apply_submitted(session, request.action)
+            apply_submitted(session, request.action, recorder)
         except (ValueError, IllegalAction) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return write(saved, (*saved.actions, request.action), session)
+        return write(saved, (*saved.actions, request.action), session, recorder.frames)
 
     @app.post("/api/games/{game_id}/undo")
     def undo(game_id: str, user: str = Depends(current_user)) -> Json:
@@ -206,8 +226,8 @@ def _with_session(saved: SavedGame, actions: tuple[Json, ...], session: GameSess
     )
 
 
-def _state_json(saved: SavedGame, session: GameSession) -> Json:
-    state = session_to_json(session)
+def _state_json(saved: SavedGame, session: GameSession, moves: Sequence[Json] = ()) -> Json:
+    state = session_to_json(session, moves)
     over = session.phase is Phase.GAME_OVER
     # Players are listed in seat order. A character's strategy stays hidden until the end.
     for player, seat in zip(state["players"], saved.seats):
