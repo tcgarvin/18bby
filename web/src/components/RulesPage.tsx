@@ -9,6 +9,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: "goal", title: "The goal" },
   { id: "round-structure", title: "How a game runs" },
   { id: "map", title: "The map and networks" },
+  { id: "terrain", title: "Terrain" },
   { id: "corporations", title: "Corporations" },
   { id: "stock-round", title: "The stock round" },
   { id: "operating-turn", title: "An operating turn" },
@@ -107,7 +108,8 @@ export function RulesPage({ section }: { section: SectionId | null }) {
         <Section id="map" title="The map and networks">
           <p>
             The board is a field of hexagons. <strong>Planets</strong> sit on some of them; the rest are empty
-            hyperspace. Planets are split into three <strong>regions</strong>: Core, Mid Rim and Outer Rim.
+            hyperspace, and some of that is hazardous (see Terrain). Planets are split into three{" "}
+            <strong>regions</strong>: Core, Mid Rim and Outer Rim.
           </p>
           <h3>Planet types</h3>
           <p>Every planet has an economic type, shown as a letter on the map. A few have two.</p>
@@ -154,6 +156,39 @@ export function RulesPage({ section }: { section: SectionId | null }) {
               ))}
             </tbody>
           </table>
+        </Section>
+
+        <Section id="terrain" title="Terrain">
+          <p>
+            Each game lays out its hazards when it starts, from the game's seed, so the same seed always gives the
+            same sky. About {percent(rules.asteroidFraction)} of the hexes that are not planets are{" "}
+            <strong>asteroid fields</strong> and about {percent(rules.nebulaFraction)} are{" "}
+            <strong>nebulae</strong>. Everything else is plain open space. Planets are never covered.
+          </p>
+          <h3>Asteroid fields</h3>
+          <p>
+            An asteroid field is impassable. It can never be charted, and no tile may have an exit facing one, so
+            lanes bend around them. Asteroid fields are never placed so that they cut the planets into separate
+            groups: there is always an asteroid-free path between any two planets.
+          </p>
+          <h3>Nebulae</h3>
+          <ul>
+            <li>
+              <strong>Charting is dearer.</strong> Charting a nebula hex costs {rules.nebulaChartSurcharge} more than
+              open space: {rules.chartCost + rules.nebulaChartSurcharge} instead of {rules.chartCost}.
+            </li>
+            <li>
+              <strong>No third lane.</strong> A tile in a nebula keeps the two lanes it was charted with and can
+              never be upgraded.
+            </li>
+            <li>
+              <strong>Service is not dearer.</strong> Extending service onto a nebula tile somebody has already
+              charted costs the usual {rules.serviceCost}.
+            </li>
+          </ul>
+          <p className="rules__note">
+            Upgrading a tile in open space costs {rules.upgradeCost}, more than the {rules.chartCost} to chart it.
+          </p>
         </Section>
 
         <Section id="corporations" title="Corporations">
@@ -251,14 +286,16 @@ export function RulesPage({ section }: { section: SectionId | null }) {
                 <td className="num">{rules.chartCost}</td>
                 <td>
                   Pick an empty hex next to your network and choose any two of its six sides as lanes. You get
-                  service there automatically.
+                  service there automatically. A nebula costs {rules.nebulaChartSurcharge} more, and an asteroid
+                  field cannot be charted at all (see Terrain).
                 </td>
               </tr>
               <tr>
                 <th>Upgrade</th>
                 <td className="num">{rules.upgradeCost}</td>
                 <td>
-                  On a charted two-lane hex where you have service, add a third lane. Existing lanes stay.
+                  On a charted two-lane hex where you have service, add a third lane. Existing lanes stay. Tiles in
+                  a nebula cannot be upgraded.
                 </td>
               </tr>
               <tr>
@@ -266,7 +303,7 @@ export function RulesPage({ section }: { section: SectionId | null }) {
                 <td className="num">{rules.serviceCost}</td>
                 <td>
                   Extend your corporation onto a hex that is already charted, next to your network, so you can
-                  pass through it.
+                  pass through it. The price is the same in a nebula.
                 </td>
               </tr>
             </tbody>
@@ -463,9 +500,19 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             in the Corporations panel).
           </Check>
           <Check>
-            Each network action reduces the treasury by its cost ({rules.chartCost} chart, {rules.upgradeCost}{" "}
-            upgrade, {rules.serviceCost} service), at most {rules.networkActionsPerTurn} per turn, and no action is
-            offered you cannot afford.
+            Each network action reduces the treasury by its cost ({rules.chartCost} chart, or{" "}
+            {rules.chartCost + rules.nebulaChartSurcharge} in a nebula; {rules.upgradeCost} upgrade;{" "}
+            {rules.serviceCost} service), at most {rules.networkActionsPerTurn} per turn, and no action is offered
+            you cannot afford.
+          </Check>
+          <Check>
+            Asteroid fields (dark, with rocks) are never highlighted and never offered any action. No chart or
+            upgrade you are offered adds an exit facing an asteroid field.
+          </Check>
+          <Check>
+            Nebulae (purple haze): a chart option there shows {rules.chartCost + rules.nebulaChartSurcharge} and is
+            labelled nebula; a charted nebula tile is never offered an upgrade; extending service onto one costs{" "}
+            {rules.serviceCost}.
           </Check>
           <Check>
             Chart: pick two exits on an uncharted hex touching your network, and the corporation immediately has
@@ -520,6 +567,10 @@ export function RulesPage({ section }: { section: SectionId | null }) {
       </article>
     </div>
   );
+}
+
+function percent(fraction: number): string {
+  return `${Math.round(fraction * 100)}%`;
 }
 
 function Section({ id, title, children }: { id: SectionId; title: string; children: ReactNode }) {

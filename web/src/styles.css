@@ -15,6 +15,17 @@
   --danger: #b3261e;
   --danger-bg: #fdecea;
   --radius: 8px;
+  /* Terrain on the map and in its legend. */
+  --asteroid-fill: #454d5a;
+  --asteroid-edge: #2a303a;
+  --rock-light: #aab3c0;
+  --rock-mid: #7d8796;
+  --rock-dark: #2b313b;
+  --nebula-core: #b676d8;
+  --nebula-fringe: #e3cdf3;
+  --nebula-wisp: #ee7fb8;
+  --nebula-edge-line: #b99ad0;
+  --nebula-ink: #8a3fae;
   color-scheme: light;
 }
 
@@ -332,6 +343,20 @@ th.num {
   background: #f8f9fa;
 }
 
+.legend__swatch--asteroid {
+  border-color: var(--asteroid-edge);
+  background:
+    radial-gradient(circle at 28% 32%, var(--rock-light) 0 1.4px, transparent 1.8px),
+    radial-gradient(circle at 70% 62%, var(--rock-mid) 0 1.6px, transparent 2px),
+    radial-gradient(circle at 36% 74%, var(--rock-dark) 0 1.4px, transparent 1.8px), var(--asteroid-fill);
+}
+.legend__swatch--nebula {
+  border-color: var(--nebula-edge-line);
+  background:
+    radial-gradient(circle at 62% 38%, var(--nebula-wisp), transparent 70%),
+    radial-gradient(circle, var(--nebula-core), var(--nebula-fringe));
+}
+
 .legend__line {
   width: 16px;
   height: 3px;
@@ -488,6 +513,13 @@ th.num {
 .tile-option__cost {
   font-size: 11px;
   color: var(--ink-3);
+}
+
+.tile-option__nebula {
+  margin-left: 4px;
+  color: var(--nebula-ink);
+  font-family: var(--font-sans);
+  font-weight: 600;
 }
 
 .pairs {

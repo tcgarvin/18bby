@@ -17,6 +17,7 @@ export type SectionId =
   | "goal"
   | "round-structure"
   | "map"
+  | "terrain"
   | "corporations"
   | "stock-round"
   | "operating-turn"
@@ -30,6 +31,7 @@ export const SECTION_IDS: SectionId[] = [
   "goal",
   "round-structure",
   "map",
+  "terrain",
   "corporations",
   "stock-round",
   "operating-turn",
@@ -136,13 +138,13 @@ export const GLOSSARY = {
   chart: {
     term: "Chart",
     summary: (r) =>
-      `Survey an empty hex next to your network by choosing two hyperspace lanes (exits) for it. Costs ${r.chartCost}. Your corporation gets service there automatically.`,
+      `Survey an empty hex next to your network by choosing two hyperspace lanes (exits) for it. Costs ${r.chartCost}, or ${r.chartCost + r.nebulaChartSurcharge} in a nebula. Your corporation gets service there automatically.`,
     section: "operating-turn",
   },
   upgrade: {
     term: "Upgrade",
     summary: (r) =>
-      `Add a third lane to a charted hex where you already have service. The original two lanes stay. Costs ${r.upgradeCost}. More lanes means more places your network can branch.`,
+      `Add a third lane to a charted hex where you already have service. The original two lanes stay. Costs ${r.upgradeCost}. More lanes means more places your network can branch. A tile in a nebula can never be upgraded.`,
     section: "operating-turn",
   },
   service: {
@@ -156,6 +158,12 @@ export const GLOSSARY = {
     summary: () =>
       "Each charted hex has hyperspace lanes leaving through some of its six sides. Two neighbouring hexes connect only if each has a lane facing the other. Planets have all six.",
     section: "map",
+  },
+  terrain: {
+    term: "Terrain",
+    summary: (r) =>
+      `Asteroid fields are impassable: they cannot be charted and no lane may face one. Nebulae cost ${r.nebulaChartSurcharge} extra to chart and their tiles never gain a third lane.`,
+    section: "terrain",
   },
   hub: {
     term: "Planet hub",

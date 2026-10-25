@@ -2,7 +2,7 @@ import type { Action, Axial, CorporationState, GameState, HexAction, TileState }
 import { corporationColor } from "../colors";
 import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
-import { hexActionsByKey } from "../selectors";
+import { hexActionsByKey, terrainByKey } from "../selectors";
 import { TilePreview } from "./TilePreview";
 import { Help } from "./Help";
 
@@ -24,6 +24,8 @@ function describe(action: HexAction): string {
 
 export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, onPreview, onAct }: NetworkActionsProps) {
   const byKey = hexActionsByKey(state.legalActions);
+  const terrain = terrainByKey(state.terrain);
+  const hasNebula = state.terrain.some((t) => t.kind === "nebula");
   const noAction = state.legalActions.find((a) => a.type === "no_action");
   const color = corporationColor(corp.id, state.corporations.map((c) => c.id));
   const options = selectedHex ? (byKey.get(hexKey(selectedHex)) ?? []) : [];
@@ -47,8 +49,9 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
       <p className="actions__lead">
         Network action {state.networkActionsTaken + 1} of {state.config.networkActionsPerTurn} for{" "}
         <strong style={{ color }}>{corp.id}</strong>. Treasury{" "}
-        <strong className="num">{corp.treasury}</strong>. Chart {state.config.chartCost} · Upgrade{" "}
-        {state.config.upgradeCost} · Service {state.config.serviceCost}.
+        <strong className="num">{corp.treasury}</strong>. Chart {state.config.chartCost}
+        {hasNebula && ` (+${state.config.nebulaChartSurcharge} in a nebula)`} · Upgrade {state.config.upgradeCost} ·
+        Service {state.config.serviceCost}.
         <Help topic="networkAction" />
       </p>
       <p className="actions__hint">
@@ -65,7 +68,8 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
         <div className="hex-options">
           <div className="hex-options__head">
             <span>
-              Hex ({selectedHex[0]}, {selectedHex[1]}){tile ? ` · charted ${tile.exits.join("/")}` : " · uncharted"}
+              Hex ({selectedHex[0]}, {selectedHex[1]}){terrain.get(hexKey(selectedHex)) === "nebula" ? " · nebula" : ""}
+              {tile ? ` · charted ${tile.exits.join("/")}` : " · uncharted"}
             </span>
             <button type="button" className="link" onClick={() => onSelectHex(null)}>
               close <kbd>Esc</kbd>
@@ -92,6 +96,14 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
                 <span className="tile-option__label">{describe(action)}</span>
                 <span className="tile-option__cost num">
                   {action.cost}
+                  {action.type === "chart" && terrain.get(hexKey(action.hex)) === "nebula" && (
+                    <span
+                      className="tile-option__nebula"
+                      title={`Includes ${state.config.nebulaChartSurcharge} extra for charting a nebula`}
+                    >
+                      nebula
+                    </span>
+                  )}
                   {i < 9 && <kbd>{i + 1}</kbd>}
                 </span>
               </button>

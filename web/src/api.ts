@@ -128,6 +128,14 @@ export interface TileState {
   service: string[];
 }
 
+export type TerrainKind = "asteroid" | "nebula";
+
+/** A hex that is not plain space. Terrain is laid out per game from its seed. */
+export interface TerrainHex {
+  hex: Axial;
+  kind: TerrainKind;
+}
+
 export interface LogEntry {
   seq: number;
   round: string;
@@ -139,6 +147,8 @@ export interface GameConfig {
   chartCost: number;
   upgradeCost: number;
   serviceCost: number;
+  /** Extra cost, on top of `chartCost`, to chart a nebula hex. */
+  nebulaChartSurcharge: number;
   networkActionsPerTurn: number;
   parPrices: number[];
   sharesPerCorporation: number;
@@ -163,6 +173,8 @@ export interface GameState {
   corporations: CorporationState[];
   operatingOrder: string[];
   tiles: TileState[];
+  /** Asteroid fields and nebulae; hexes not listed are plain space. */
+  terrain: TerrainHex[];
   /** Market rows, top (highest prices) first; lower rows may be shorter. */
   stockMarket: number[][];
   parColumn: number;
@@ -247,6 +259,11 @@ export interface Rules {
   chartCost: number;
   upgradeCost: number;
   serviceCost: number;
+  nebulaChartSurcharge: number;
+  /** Share of non-planet hexes that are asteroid fields (0 to 1). */
+  asteroidFraction: number;
+  /** Share of non-planet hexes that are nebulae (0 to 1). */
+  nebulaFraction: number;
   typedPairValue: number;
   /** Pairs of planet type letters, e.g. ["A", "M"]. */
   typedPairs: [string, string][];

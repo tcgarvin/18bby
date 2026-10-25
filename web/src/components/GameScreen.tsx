@@ -5,7 +5,7 @@ import { corporationColor } from "../colors";
 import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
 import { newLogEntries } from "../logdiff";
-import { findCorporation, hexActionsByKey, playerName } from "../selectors";
+import { findCorporation, hexActionsByKey, playerName, terrainByKey } from "../selectors";
 import { changedHexes } from "../tilediff";
 import { CorporationsPanel } from "./CorporationsPanel";
 import { DividendActions } from "./DividendActions";
@@ -55,6 +55,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   const focusCorp = explicitFocus ?? state.currentCorporation;
   const actingCorp = findCorporation(state, state.currentCorporation);
   const hexActions = useMemo(() => hexActionsByKey(state.legalActions), [state.legalActions]);
+  const terrain = useMemo(() => terrainByKey(state.terrain), [state.terrain]);
   const actionableHexes = useMemo(
     () => (state.phase === "network" && state.waitingOnHuman ? new Set(hexActions.keys()) : new Set<string>()),
     [hexActions, state.phase, state.waitingOnHuman],
@@ -172,6 +173,8 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             <HexMap
               board={board}
               tiles={state.tiles}
+              terrain={terrain}
+              nebulaChartSurcharge={state.config.nebulaChartSurcharge}
               corporations={state.corporations}
               focusCorp={focusCorp}
               actionableHexes={actionableHexes}
@@ -285,6 +288,18 @@ function MapLegend({ state, focusCorp }: { state: GameState; focusCorp: string |
       </span>
       <Help topic="region" />
       <span className="legend__sep" />
+      {state.terrain.length > 0 && (
+        <>
+          <span className="legend__item">
+            <span className="legend__swatch legend__swatch--asteroid" /> Asteroids
+          </span>
+          <span className="legend__item">
+            <span className="legend__swatch legend__swatch--nebula" /> Nebula
+          </span>
+          <Help topic="terrain" />
+          <span className="legend__sep" />
+        </>
+      )}
       {state.corporations.map((c) => (
         <span key={c.id} className="legend__item">
           <span className="legend__line" style={{ background: corporationColor(c.id, corpIds) }} /> {c.id}

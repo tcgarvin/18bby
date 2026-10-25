@@ -1,5 +1,15 @@
 import { useMemo } from "react";
-import type { Axial, Board, CorporationState, DirectionName, HexAction, Planet, Region, TileState } from "../api";
+import type {
+  Axial,
+  Board,
+  CorporationState,
+  DirectionName,
+  HexAction,
+  Planet,
+  Region,
+  TerrainKind,
+  TileState,
+} from "../api";
 import { REGION_FILL, TAG_FILL, corporationColor } from "../colors";
 import {
   DIRECTIONS,
@@ -13,6 +23,7 @@ import {
   neighbor,
   type Point,
 } from "../hex";
+import { scatterBlobs } from "../terrain";
 import "./HexMap.css";
 
 /** Hex side length in SVG units; everything else on the map scales from it. */
@@ -22,14 +33,20 @@ const TRACE_WIDTH = S * 0.075;
 const TRACE_SPACING = S * 0.082;
 const BADGE_RADIUS = S * 0.36;
 const NEUTRAL_CHANGE = "#5b6573";
+const ASTEROID_ROCKS = { count: 9, area: S * 0.7, minRadius: 1.1, maxRadius: 3.1, salt: 1, overlap: false };
+const NEBULA_WISPS = { count: 3, area: S * 0.75, minRadius: S * 0.22, maxRadius: S * 0.34, salt: 2, overlap: true };
 
 interface HexMapProps {
   board: Board;
   tiles: TileState[];
+  /** Asteroid fields and nebulae by `hexKey`; plain space is absent. */
+  terrain: Map<string, TerrainKind>;
+  /** Extra cost to chart a nebula, quoted in its tooltip. */
+  nebulaChartSurcharge: number;
   corporations: CorporationState[];
   /** Corporation whose network is emphasized, or null for the neutral overview. */
   focusCorp: string | null;
-  /** Hexes with at least one legal network action for the acting corporation. */
+  /** Hexes with at least one legal network action for the acting corporation. Asteroid fields are never drawn as targets. */
   actionableHexes: Set<string>;
   selectedHex: Axial | null;
   preview: HexAction | null;
@@ -141,7 +158,19 @@ function previewSegments(preview: HexAction, tiles: TileState[], planetsByKey: M
 }
 
 export function HexMap(props: HexMapProps) {
-  const { board, tiles, corporations, focusCorp, actionableHexes, selectedHex, preview, changedHexes, onHexClick } = props;
+  const {
+    board,
+    tiles,
+    terrain,
+    nebulaChartSurcharge,
+    corporations,
+    focusCorp,
+    actionableHexes,
+    selectedHex,
+    preview,
+    changedHexes,
+    onHexClick,
+  } = props;
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
   const boundaries = useMemo(() => regionBoundaries(board, regions), [board, regions]);
@@ -152,6 +181,16 @@ export function HexMap(props: HexMapProps) {
   );
   const planetsByName = useMemo(() => new Map(board.planets.map((p) => [p.name, p] as const)), [board]);
   const segments = useMemo(() => buildSegments(tiles, planetsByKey), [tiles, planetsByKey]);
+  const terrainCells = useMemo(
+    () =>
+      board.hexes.flatMap((hex) => {
+        const kind = terrain.get(hexKey(hex));
+        return kind === undefined ? [] : [<TerrainCell key={hexKey(hex)} hex={hex} kind={kind} surcharge={nebulaChartSurcharge} />];
+      }),
+    [board, terrain, nebulaChartSurcharge],
+  );
+  // The engine never offers actions on an asteroid field; filtering here keeps one from being drawn or clicked regardless.
+  const targetHexes = board.hexes.filter((hex) => actionableHexes.has(hexKey(hex)) && terrain.get(hexKey(hex)) !== "asteroid");
 
   const focus = corporations.find((c) => c.id === focusCorp) ?? null;
   const reachable = new Set(focus?.reachablePlanets ?? []);
@@ -164,6 +203,16 @@ export function HexMap(props: HexMapProps) {
 
   return (
     <svg className={`hexmap${focus ? " hexmap--focused" : ""}`} viewBox={box} role="img" aria-label="Galaxy map">
+      <defs>
+        <radialGradient id="hexmap-nebula-haze">
+          <stop offset="0%" className="hexmap__haze-core" />
+          <stop offset="100%" className="hexmap__haze-edge" />
+        </radialGradient>
+        <radialGradient id="hexmap-nebula-wisp">
+          <stop offset="0%" className="hexmap__wisp-core" />
+          <stop offset="100%" className="hexmap__wisp-edge" />
+        </radialGradient>
+      </defs>
       <g className="hexmap__cells">
         {board.hexes.map((hex) => {
           const region = regions.get(hexKey(hex)) ?? "Outer Rim";
@@ -172,21 +221,20 @@ export function HexMap(props: HexMapProps) {
           );
         })}
       </g>
+      <g className="hexmap__terrain">{terrainCells}</g>
       <path d={boundaries} className="hexmap__boundary" />
 
       <g className="hexmap__actionable">
-        {board.hexes
-          .filter((hex) => actionableHexes.has(hexKey(hex)))
-          .map((hex) => {
-            const selected = selectedHex !== null && hexKey(selectedHex) === hexKey(hex);
-            return (
-              <path
-                key={hexKey(hex)}
-                d={cornersToPath(hexToPixel(hex, S), S * 0.9)}
-                className={`hexmap__option${selected ? " hexmap__option--selected" : ""}`}
-              />
-            );
-          })}
+        {targetHexes.map((hex) => {
+          const selected = selectedHex !== null && hexKey(selectedHex) === hexKey(hex);
+          return (
+            <path
+              key={hexKey(hex)}
+              d={cornersToPath(hexToPixel(hex, S), S * 0.9)}
+              className={`hexmap__option${selected ? " hexmap__option--selected" : ""}`}
+            />
+          );
+        })}
       </g>
 
       <g className="hexmap__lanes">
@@ -310,20 +358,44 @@ export function HexMap(props: HexMapProps) {
       </g>
 
       <g className="hexmap__targets">
-        {board.hexes
-          .filter((hex) => actionableHexes.has(hexKey(hex)))
-          .map((hex) => (
-            <path
-              key={hexKey(hex)}
-              d={cornersToPath(hexToPixel(hex, S), S)}
-              className="hexmap__target"
-              onClick={() => onHexClick(hex)}
-            >
-              <title>{`Hex (${hex[0]}, ${hex[1]}): network options`}</title>
-            </path>
-          ))}
+        {targetHexes.map((hex) => (
+          <path
+            key={hexKey(hex)}
+            d={cornersToPath(hexToPixel(hex, S), S)}
+            className="hexmap__target"
+            onClick={() => onHexClick(hex)}
+          >
+            <title>{`Hex (${hex[0]}, ${hex[1]}): network options${terrain.get(hexKey(hex)) === "nebula" ? " · nebula" : ""}`}</title>
+          </path>
+        ))}
       </g>
     </svg>
+  );
+}
+
+/** An asteroid field (dark, studded with rocks) or a nebula (a purple and pink haze) filling one hex. */
+function TerrainCell({ hex, kind, surcharge }: { hex: Axial; kind: TerrainKind; surcharge: number }) {
+  const center = hexToPixel(hex, S);
+  const outline = cornersToPath(center, S);
+  if (kind === "asteroid") {
+    return (
+      <g>
+        <title>Asteroid field: impassable. It cannot be charted, and no lane may face it.</title>
+        <path d={outline} className="hexmap__asteroid" />
+        {scatterBlobs(hex, ASTEROID_ROCKS).map((rock, i) => (
+          <circle key={i} cx={center.x + rock.x} cy={center.y + rock.y} r={rock.r} className={`hexmap__rock hexmap__rock--${i % 3}`} />
+        ))}
+      </g>
+    );
+  }
+  return (
+    <g>
+      <title>{`Nebula: charting costs ${surcharge} more, and its tile can never gain a third exit.`}</title>
+      <path d={outline} className="hexmap__nebula" />
+      {scatterBlobs(hex, NEBULA_WISPS).map((wisp, i) => (
+        <circle key={i} cx={center.x + wisp.x} cy={center.y + wisp.y} r={wisp.r} className="hexmap__wisp" />
+      ))}
+    </g>
   );
 }
 

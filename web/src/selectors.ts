@@ -1,6 +1,6 @@
 /** Small derived views of GameState used by several components. */
 
-import type { Action, BuyAction, CorporationState, GameState, HexAction, SellAction } from "./api";
+import type { Action, BuyAction, CorporationState, GameState, HexAction, SellAction, TerrainHex, TerrainKind } from "./api";
 import { isHexAction } from "./api";
 import { hexKey } from "./hex";
 
@@ -22,6 +22,11 @@ export function hexActionsByKey(actions: Action[]): Map<string, HexAction[]> {
     byKey.set(key, [...(byKey.get(key) ?? []), action]);
   }
   return byKey;
+}
+
+/** Terrain keyed by `hexKey`; hexes that are plain space are absent. */
+export function terrainByKey(terrain: TerrainHex[]): Map<string, TerrainKind> {
+  return new Map(terrain.map((t) => [hexKey(t.hex), t.kind] as const));
 }
 
 export interface CorpTradeOptions {

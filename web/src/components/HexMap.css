@@ -11,6 +11,55 @@
   stroke-width: 1;
 }
 
+/* Terrain: asteroid fields are dark and rocky, nebulae a soft haze. Colors live in styles.css. */
+.hexmap__asteroid {
+  fill: var(--asteroid-fill);
+  stroke: var(--asteroid-edge);
+  stroke-width: 1;
+}
+
+.hexmap__rock--0 {
+  fill: var(--rock-light);
+}
+
+.hexmap__rock--1 {
+  fill: var(--rock-mid);
+}
+
+.hexmap__rock--2 {
+  fill: var(--rock-dark);
+}
+
+.hexmap__nebula {
+  fill: url(#hexmap-nebula-haze);
+  stroke: var(--nebula-edge-line);
+  stroke-width: 1;
+}
+
+.hexmap__wisp {
+  fill: url(#hexmap-nebula-wisp);
+}
+
+.hexmap__haze-core {
+  stop-color: var(--nebula-core);
+  stop-opacity: 0.8;
+}
+
+.hexmap__haze-edge {
+  stop-color: var(--nebula-fringe);
+  stop-opacity: 0.6;
+}
+
+.hexmap__wisp-core {
+  stop-color: var(--nebula-wisp);
+  stop-opacity: 0.75;
+}
+
+.hexmap__wisp-edge {
+  stop-color: var(--nebula-wisp);
+  stop-opacity: 0;
+}
+
 .hexmap__boundary {
   fill: none;
   stroke: #939dab;
