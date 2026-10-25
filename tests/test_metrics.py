@@ -28,7 +28,7 @@ def _float(game: Game, corp_id: str = "CEC") -> None:
     corp.president = "P1"
 
 
-def test_planet_value_is_the_revenue_it_adds():
+def test_planet_value_splits_each_pair_between_its_planets():
     game = _game({})
     _float(game)
     cec = game.corp("CEC")
@@ -36,8 +36,9 @@ def test_planet_value_is_the_revenue_it_adds():
     game.network.chart("CEC", Hex(-4, 2), frozenset({D.SW, D.NW}), game.reachable(cec))
     metrics = planet_metrics(game)
     assert metrics["Corellia"].reached_by == metrics["Alderaan"].reached_by == 1
-    assert metrics["Corellia"].value == metrics["Alderaan"].value == 30
+    assert metrics["Corellia"].value == metrics["Alderaan"].value == 15
     assert metrics["Coruscant"].reached_by == 0 and metrics["Coruscant"].value == 0
+    assert sum(m.value for m in metrics.values()) == game.revenue(cec).total
 
 
 def test_frontier_cost_prices_nebulae_and_goes_around_asteroids():

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import heapq
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from itertools import combinations
 from statistics import mean, pstdev
@@ -198,24 +198,23 @@ def frontier_costs(game: Game, corp_id: str, reach: frozenset[Hex]) -> dict[str,
 class PlanetMetrics:
     reached_by: int
     """Floated corporations whose final network reaches the planet."""
-    value: int
-    """Revenue the planet adds, summed over the corporations that reach it: each one's revenue
-    minus what it would earn with the planet removed from its network."""
+    value: float
+    """Revenue the planet earns, summed over the corporations that reach it: half of the value
+    of each paired route it sits in. Over all planets this adds up to total revenue."""
 
 
 def planet_metrics(game: Game) -> dict[str, PlanetMetrics]:
-    """How much each planet is worth at the end of the game, and how many reach it."""
+    """How much each planet earns at the end of the game, and how many corporations reach it."""
     reached_by: Counter[str] = Counter()
-    value: Counter[str] = Counter()
+    value: defaultdict[str, float] = defaultdict(float)
     for corp in game.corporations.values():
         if not corp.floated:
             continue
-        planets = game.reachable_planets(corp)
-        total = compute_revenue(planets, game.config).total
-        for planet in planets:
-            others = [p for p in planets if p is not planet]
+        for planet in game.reachable_planets(corp):
             reached_by[planet.name] += 1
-            value[planet.name] += total - compute_revenue(others, game.config).total
+        for pair in compute_revenue(game.reachable_planets(corp), game.config).pairs:
+            value[pair.a.name] += pair.value / 2
+            value[pair.b.name] += pair.value / 2
     return {p.name: PlanetMetrics(reached_by[p.name], value[p.name]) for p in game.board.planets}
 
 
