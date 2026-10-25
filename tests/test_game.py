@@ -107,10 +107,10 @@ def test_operating_turn_charts_and_pays_dividends(game):
     charts = [a for a in legal if isinstance(a, Chart)]
     assert charts and NoNetworkAction() in legal
     # Corellia (-5,3) -> (-4,2) NE exit reaches Kuat? No: Kuat is (-3,2), two steps. Chart toward Alderaan (-4,1)
-    action = Chart(Hex(-4, 2), frozenset({D.SW, D.NW}), 50)
+    action = Chart(Hex(-4, 2), frozenset({D.SW, D.NW}), 60)
     assert action in charts
     game.apply_network_action(cec, action)
-    assert cec.treasury == 430
+    assert cec.treasury == 420
     result = game.revenue(cec)
     # Corellia (I/S) <-> Alderaan (M): Industry-Market typed pair.
     assert result.total == 30
@@ -119,7 +119,7 @@ def test_operating_turn_charts_and_pays_dividends(game):
     assert ann.cash == 400 - 120 + 6  # 3/share x 2
     assert bo.cash == 400 - 120 + 6
     assert cy.cash == 400 - 60 + 3
-    assert cec.treasury == 430  # unheld shares pay nobody
+    assert cec.treasury == 420  # unheld shares pay nobody
     assert game.price(cec) == 70
 
 

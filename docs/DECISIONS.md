@@ -46,11 +46,12 @@ Each operating turn a corporation, in order:
 
 1. Takes **up to two network actions** (placeholder allowance): chart an uncharted hex,
    upgrade a charted tile it has service on to three exits, or extend service onto one
-   already-charted tile adjacent to its network. Charting and service cost **50**; an
-   upgrade costs **70** (see "Terrain and expansion cost"). Passing ends the corporation's
-   network actions for the turn. (History: one action at cost 20 until 2026-09-28; service
-   was 10 until 2026-09-27, when bot playtests showed nearly every tile shared; upgrades cost
-   50 until 2026-10-25.)
+   already-charted tile adjacent to its network. Charting and service cost **60**; an
+   upgrade costs **80** (see "Terrain and expansion cost" and "Dearer network actions").
+   Passing ends the corporation's network actions for the turn. (History: one action at cost
+   20 until 2026-09-28; service was 10 until 2026-09-27, when bot playtests showed nearly
+   every tile shared; upgrades cost 50 until 2026-10-25, and charting and service were 50 and
+   the upgrade 70 until later that day.)
 2. Has its **revenue** computed automatically (see Economy).
 3. Chooses to **pay** the full revenue as dividends or **withhold** it into the treasury.
 
@@ -137,8 +138,8 @@ was which planets to link. Two changes make routing a puzzle. Both are tunable i
 
 - **Asteroid fields** (15% of non-planet hexes) are impassable. They cannot be charted, and
   no tile may have an exit facing one, so routes bend around them.
-- **Nebulae** (15% of non-planet hexes) cost **+30** to chart (80 instead of 50). Extending
-  service onto an existing nebula tile costs the usual 50, so the first company through
+- **Nebulae** (15% of non-planet hexes) cost **+30** to chart (90 instead of 60). Extending
+  service onto an existing nebula tile costs the usual 60, so the first company through
   pays and rivals ride cheaply. A nebula tile can **never be upgraded** to three exits.
 - **Placement is seeded.** The game seed alone fixes the layout (`terrain.py`), so a seed
   always gives the same sky and a saved game's replay rebuilds it. Terrain comes in random
@@ -147,15 +148,28 @@ was which planets to link. Two changes make routing a puzzle. Both are tunable i
   planets always form one connected whole. Planet hexes never carry terrain. Symmetry between
   seats is not required: players choose corporations, not positions.
 - **Charting is exploration, the 2-to-3-exit upgrade is expansion.** Charting places a
-  two-exit tile for **50**; the only upgrade, to three exits, now costs **70** (was 50).
-  Upgrades in open space otherwise work as before.
+  two-exit tile for **60**; the only upgrade, to three exits, now costs **80** (was 50 before
+  terrain). Upgrades in open space otherwise work as before.
 - **Existing saved games** replay from their seed, so they now rebuild with terrain and the
-  70 upgrade. A save whose recorded moves are no longer legal is reported as outdated.
+  dearer upgrade. A save whose recorded moves are no longer legal is reported as outdated.
 
 Terrain is measured by the sweep harness, not decided by it: `bby18 terrain-report` prices
 planet pairs on the map alone, and sweep rows carry per-planet value and reach, near-pair
 links and frontier costs. The `greedy-path` bot prices routes around terrain; the original
 `greedy` bot measures straight-line hexes and does not.
+
+## Dearer network actions (decided 2026-10-25)
+
+Charting, extending service and upgrading each rose by **10**: 60, 60 and 80 (from 50, 50 and
+70). The nebula surcharge stays +30 on top, so a nebula chart is 90. Costs are all in
+`config.py`; the old figures can be restored per sweep variant.
+
+A 40-seed greedy-path sweep per player count (2, 3 and 4 players, identical terrain seeds)
+found board coverage unchanged (planets reached 93%, 95%, 96% before and after) and builds
+per corporation unchanged, but corporations withhold more: about 44% of operating turns
+instead of 34-35%, and final share prices fall 22-31% (3 players: 219 to 154), taking mean
+player worth down 19-28%. Capital binds harder; the 2026-09-28 note that "slightly over-tight
+is acceptable" still applies, but this is the tightest the economy has been.
 
 ## Explicitly deferred
 

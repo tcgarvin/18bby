@@ -37,7 +37,7 @@ def test_variant_coerces_json_values_to_field_types():
     assert config.regional_bonus_regions == frozenset({"Core", "Mid Rim"})
     assert config.typed_pairs == frozenset({frozenset({"A", "M"})})
     assert config.starting_cash_by_player_count == {3: 500}
-    assert DEFAULT_CONFIG.chart_cost == 50
+    assert DEFAULT_CONFIG.chart_cost == 60
 
 
 def test_variant_rejects_wrong_value_type():

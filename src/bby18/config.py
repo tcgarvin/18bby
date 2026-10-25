@@ -24,9 +24,9 @@ class GameConfig:
 
     # Network actions
     network_actions_per_turn: int = 2
-    chart_cost: int = 50
-    upgrade_cost: int = 70
-    service_cost: int = 50
+    chart_cost: int = 60
+    upgrade_cost: int = 80
+    service_cost: int = 60
     nebula_chart_surcharge: int = 30
     """Extra cost to chart a nebula hex. Extending service onto one costs the usual amount."""
 

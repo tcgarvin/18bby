@@ -44,9 +44,9 @@ def test_planet_value_splits_each_pair_between_its_planets():
 def test_frontier_cost_prices_nebulae_and_goes_around_asteroids():
     corellia = (-5, 3)
     cases = {
-        "open": ({}, 50),
-        "nebula": ({Hex(-4, 2): Terrain.NEBULA, Hex(-4, 3): Terrain.NEBULA}, 80),
-        "one asteroid": ({Hex(-4, 2): Terrain.ASTEROID}, 50),
+        "open": ({}, 60),
+        "nebula": ({Hex(-4, 2): Terrain.NEBULA, Hex(-4, 3): Terrain.NEBULA}, 90),
+        "one asteroid": ({Hex(-4, 2): Terrain.ASTEROID}, 60),
     }
     for terrain, expected in (v for v in cases.values()):
         game = _game(terrain)
@@ -61,7 +61,7 @@ def test_frontier_cost_detours_when_both_short_routes_are_blocked():
     game = _game(walled)
     _float(game)
     reach = game.reachable(game.corp("CEC"))
-    assert frontier_costs(game, "CEC", reach)["Kuat"] > 50
+    assert frontier_costs(game, "CEC", reach)["Kuat"] > 60
 
 
 def test_near_pairs_are_all_stranded_before_anything_floats():

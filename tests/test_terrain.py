@@ -131,10 +131,10 @@ def test_nebula_chart_costs_the_surcharge_and_is_offered_at_that_price():
     charts = [a for a in game.legal_network_actions(cec) if isinstance(a, Chart)]
     in_nebula = [a for a in charts if a.hex == nebula]
     elsewhere = [a for a in charts if a.hex != nebula]
-    assert in_nebula and all(a.cost == 50 + 30 for a in in_nebula)
-    assert elsewhere and all(a.cost == 50 for a in elsewhere)
+    assert in_nebula and all(a.cost == 60 + 30 for a in in_nebula)
+    assert elsewhere and all(a.cost == 60 for a in elsewhere)
     game.apply_network_action(cec, in_nebula[0])
-    assert cec.treasury == 480 - 80
+    assert cec.treasury == 480 - 90
 
 
 def test_extending_service_onto_a_nebula_costs_the_usual_amount():
@@ -145,7 +145,7 @@ def test_extending_service_onto_a_nebula_costs_the_usual_amount():
     cec, kdy = game.corp("CEC"), game.corp("KDY")
     game.network.chart("KDY", nebula, frozenset({D.E, D.SW}), game.reachable(kdy))
     service = [a for a in game.legal_network_actions(cec) if isinstance(a, ExtendService)]
-    assert [a.cost for a in service if a.hex == nebula] == [50]
+    assert [a.cost for a in service if a.hex == nebula] == [60]
 
 
 def test_nebula_tile_can_never_be_upgraded():
@@ -166,9 +166,9 @@ def test_open_space_tile_upgrades_at_the_expansion_cost():
     hex = Hex(-4, 2)
     game.network.chart("CEC", hex, frozenset({D.SW, D.NW}), game.reachable(cec))
     upgrades = [a for a in game.legal_network_actions(cec) if isinstance(a, Upgrade)]
-    assert upgrades and all(a.cost == CFG.upgrade_cost == 70 for a in upgrades)
+    assert upgrades and all(a.cost == CFG.upgrade_cost == 80 for a in upgrades)
     game.apply_network_action(cec, upgrades[0])
-    assert cec.treasury == 480 - 70
+    assert cec.treasury == 480 - 80
 
 
 def test_games_with_the_same_seed_share_a_sky_and_different_seeds_do_not():
