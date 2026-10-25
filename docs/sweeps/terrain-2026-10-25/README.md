@@ -81,8 +81,10 @@ Slightly. `greedy-path`, 3 players, end of game:
 
 ("Near pair" = two planets within three hexes.) At the adopted settings stranded near pairs go from
 2% to 5% of pairs, planets per corporation fall about half a planet, and final revenue falls 3%
-(409 to 397). That is a real, consistent shift but a small one. `greedy` shows the same direction
-(planets reached by any: 90% -> 92%, noisier because that bot wanders).
+(409 to 397). That is a real, consistent shift but a small one. The original `greedy` bot agrees
+that each corporation reaches fewer planets (19.6 -> 19.3) but not that coverage falls: planets
+reached by any corporation go 90% -> 92% and stranded near pairs 10% -> 9%. Its random exits
+already leave about a tenth of the map unreached, and I have not established why terrain helps it.
 
 ## 3. Are players making choices?
 
@@ -108,8 +110,8 @@ decisions about *where* to spend a scarce action, not whether to.
 Planets are open hubs, so a line can already branch at any planet. `greedy-path` upgrades a tile
 0.67 times per corporation at 50 credits, 0.06 at 60, 0.06 at 70 and 0.03 at 90 (junction tiles
 2.0 -> 0.2). `upgrade_probe.py` shows why: when the bot ignores cost, it upgrades about 0.65 times
-per corporation *at any price* (30, 50, 70), so roughly one corporation in two finds one upgrade
-strictly best. Those upgrades are worth about 5 revenue and 0.3 planets per corporation, the
+per corporation *at any price* (30, 50, 70), so about two corporations in three find an upgrade
+strictly best. Those upgrades are worth about 5 revenue and 0.25 planets per corporation, the
 whole price of skipping them. So 70 is "never worth it" for a price-sensitive player and the
 2-to-3-exit decision does not become a deliberate trade-off. The original `greedy` bot picks
 upgrades largely at random and still makes 4.3 per corporation at 70 (5.5 at 50).
