@@ -1,5 +1,6 @@
 import type { GameState } from "../api";
 import { corporationColor } from "../colors";
+import { Help } from "./Help";
 
 /** The two-dimensional stock market with a marker per started corporation. */
 export function StockMarket({ state }: { state: GameState }) {
@@ -9,7 +10,10 @@ export function StockMarket({ state }: { state: GameState }) {
   const width = Math.max(...state.stockMarket.map((row) => row.length));
   return (
     <section className="panel">
-      <h2 className="panel__title">Stock market</h2>
+      <h2 className="panel__title">
+        Stock market
+        <Help topic="marketMovement" />
+      </h2>
       <p className="muted market__hint">
         Paying moves right (two columns for a big payout), withholding left; selling moves down, a sold-out
         corporation moves up.

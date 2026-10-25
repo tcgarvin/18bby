@@ -3,6 +3,7 @@ import type { Action, GameState, SellAction } from "../api";
 import { corporationColor } from "../colors";
 import { useHotkeys } from "../hotkeys";
 import { findCorporation, tradeOptions } from "../selectors";
+import { Help } from "./Help";
 
 interface StockActionsProps {
   state: GameState;
@@ -18,6 +19,14 @@ export function StockActions({ state, busy, onAct }: StockActionsProps) {
 
   return (
     <div className="actions">
+      <p className="actions__hint">
+        One action per turn: buy a share, sell shares, or pass.
+        <Help topic="stockRound" />
+        {" "}
+        <span className="actions__legend">
+          Par <Help topic="par" /> · IPO <Help topic="ipo" /> · Pool <Help topic="pool" />
+        </span>
+      </p>
       {options.length === 0 && <p className="muted">No legal buys or sells.</p>}
       {options.map((option) => {
         const corp = findCorporation(state, option.corpId);

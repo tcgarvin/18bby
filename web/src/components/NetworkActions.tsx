@@ -4,6 +4,7 @@ import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
 import { hexActionsByKey } from "../selectors";
 import { TilePreview } from "./TilePreview";
+import { Help } from "./Help";
 
 interface NetworkActionsProps {
   state: GameState;
@@ -48,6 +49,11 @@ export function NetworkActions({ state, corp, selectedHex, busy, onSelectHex, on
         <strong style={{ color }}>{corp.id}</strong>. Treasury{" "}
         <strong className="num">{corp.treasury}</strong>. Chart {state.config.chartCost} · Upgrade{" "}
         {state.config.upgradeCost} · Service {state.config.serviceCost}.
+        <Help topic="networkAction" />
+      </p>
+      <p className="actions__hint">
+        Chart <Help topic="chart" /> · Upgrade <Help topic="upgrade" /> · Service <Help topic="service" /> · Exits{" "}
+        <Help topic="lanes" />
       </p>
       <p className="actions__hint">
         {byKey.size > 0

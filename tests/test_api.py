@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from bby18.api.app import create_app
 from bby18.api.auth import AuthError
 from bby18.api.store import MemoryStore
+from bby18.config import DEFAULT_CONFIG
 
 
 class HeaderUser:
@@ -29,6 +30,20 @@ def test_board_endpoint(client):
     data = client.get("/api/board").json()
     assert len(data["hexes"]) == 127
     assert len(data["planets"]) == 24
+
+
+def test_rules_endpoint_matches_config(client):
+    rules = client.get("/api/rules").json()
+    assert rules["chartCost"] == DEFAULT_CONFIG.chart_cost
+    assert rules["parPrices"] == list(DEFAULT_CONFIG.par_prices)
+    assert rules["stockMarket"][0][0] == DEFAULT_CONFIG.stock_market[0][0]
+    assert ["A", "M"] in rules["typedPairs"]
+    assert {c["id"] for c in rules["corporations"]} == {c.id for c in DEFAULT_CONFIG.corporations}
+
+
+def test_rules_endpoint_is_public(store):
+    anonymous = TestClient(create_app(store, store, HeaderUser()))
+    assert anonymous.get("/api/rules").status_code == 200
 
 
 def test_new_game_and_act(client):

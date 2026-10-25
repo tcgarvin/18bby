@@ -33,7 +33,7 @@ from bby18.api.saves import (
     replay,
     snapshot,
 )
-from bby18.api.serialize import Json, board_to_json, session_to_json
+from bby18.api.serialize import Json, board_to_json, rules_to_json, session_to_json
 from bby18.api.store import (
     AccountStore,
     GameNotFound,
@@ -108,6 +108,11 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
     @app.get("/api/board")
     def board() -> Json:
         return board_to_json(load_board(DEFAULT_CONFIG.map_file))
+
+    @app.get("/api/rules")
+    def rules() -> Json:
+        """The tunable numbers behind the rules page; public, like the board."""
+        return rules_to_json(DEFAULT_CONFIG)
 
     @app.get("/api/games")
     def list_games(user: str = Depends(current_user)) -> Json:

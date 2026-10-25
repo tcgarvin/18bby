@@ -19,6 +19,7 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Board
+from bby18.config import GameConfig
 from bby18.game import Game
 from bby18.hexgrid import Direction, Hex
 from bby18.session import Action, Dividend, GameSession, Phase
@@ -205,6 +206,37 @@ def session_to_json(session: GameSession) -> Json:
             {"seq": i, "round": e.round_label, "actor": e.actor, "text": e.text}
             for i, e in enumerate(game.log)
         ][-200:],
+    }
+
+
+def rules_to_json(config: GameConfig) -> Json:
+    """Every number the rules page quotes, straight from the config so the docs cannot drift."""
+    return {
+        "corporations": [
+            {"id": c.id, "name": c.name, "homeworld": c.homeworld} for c in config.corporations
+        ],
+        "networkActionsPerTurn": config.network_actions_per_turn,
+        "chartCost": config.chart_cost,
+        "upgradeCost": config.upgrade_cost,
+        "serviceCost": config.service_cost,
+        "typedPairValue": config.typed_pair_value,
+        "typedPairs": sorted(sorted(pair) for pair in config.typed_pairs),
+        "regionalBonus": config.regional_bonus,
+        "regionalBonusRegions": sorted(config.regional_bonus_regions),
+        "basicRouteValue": config.basic_route_value,
+        "stockMarket": [list(row) for row in config.stock_market],
+        "parColumn": config.par_column,
+        "parPrices": list(config.par_prices),
+        "payoutStepFractions": list(config.payout_step_fractions),
+        "sharesPerCorporation": config.shares_per_corporation,
+        "presidentShareSize": config.president_share_size,
+        "floatThresholdShares": config.float_threshold_shares,
+        "floatCapitalShares": config.float_capital_shares,
+        "startingCash": {str(n): cash for n, cash in config.starting_cash_by_player_count.items()},
+        "maxHoldingShares": config.max_holding_shares,
+        "certificateLimit": config.certificate_limit,
+        "totalRounds": config.total_rounds,
+        "operatingRoundsPerStockRound": config.operating_rounds_per_stock_round,
     }
 
 

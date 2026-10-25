@@ -978,3 +978,218 @@ kbd {
 .link--danger {
   color: var(--danger);
 }
+
+/* ---------- Help popovers ---------- */
+
+.help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  vertical-align: middle;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.help__btn {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.help__btn:hover,
+.help__btn:focus-visible,
+.help__btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.help__pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  left: -8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 6px 20px rgba(27, 35, 48, 0.18);
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.help__term {
+  font-size: 13px;
+}
+
+.help__more {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* ---------- Rules page ---------- */
+
+.rules {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 760px);
+  gap: 40px;
+  justify-content: center;
+  padding: 24px 24px 80px;
+}
+
+.rules__toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  font-size: 13px;
+}
+
+.rules__toc ol {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules__toc li a {
+  display: block;
+  padding: 4px 0;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.rules__toc li a:hover {
+  color: var(--accent);
+}
+
+.rules__home {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rules__body {
+  min-width: 0;
+  line-height: 1.6;
+}
+
+.rules__body h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.rules__lede {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.rules__section {
+  margin-top: 40px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 16px;
+}
+
+.rules__section h2 {
+  margin: 16px 0 8px;
+  font-size: 20px;
+}
+
+.rules__section h3 {
+  margin: 20px 0 4px;
+  font-size: 15px;
+}
+
+.rules__note {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.rules__table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13.5px;
+}
+
+.rules__table th,
+.rules__table td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rules__market-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.rules__market {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rules__market td {
+  min-width: 38px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  text-align: right;
+}
+
+.rules__market .rules__market-par {
+  background: var(--highlight);
+  font-weight: 700;
+}
+
+.rules__check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.rules__check input {
+  margin-top: 4px;
+}
+
+.rules__glossary dt {
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.rules__glossary dd {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+}
+
+@media (max-width: 800px) {
+  .rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rules__toc {
+    position: static;
+  }
+}
+
+.help__pop--right {
+  right: -8px;
+  left: auto;
+}

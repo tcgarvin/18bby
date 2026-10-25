@@ -240,6 +240,38 @@ async function errorDetail(response: Response): Promise<string> {
   }
 }
 
+/** The tunable numbers behind the rules (see rules_to_json in src/bby18/api/serialize.py). */
+export interface Rules {
+  corporations: { id: string; name: string; homeworld: string }[];
+  networkActionsPerTurn: number;
+  chartCost: number;
+  upgradeCost: number;
+  serviceCost: number;
+  typedPairValue: number;
+  /** Pairs of planet type letters, e.g. ["A", "M"]. */
+  typedPairs: [string, string][];
+  regionalBonus: number;
+  regionalBonusRegions: Region[];
+  basicRouteValue: number;
+  stockMarket: number[][];
+  parColumn: number;
+  parPrices: number[];
+  payoutStepFractions: number[];
+  sharesPerCorporation: number;
+  presidentShareSize: number;
+  floatThresholdShares: number;
+  floatCapitalShares: number;
+  startingCash: Record<string, number>;
+  maxHoldingShares: number;
+  certificateLimit: number;
+  totalRounds: number;
+  operatingRoundsPerStockRound: number;
+}
+
+export function fetchRules(): Promise<Rules> {
+  return request<Rules>("/rules");
+}
+
 export function fetchBoard(): Promise<Board> {
   return request<Board>("/board");
 }

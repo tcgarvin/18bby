@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import type { Board, GameState, NewGameResponse } from "./api";
-import { ApiError, fetchBoard, fetchGame } from "./api";
+import type { Board, GameState, NewGameResponse, Rules } from "./api";
+import { ApiError, fetchBoard, fetchGame, fetchRules } from "./api";
 import { GameScreen } from "./components/GameScreen";
 import { NewGame } from "./components/NewGame";
+import { RulesPage } from "./components/RulesPage";
 import { SavedGames } from "./components/SavedGames";
+import { SECTION_IDS } from "./help/glossary";
+import type { SectionId } from "./help/glossary";
+import { RulesProvider } from "./help/rulesContext";
 
 type View =
   | { kind: "loading" }
@@ -12,6 +16,14 @@ type View =
 
 function gameIdFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get("game");
+}
+
+/** The rules page is requested as ``?rules`` or ``?rules=<section>``; null means a normal visit. */
+function rulesRequest(): { section: SectionId | null } | null {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("rules")) return null;
+  const section = params.get("rules");
+  return { section: SECTION_IDS.find((id) => id === section) ?? null };
 }
 
 /** Load a saved game, or explain on the home screen why it cannot be opened. */
@@ -40,6 +52,7 @@ function setGameInUrl(gameId: string | null) {
 
 export function App() {
   const [board, setBoard] = useState<Board | null>(null);
+  const [rules, setRules] = useState<Rules | null>(null);
   const [view, setView] = useState<View>({ kind: "loading" });
   const [fatal, setFatal] = useState<string | null>(null);
 
@@ -47,6 +60,10 @@ export function App() {
     let cancelled = false;
     async function load() {
       try {
+        const loadedRules = await fetchRules();
+        if (cancelled) return;
+        setRules(loadedRules);
+        if (rulesRequest()) return;
         const loadedBoard = await fetchBoard();
         if (cancelled) return;
         setBoard(loadedBoard);
@@ -100,14 +117,29 @@ export function App() {
       </div>
     );
   }
+  if (rules === null) return <div className="loading">Loading…</div>;
+  const requested = rulesRequest();
+  if (requested) {
+    return (
+      <RulesProvider value={rules}>
+        <RulesPage section={requested.section} />
+      </RulesProvider>
+    );
+  }
   if (view.kind === "loading" || board === null) return <div className="loading">Loading…</div>;
   if (view.kind === "new") {
     return (
-      <div className="newgame newgame--home">
-        <SavedGames onOpen={(gameId) => void open(gameId)} />
-        <NewGame onCreated={created} notice={view.notice} />
-      </div>
+      <RulesProvider value={rules}>
+        <div className="newgame newgame--home">
+          <SavedGames onOpen={(gameId) => void open(gameId)} />
+          <NewGame onCreated={created} notice={view.notice} />
+        </div>
+      </RulesProvider>
     );
   }
-  return <GameScreen key={view.gameId} gameId={view.gameId} board={board} initialState={view.state} onLeave={leave} />;
+  return (
+    <RulesProvider value={rules}>
+      <GameScreen key={view.gameId} gameId={view.gameId} board={board} initialState={view.state} onLeave={leave} />
+    </RulesProvider>
+  );
 }

@@ -16,6 +16,7 @@ import { NetworkActions } from "./NetworkActions";
 import { PlayersPanel } from "./PlayersPanel";
 import { StockActions } from "./StockActions";
 import { StockMarket } from "./StockMarket";
+import { Help } from "./Help";
 
 interface GameScreenProps {
   gameId: string;
@@ -141,6 +142,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           <span className="round__label">{state.roundLabel === "end" ? "End" : state.roundLabel}</span>
           <span className="round__meta">
             Round {displayRound} of {state.totalRounds} · {PHASE_NAMES[state.phase]}
+            <Help topic={state.phase === "stock" ? "stockRound" : "operatingRound"} />
           </span>
         </div>
         <div className="topbar__right">
@@ -281,6 +283,7 @@ function MapLegend({ state, focusCorp }: { state: GameState; focusCorp: string |
       <span className="legend__item">
         <span className="legend__swatch legend__swatch--outer" /> Outer Rim
       </span>
+      <Help topic="region" />
       <span className="legend__sep" />
       {state.corporations.map((c) => (
         <span key={c.id} className="legend__item">

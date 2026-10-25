@@ -1,5 +1,6 @@
 import type { GameState } from "../api";
 import { corporationColor } from "../colors";
+import { Help } from "./Help";
 
 export function PlayersPanel({ state }: { state: GameState }) {
   const corpIds = state.corporations.map((c) => c.id);
@@ -13,9 +14,15 @@ export function PlayersPanel({ state }: { state: GameState }) {
           <tr>
             <th>Player</th>
             <th className="num">Cash</th>
-            <th className="num">Worth</th>
+            <th className="num">
+              Worth
+              <Help topic="netWorth" />
+            </th>
             <th>Shares</th>
-            <th className="num" title="Certificates held / limit">Certs</th>
+            <th className="num" title="Certificates held / limit">
+              Certs
+              <Help topic="certificate" />
+            </th>
           </tr>
         </thead>
         <tbody>

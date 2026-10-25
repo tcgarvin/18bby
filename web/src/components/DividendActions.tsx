@@ -1,6 +1,7 @@
 import type { Action, CorporationState, GameState } from "../api";
 import { corporationColor } from "../colors";
 import { useHotkeys } from "../hotkeys";
+import { Help } from "./Help";
 
 interface DividendActionsProps {
   state: GameState;
@@ -21,6 +22,7 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
       <p className="actions__lead">
         <strong style={{ color }}>{corp.id}</strong> earns <strong className="num">{total}</strong>
         {total > 0 && <> ({perShare}/share)</>}.
+        <Help topic="revenue" />
       </p>
       {pairs.length > 0 ? (
         <table className="pairs">
@@ -39,6 +41,9 @@ export function DividendActions({ state, corp, busy, onAct }: DividendActionsPro
       ) : (
         <p className="muted">No scoring pairs yet.</p>
       )}
+      <p className="actions__hint">
+        Pay <Help topic="dividend" /> · Withhold <Help topic="withhold" />
+      </p>
       <div className="btn-row">
         {choices.map((action, i) => {
           const pay = action.choice === "pay";
