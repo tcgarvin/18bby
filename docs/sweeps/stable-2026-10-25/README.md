@@ -1,5 +1,9 @@
 # Strategy stable tournament (2026-10-25)
 
+> **Note (2026-10-26).** These specs were run when an empty variant (`{}`) meant the rules without
+> the Death Star, which became the default on 2026-10-26. To rerun them under the rules they
+> measured, add `"death_star_rules": false` to each variant (`CLASSIC_CONFIG` in `config.py`).
+
 Question: under the current rules, does one strategy dominate? The balance goal is not that every
 strategy is viable or wins equally, but that **no single strategy dominates**, with at least two
 viable strategies and more being better.

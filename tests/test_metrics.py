@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from bby18.board import Terrain
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG
 from bby18.game import Game, LogEntry
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
@@ -9,7 +9,7 @@ from bby18.metrics import count_log, frontier_costs, near_pair_links, planet_met
 from bby18.network import HyperspaceNetwork
 from bby18.state import CorpStatus
 
-CLEAR = replace(DEFAULT_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0)
+CLEAR = replace(CLASSIC_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0)
 
 
 def _game(terrain: dict[Hex, Terrain]) -> Game:

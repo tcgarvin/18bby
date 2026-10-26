@@ -1,4 +1,4 @@
-"""The experimental Death Star and fleets rules (``death_star_rules``)."""
+"""The Death Star and fleets rules (``death_star_rules``, adopted 2026-10-26)."""
 
 import hashlib
 import random
@@ -11,7 +11,7 @@ from bby18.actions import BuyFleet, BuyShare, FinishFleets, NoNetworkAction, Pas
 from bby18.api.serialize import action_to_json, match_action, session_to_json
 from bby18.board import Planet, Terrain, load_board
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
-from bby18.config import DEFAULT_CONFIG, UNLIMITED, FleetTier
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, UNLIMITED, FleetTier
 from bby18.death_star import SITE_NAME, SitePlacementError, place_sites
 from bby18.game import Game
 from bby18.hexgrid import Hex
@@ -28,7 +28,10 @@ from bby18.session import Dividend, GameSession, Phase
 from bby18.state import NO_PLAYER, CorpStatus
 from bby18.terrain import generate_terrain
 
-RULES = replace(DEFAULT_CONFIG, death_star_rules=True)
+RULES = replace(CLASSIC_CONFIG, death_star_rules=True)
+"""The Death Star rules with the numbers they were built and tested with (6 cubes per stage,
+sites anywhere that qualifies). ``CLASSIC_CONFIG`` adopted tighter numbers on 2026-10-26; these
+tests pin the mechanics, not the adopted numbers."""
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Tests that build specific tiles run on an empty sky."""
 
@@ -172,7 +175,7 @@ def test_revenue_uses_at_most_one_pair_per_fleet():
 
 
 def test_revenue_is_uncapped_with_the_rules_off():
-    game = new_game(DEFAULT_CONFIG)
+    game = new_game(CLASSIC_CONFIG)
     cec = float_corp(game, "CEC")
     planets = [planet(f"p{i}", t, hex=Hex(i, 0)) for i, t in enumerate("AMRSIM")]
     game.reachable_planets = lambda corp: planets  # type: ignore[method-assign]
@@ -231,7 +234,7 @@ def test_first_fleet_is_mandatory():
 
 
 def test_fleets_do_not_exist_with_the_rules_off():
-    game = new_game(DEFAULT_CONFIG)
+    game = new_game(CLASSIC_CONFIG)
     cec = float_corp(game, "CEC")
     with pytest.raises(IllegalAction):
         game.legal_fleet_actions(cec)
@@ -346,7 +349,7 @@ def test_empire_adds_a_cube_every_stock_round():
 
 
 def test_no_cubes_with_the_rules_off():
-    game = new_game(DEFAULT_CONFIG)
+    game = new_game(CLASSIC_CONFIG)
     start = len(game.log)
     game.finish_stock_round()
     assert game.death_star.cubes == 0
@@ -584,7 +587,7 @@ def test_site_placement_is_seeded_and_satisfies_its_constraints():
 
 
 def test_game_places_the_first_site_as_a_planet_and_leaves_terrain_alone():
-    on, off = new_game(RULES, seed=5), new_game(DEFAULT_CONFIG, seed=5)
+    on, off = new_game(RULES, seed=5), new_game(CLASSIC_CONFIG, seed=5)
     assert on.board.terrain == off.board.terrain
     first, second = on.death_star.sites
     site = on.board.planet_named(SITE_NAME)
@@ -639,19 +642,44 @@ def test_bad_death_star_numbers_are_rejected(overrides):
 
 
 def test_default_death_star_numbers_match_the_decisions_doc():
-    assert RULES.fleet_tiers == (
+    config = DEFAULT_CONFIG
+    assert config.death_star_rules
+    assert config.fleet_tiers == (
         FleetTier(6, 60),
         FleetTier(6, 90),
         FleetTier(6, 120),
         FleetTier(UNLIMITED, 160),
     )
-    assert RULES.fleet_limit == 4
-    assert RULES.death_star_stage_values == (40, 50, 60, 70)
-    assert RULES.death_star_stage_results == ("seizure", "move", "seizure", "completion")
-    assert RULES.death_star_cubes_per_stage == 6
-    assert RULES.empire_cubes_per_stock_round == 1
-    assert RULES.death_star_backstop_rounds == 8
-    assert not DEFAULT_CONFIG.death_star_rules
+    assert config.fleet_limit == 4
+    assert config.death_star_stage_values == (40, 50, 60, 70)
+    assert config.death_star_stage_results == ("seizure", "move", "seizure", "completion")
+    assert config.death_star_cubes_per_stage == 5
+    assert config.death_star_max_homeworld_distance == 4
+    assert config.death_star_near_homeworlds == 2
+    assert config.empire_cubes_per_stock_round == 1
+    assert config.death_star_backstop_rounds == 8
+
+
+def test_classic_config_is_the_default_before_the_death_star_was_adopted():
+    assert CLASSIC_CONFIG == replace(
+        DEFAULT_CONFIG,
+        death_star_rules=False,
+        death_star_cubes_per_stage=6,
+        death_star_max_homeworld_distance=99,
+        death_star_near_homeworlds=1,
+    )
+    assert RULES.death_star_rules and RULES.death_star_cubes_per_stage == 6
+
+
+def test_adopted_sites_are_contested_on_most_seeds():
+    """Within 4 hexes of two homeworlds, relaxed hex by hex on a seed that has no such hex."""
+    board = load_board(DEFAULT_CONFIG.map_file)
+    homeworlds = [board.planet_named(c.homeworld).hex for c in DEFAULT_CONFIG.corporations]
+    contested = 0
+    for seed in range(1, 41):
+        for site in new_game(DEFAULT_CONFIG, seed=seed).death_star.sites:
+            contested += sum(1 for h in homeworlds if site.distance(h) <= 4) >= 2
+    assert contested >= 60
 
 
 # --- whole games ---------------------------------------------------------------------------
@@ -705,7 +733,7 @@ Star rules were added."""
 @pytest.mark.parametrize("key", sorted(BASELINE_DIGESTS))
 def test_games_with_the_rules_off_play_exactly_as_before(key):
     kind, players, seed = key
-    game, _ = play_one(seed, players, kind, DEFAULT_CONFIG)
+    game, _ = play_one(seed, players, kind, CLASSIC_CONFIG)
     digest = hashlib.sha256()
     for entry in game.log:
         digest.update(str(entry).encode())

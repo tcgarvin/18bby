@@ -28,7 +28,6 @@ from bby18.api.auth import (
 from bby18.api.saves import (
     CODE_VERSION,
     SaveOutdated,
-    api_config,
     apply_submitted,
     bot_seats,
     load_session,
@@ -56,6 +55,7 @@ from bby18.api.store import (
 )
 from bby18.board import load_board
 from bby18.bots.roster import DIFFICULTIES, PLANS, character_named
+from bby18.config import DEFAULT_CONFIG
 from bby18.network import IllegalAction
 from bby18.session import GameSession, Phase
 
@@ -90,8 +90,6 @@ class ActionRequest(BaseModel):
 
 
 def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenticator) -> FastAPI:
-    # Read the rules switch once at startup, so a bad value stops the server before any request.
-    api_config()
     app = FastAPI(title="18BBY", version="0.1.0")
 
     def current_user(authorization: Annotated[str, Header()] = "") -> str:
@@ -135,12 +133,12 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
 
     @app.get("/api/board")
     def board() -> Json:
-        return board_to_json(load_board(api_config().map_file))
+        return board_to_json(load_board(DEFAULT_CONFIG.map_file))
 
     @app.get("/api/rules")
     def rules() -> Json:
         """The tunable numbers behind the rules page; public, like the board."""
-        return rules_to_json(api_config())
+        return rules_to_json(DEFAULT_CONFIG)
 
     @app.get("/api/games")
     def list_games(user: str = Depends(current_user)) -> Json:

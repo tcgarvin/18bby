@@ -11,7 +11,7 @@ export interface GlossaryEntry {
   summary: (rules: Rules) => string;
   /** Id of the rules-page section that explains it in full. */
   section: SectionId;
-  /** Part of the experimental Death Star rules: listed only when they are in force. */
+  /** Part of the Death Star rules: listed only when they are in force. */
   deathStar?: boolean;
 }
 

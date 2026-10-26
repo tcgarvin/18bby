@@ -40,20 +40,15 @@ browser ──▶ Vercel ──┬─ public/ (the built web/ frontend, served f
 Local play needs neither: `uv run bby18 serve` sets `BBY18_MODE=local` (games in memory, one
 local user; account tokens are issued but not needed).
 
-**Development switch for the experimental Death Star rules.** `BBY18_DEATH_STAR_RULES=1`
-makes the API serve `GameConfig(death_star_rules=True)` (fleets, the Death Star track, its
-construction sites; see `docs/DECISIONS.md`) for new games, replays, `/api/board` and
-`/api/rules`; unset or `0` serves the default rules, and any other value stops the server
-at startup with an error. The API reads it in one place, `api_config()` in `src/bby18/api/saves.py`.
+**Rules.** The API serves one rule set, `DEFAULT_CONFIG` (the Death Star and fleets rules since
+2026-10-26; see `docs/DECISIONS.md`). The `BBY18_DEATH_STAR_RULES` switch that served them
+experimentally before then has been removed; setting it does nothing.
 
-```sh
-BBY18_DEATH_STAR_RULES=1 uv run bby18 serve --port 8000
-```
-
-It is not set in Vercel. A game keeps the rules it started with only while its snapshot is
-trusted (same `CODE_VERSION`); a replay after an engine change uses the switch as it is then,
-so play a game started with the switch on with it still on. Adopting the rules means flipping
-the config default, after which the switch is unnecessary.
+**Saves from before 2026-10-26.** A save records its seed, seats and actions, not its rules, so
+after the deploy that adopts the Death Star rules every older save replays from its seed under
+them: the board gains the construction sites and every operating turn a fleet step. Most such
+games' recorded moves stop being legal (an operating turn now ends with a fleet step), so they
+answer 409 and cannot be resumed, as after the terrain change. Players start a new game.
 
 Build: `vercel.json` sets the FastAPI framework and builds the frontend into `public/`.
 `[tool.vercel]` in `pyproject.toml` names the entrypoint as a path from the repository root

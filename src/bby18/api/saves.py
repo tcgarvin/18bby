@@ -7,14 +7,14 @@ carries a pickled session, trusted only while ``CODE_VERSION`` (a hash of the en
 is unchanged. After a deploy that changes the engine, the first load replays and the next write
 refreshes the snapshot.
 
-If the rules changed so that a saved action is no longer legal, replay fails with
-``SaveOutdated``; such a game can no longer be resumed.
+The API serves one rule set, ``DEFAULT_CONFIG``, and a save does not record its rules: a replay
+always uses the rules as they are now. If the rules changed so that a saved action is no longer
+legal, replay fails with ``SaveOutdated``; such a game can no longer be resumed.
 """
 
 from __future__ import annotations
 
 import hashlib
-import os
 import pickle
 import random
 import zlib
@@ -26,7 +26,7 @@ from bby18.api.serialize import Json, match_action
 from bby18.api.store import Seat, SavedGame
 from bby18.bots import GreedyBot
 from bby18.bots.roster import character_named, character_policy, draw_characters
-from bby18.config import DEFAULT_CONFIG, GameConfig
+from bby18.config import DEFAULT_CONFIG
 from bby18.game import Game
 from bby18.network import IllegalAction
 from bby18.session import Decider, GameSession, MoveObserver
@@ -48,25 +48,6 @@ def _code_version() -> str:
 
 CODE_VERSION = _code_version()
 
-DEATH_STAR_RULES_ENV = "BBY18_DEATH_STAR_RULES"
-"""Development switch: set to ``1`` to serve games under the experimental Death Star rules."""
-
-
-def api_config() -> GameConfig:
-    """The rules the API serves: ``DEFAULT_CONFIG``, or with the experimental Death Star rules
-    switched on when ``BBY18_DEATH_STAR_RULES=1``. Read on every call, so the switch applies to
-    games started (and saves replayed) after it changes; see docs/DEPLOYMENT.md.
-
-    Raises ``ValueError`` for any other non-empty value, so a typo cannot quietly serve the
-    wrong rules.
-    """
-    value = os.environ.get(DEATH_STAR_RULES_ENV, "")
-    if value in ("", "0"):
-        return DEFAULT_CONFIG
-    if value == "1":
-        return replace(DEFAULT_CONFIG, death_star_rules=True)
-    raise ValueError(f"{DEATH_STAR_RULES_ENV} must be 0 or 1, not {value!r}")
-
 
 def new_session(
     seed: int, seats: Iterable[Seat], observer: MoveObserver | None = None
@@ -77,7 +58,7 @@ def new_session(
     """
     seats = list(seats)
     rng = random.Random(seed)
-    game = Game.new([s.name for s in seats], api_config(), seed)
+    game = Game.new([s.name for s in seats], DEFAULT_CONFIG, seed)
     bots: dict[str, Decider] = {
         player.id: _bot_for(seat, random.Random(rng.random()))
         for player, seat in zip(game.players, seats)

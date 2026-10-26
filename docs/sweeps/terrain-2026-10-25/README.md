@@ -1,5 +1,9 @@
 # Terrain and 70-credit upgrade: sweep results (2026-10-25)
 
+> **Note (2026-10-26).** These specs were run when an empty variant (`{}`) meant the rules without
+> the Death Star, which became the default on 2026-10-26. To rerun them under the rules they
+> measured, add `"death_star_rules": false` to each variant (`CLASSIC_CONFIG` in `config.py`).
+
 Question: after adding asteroid fields and nebulae (15% / 15% of non-planet hexes), a 30-credit
 nebula chart surcharge, a ban on upgrading nebula tiles, and a 70-credit 2-to-3-exit upgrade
 (was 50), do planets change in value, are planets that used to be linked now left out, and are

@@ -6,7 +6,7 @@ from bby18.actions import BuyShare, Chart, NoNetworkAction, PassStock, SellShare
 from dataclasses import replace
 
 from bby18.bots import GreedyBot, RandomBot
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG
 from bby18.game import Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
@@ -15,7 +15,7 @@ from bby18.runner import run_game
 from bby18.session import GameSession
 from bby18.state import CorpStatus
 
-OPEN_SPACE = replace(DEFAULT_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0)
+OPEN_SPACE = replace(CLASSIC_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Rules tests that name specific hexes run on an empty sky; terrain has its own tests."""
 
 
@@ -172,7 +172,7 @@ def test_stock_round_priority_moves_past_last_actor(game):
 @pytest.mark.parametrize("bot_cls", [GreedyBot, RandomBot])
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_full_bot_games_complete_and_conserve_money(bot_cls, seed):
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     deciders = {p.id: bot_cls(random.Random(seed + i)) for i, p in enumerate(game.players)}
     run_game(game, deciders)
     assert game.is_over()

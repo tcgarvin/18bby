@@ -1,0 +1,88 @@
+{
+ "variants": {
+  "ds": {
+   "death_star_rules": true,
+   "death_star_cubes_per_stage": 6,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "rich": {
+   "death_star_rules": true,
+   "death_star_stage_values": [
+    60,
+    70,
+    80,
+    90
+   ],
+   "death_star_cubes_per_stage": 6,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "empire2": {
+   "death_star_rules": true,
+   "empire_cubes_per_stock_round": 2,
+   "death_star_cubes_per_stage": 6,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "rich_empire2": {
+   "death_star_rules": true,
+   "death_star_stage_values": [
+    60,
+    70,
+    80,
+    90
+   ],
+   "empire_cubes_per_stock_round": 2,
+   "death_star_cubes_per_stage": 6,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "short": {
+   "death_star_rules": true,
+   "death_star_cubes_per_stage": 4,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "rich_short": {
+   "death_star_rules": true,
+   "death_star_stage_values": [
+    60,
+    70,
+    80,
+    90
+   ],
+   "death_star_cubes_per_stage": 4,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  },
+  "rich_short_empire2": {
+   "death_star_rules": true,
+   "death_star_stage_values": [
+    60,
+    70,
+    80,
+    90
+   ],
+   "death_star_cubes_per_stage": 4,
+   "empire_cubes_per_stock_round": 2,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  }
+ },
+ "seeds": [
+  1,
+  24
+ ],
+ "players": [
+  3
+ ],
+ "bots": [
+  "mix:builder,baron,saver",
+  "mix:admiral,contractor,staller",
+  "mix:targeted,early-builder,raider",
+  "mix:baron,baron,baron",
+  "mix:builder,builder,builder",
+  "mix:contractor,contractor,contractor"
+ ]
+}

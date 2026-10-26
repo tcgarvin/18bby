@@ -10,7 +10,7 @@ import pytest
 
 from bby18.actions import BuyFleet, BuyShare, NoNetworkAction, PassStock, SellShares, ShareSource
 from bby18.cli import death_star_command
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG
 from bby18.death_star_metrics import (
     ROW_PREFIX,
     DeathStarRecorder,
@@ -22,7 +22,10 @@ from bby18.game import Game
 from bby18.playtest import play_one
 from bby18.session import Dividend, GameSession, Phase, PlayedMove
 
-RULES = replace(DEFAULT_CONFIG, death_star_rules=True)
+RULES = replace(CLASSIC_CONFIG, death_star_rules=True)
+"""The Death Star rules with the numbers they were built and tested with (6 cubes per stage,
+sites anywhere that qualifies). ``CLASSIC_CONFIG`` adopted tighter numbers on 2026-10-26; these
+tests pin the mechanics, not the adopted numbers."""
 
 
 # --- the clock --------------------------------------------------------------------------------
@@ -85,7 +88,7 @@ class Script:
 
 def test_recorder_needs_the_rules_on():
     with pytest.raises(ValueError):
-        DeathStarRecorder(Game.new(["Ann", "Bo"], DEFAULT_CONFIG))
+        DeathStarRecorder(Game.new(["Ann", "Bo"], CLASSIC_CONFIG))
 
 
 def test_contract_cubes_score_the_value_of_the_stage_being_built_before_the_move():
@@ -240,11 +243,11 @@ def test_recorded_game_agrees_with_the_final_state_and_the_log(kind, seed):
 
 
 def test_games_with_the_rules_off_have_no_death_star_fields():
-    game, summary = play_one(1, 3, "greedy", DEFAULT_CONFIG)
+    game, summary = play_one(1, 3, "greedy", CLASSIC_CONFIG)
     row = summary.to_row()
     assert summary.death_star is None
     assert not [k for k in row if k.startswith(ROW_PREFIX)]
-    assert row["rounds_played"] == DEFAULT_CONFIG.total_rounds == game.round_number
+    assert row["rounds_played"] == CLASSIC_CONFIG.total_rounds == game.round_number
 
 
 # --- the report -------------------------------------------------------------------------------
@@ -260,7 +263,7 @@ def _rows(config, variant, seeds, bot="mix:baron,builder,targeted"):
 
 
 def test_report_has_a_block_per_variant_and_the_death_star_lines_only_with_the_rules_on():
-    rows = _rows(DEFAULT_CONFIG, "base", [1]) + _rows(RULES, "death_star", [1, 2])
+    rows = _rows(CLASSIC_CONFIG, "base", [1]) + _rows(RULES, "death_star", [1, 2])
     text = death_star_report(rows)
     base, death_star = text.split("\n\n")
     assert base.startswith("variant base: 1 games, Death Star rules off")
@@ -325,7 +328,7 @@ def test_report_attributes_bankruptcies_to_the_presidents_strategy():
 
 def test_report_rejects_rows_mixing_rules_or_missing_rounds():
     on = _rows(RULES, "v", [1])
-    off = _rows(DEFAULT_CONFIG, "v", [1])
+    off = _rows(CLASSIC_CONFIG, "v", [1])
     with pytest.raises(ValueError, match="mixes"):
         variant_report("v", on + off)
     del off[0]["rounds_played"]
@@ -334,7 +337,7 @@ def test_report_rejects_rows_mixing_rules_or_missing_rounds():
 
 
 def test_death_star_report_command_filters_one_variant(tmp_path, capsys):
-    rows = _rows(DEFAULT_CONFIG, "base", [1]) + _rows(RULES, "death_star", [1])
+    rows = _rows(CLASSIC_CONFIG, "base", [1]) + _rows(RULES, "death_star", [1])
     path = tmp_path / "rows.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     args = argparse.Namespace(rows=path, variant="death_star")

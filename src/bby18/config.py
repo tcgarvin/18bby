@@ -116,8 +116,9 @@ class GameConfig:
     total_rounds: int = 6
     operating_rounds_per_stock_round: int = 2
 
-    # Experimental rule variants. Defaults reproduce the current rules; the alternatives exist
-    # so balance sweeps can compare them. None is an adopted rule until docs/DECISIONS.md says so.
+    # Rule variants. Defaults are the current rules; the alternatives exist so balance sweeps
+    # can compare them. Those marked EXPERIMENTAL are not adopted rules until docs/DECISIONS.md
+    # says so.
     zero_revenue_moves_price: bool = True
     """EXPERIMENTAL. When False, an operating turn with zero revenue leaves the price unchanged
     (it is still logged as withholding 0)."""
@@ -145,14 +146,14 @@ class GameConfig:
     treasury_in_final_worth: float = 0.0
     """EXPERIMENTAL. Each share is worth its price plus this fraction of its corporation's
     treasury divided by shares_per_corporation, in player worth and so in final score."""
-    death_star_rules: bool = False
-    """EXPERIMENTAL. Fleets, bankruptcy and the Death Star construction track (see "Death Star
-    and fleets" in docs/DECISIONS.md and ``bby18.death_star``). When True, revenue uses at most
-    one pair per fleet owned, each operating turn has a fleet step after the network actions,
-    the construction site and its contracts are on the board, and the game ends after the set
-    of operating rounds in which the station launches, or after ``death_star_backstop_rounds``
-    (``total_rounds`` is then ignored). The ``fleet_*`` and ``death_star_*`` fields below apply
-    only when this is True."""
+    death_star_rules: bool = True
+    """Adopted 2026-10-26 (``CLASSIC_CONFIG`` turns it off). Fleets, bankruptcy and the Death
+    Star construction track (see "Death Star and fleets" in docs/DECISIONS.md and
+    ``bby18.death_star``). When True, revenue uses at most one pair per fleet owned, each
+    operating turn has a fleet step after the network actions, the construction site and its
+    contracts are on the board, and the game ends after the set of operating rounds in which
+    the station launches, or after ``death_star_backstop_rounds`` (``total_rounds`` is then
+    ignored). The ``fleet_*`` and ``death_star_*`` fields below apply only when this is True."""
     fleet_tiers: tuple[FleetTier, ...] = (
         FleetTier(6, 60),
         FleetTier(6, 90),
@@ -172,7 +173,7 @@ class GameConfig:
     death_star_stage_results: tuple[str, ...] = (SEIZURE, SITE_MOVE, SEIZURE, COMPLETION)
     """What happens when each stage fills: one of ``STAGE_RESULTS``. Exactly one stage moves
     the site, and the last stage, only, completes the station."""
-    death_star_cubes_per_stage: int = 6
+    death_star_cubes_per_stage: int = 5
     """Cubes that fill one stage; extra cubes carry over to the next."""
     empire_cubes_per_stock_round: int = 1
     """Cubes the Empire adds at the end of every stock round."""
@@ -183,11 +184,11 @@ class GameConfig:
     """Region of the first construction site, then of the second."""
     death_star_min_homeworld_distance: int = 3
     """Each site is at least this many hexes from every corporation's homeworld."""
-    death_star_max_homeworld_distance: int = 99
+    death_star_max_homeworld_distance: int = 4
     """Each site is at most this many hexes from at least ``death_star_near_homeworlds``
-    homeworlds, so that several corporations can contest it. The default, larger than any
-    board, is no constraint."""
-    death_star_near_homeworlds: int = 1
+    homeworlds, so that several corporations can contest it. If no hex qualifies on a seed, the
+    limit is relaxed one hex at a time. A value larger than any board (99) is no constraint."""
+    death_star_near_homeworlds: int = 2
     """How many homeworlds must be within ``death_star_max_homeworld_distance`` of each site."""
     death_star_min_planet_distance: int = 1
     """Each site is at least this many hexes from every planet. 1 (no constraint beyond not
@@ -286,6 +287,15 @@ CAPITALIZATION_RULES = ("full", "incremental")
 
 DEFAULT_CONFIG = GameConfig()
 
+CLASSIC_CONFIG = GameConfig(
+    death_star_rules=False,
+    death_star_cubes_per_stage=6,
+    death_star_max_homeworld_distance=99,
+    death_star_near_homeworlds=1,
+)
+"""The rules before 2026-10-26, kept for comparison sweeps and tests: no fleets or Death Star,
+a fixed ``total_rounds``, and the Death Star numbers the experimental switch used to default to."""
+
 # Harness settings (not game rules).
 REVENUE_CACHE_SIZE = 1 << 16
 """Bound on memoized revenue matchings kept per process."""
@@ -293,24 +303,25 @@ REVENUE_CACHE_SIZE = 1 << 16
 # AI difficulty for the web app's named opponents (see bby18.bots.roster).
 DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
 """Per difficulty, the worth share a reference player (the stable's ``builder``) should take
-when seated with two bots of any one strategy. A fair share at three players is 0.333; the
-original web bot gives about 0.40. At the 1.0 noise maximum every strategy gives about 0.45."""
+when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
+Death Star rules the 1.0 noise maximum gives 0.49-0.58, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-25 for DIFFICULTY_TARGET_SHARE (docs/sweeps/difficulty-2026-10-25).
+    # Calibrated 2026-10-26 for DIFFICULTY_TARGET_SHARE under the Death Star rules
+    # (docs/sweeps/difficulty-2026-10-26).
     "easy": {
-        "baron": 0.95,
-        "baron-prestige": 0.9,
-        "baron-tycoon": 0.86,
-        "builder": 0.86,
-        "churner": 0.4,
-        "diversifier": 0.87,
-        "early-builder": 0.89,
-        "hoarder": 0.69,
+        "baron": 0.62,
+        "baron-prestige": 0.77,
+        "baron-tycoon": 0.51,
+        "builder": 0.57,
+        "churner": 0.33,
+        "diversifier": 0.59,
+        "early-builder": 0.71,
+        "hoarder": 0.57,
         "prestige": 0.72,
-        "spoiler": 0.63,
-        "straight": 0.29,
-        "targeted": 0.89,
-        "tycoon": 0.51,
+        "spoiler": 0.46,
+        "straight": 0.35,
+        "targeted": 0.57,
+        "tycoon": 0.5,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

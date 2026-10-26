@@ -24,14 +24,17 @@ from bby18.bots.forecast import (
     turns_to_round_limit,
 )
 from bby18.bots.stable import STABLE
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG
 from bby18.death_star import SITE_NAME
 from bby18.game import Game
 from bby18.hexgrid import Hex
 from bby18.playtest import play_one
 from bby18.runner import run_game
 
-RULES = replace(DEFAULT_CONFIG, death_star_rules=True)
+RULES = replace(CLASSIC_CONFIG, death_star_rules=True)
+"""The Death Star rules with the numbers they were built and tested with (6 cubes per stage,
+sites anywhere that qualifies). ``CLASSIC_CONFIG`` adopted tighter numbers on 2026-10-26; these
+tests pin the mechanics, not the adopted numbers."""
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 NEW_ARCHETYPES = ("admiral", "contractor", "staller", "saver", "raider")
 DEATH_STAR_KNOB_DEFAULTS = {
@@ -466,7 +469,7 @@ def test_death_star_knobs_do_not_change_play_with_the_rules_off(name):
     plain = replace(policy, **DEATH_STAR_KNOB_DEFAULTS)
     logs = []
     for p in (policy, plain):
-        game = new_game(DEFAULT_CONFIG, seed=2)
+        game = new_game(CLASSIC_CONFIG, seed=2)
         rng = random.Random(2)
         run_game(game, {pl.id: GreedyBot(random.Random(rng.random()), p) for pl in game.players})
         logs.append(_log(game))

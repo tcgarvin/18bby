@@ -4,7 +4,7 @@ import pytest
 
 from bby18.actions import BuyShare, PassStock, SellShares, ShareSource, StockAction
 from bby18.bots import GreedyBot, GreedyPolicy
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG
 from bby18.game import Game
 from bby18.playtest import BOT_KINDS, make_deciders, play_one, seat_kinds
 from bby18.runner import run_game
@@ -14,7 +14,7 @@ from bby18.sweep import GameTask, run_task, validate_tasks
 
 def _play(seed: int, policy: GreedyPolicy | None) -> Game:
     """A 3-player greedy game seeded like ``play_one``; ``None`` omits the policy argument."""
-    game = Game.new([f"Player {i + 1}" for i in range(3)], DEFAULT_CONFIG, seed)
+    game = Game.new([f"Player {i + 1}" for i in range(3)], CLASSIC_CONFIG, seed)
     rng = random.Random(seed)
     deciders = {
         p.id: (
@@ -37,7 +37,7 @@ def test_default_policy_matches_bot_without_policy():
 
 
 def test_greedy_kind_is_the_default_policy():
-    game, _ = play_one(1, 3, "greedy", DEFAULT_CONFIG)
+    game, _ = play_one(1, 3, "greedy", CLASSIC_CONFIG)
     assert _log(game) == _log(_play(1, None))
 
 
@@ -76,7 +76,7 @@ def test_two_presidencies_allowed():
 
 
 def test_best_home_ranks_by_nearby_revenue():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     bot = GreedyBot(random.Random(1), GreedyPolicy(start_order="best_home"))
     potentials = {cid: bot.home_potential(game, c) for cid, c in game.corporations.items()}
     assert all(v >= 0 for v in potentials.values())
@@ -88,7 +88,7 @@ def test_best_home_ranks_by_nearby_revenue():
 
 @pytest.mark.parametrize("par_choice", ["min", "max", "mid", "random"])
 def test_par_choice_picks_an_affordable_par(par_choice):
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     player = game.players[0]
     bot = GreedyBot(random.Random(1), GreedyPolicy(par_choice=par_choice))
     legal = game.legal_stock_actions(player, set())
@@ -118,7 +118,7 @@ class _RecordingBot(GreedyBot):
 
 def _losing_position(stock_rounds_played: int) -> tuple[Game, Player]:
     """P1 presides over CEC; P2 holds one CEC share and CEC trades below par."""
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     p1, p2 = game.players[0], game.players[1]
     game.apply_stock_action(p1, BuyShare("CEC", ShareSource.IPO, 100), set())
     game.apply_stock_action(p2, BuyShare("CEC", ShareSource.IPO), set())
@@ -156,12 +156,12 @@ def test_sell_losers_keeps_presidencies():
 def test_sell_losers_bot_plays_only_legal_actions_in_full_games():
     # The session rejects illegal actions, so completing games is the legality check.
     for seed in range(1, 4):
-        game, _ = play_one(seed, 3, "greedy-sell", DEFAULT_CONFIG)
+        game, _ = play_one(seed, 3, "greedy-sell", CLASSIC_CONFIG)
         assert game.is_over()
 
 
 def test_default_policy_never_sells():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     rng = random.Random(1)
     bots = {p.id: _RecordingBot(random.Random(rng.random()), GreedyPolicy()) for p in game.players}
     run_game(game, dict(bots))
@@ -169,7 +169,7 @@ def test_default_policy_never_sells():
 
 
 def test_hold_policy_withholds_low_revenue():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     corp = next(iter(game.corporations.values()))
     corp.treasury = 1000
     bot = GreedyBot(random.Random(1), GreedyPolicy(withhold_when_revenue_below=60))
@@ -178,7 +178,7 @@ def test_hold_policy_withholds_low_revenue():
 
 
 def _started_cec() -> tuple[Game, Player]:
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     p1 = game.players[0]
     game.apply_stock_action(p1, BuyShare("CEC", ShareSource.IPO, 100), set())
     return game, p1
@@ -216,7 +216,7 @@ def test_pay_when_steps_pays_a_big_payout_despite_withholding_early():
 
 
 def test_last_start_round_stops_starting_corporations():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     player = game.players[0]
     game.round_number = 3
     bot = GreedyBot(random.Random(1), GreedyPolicy(last_start_round=2))
@@ -250,7 +250,7 @@ def test_invalid_policy_rejected():
 
 def test_every_bot_kind_completes_a_game():
     for kind in BOT_KINDS:
-        game, _ = play_one(2, 3, kind, DEFAULT_CONFIG)
+        game, _ = play_one(2, 3, kind, CLASSIC_CONFIG)
         assert game.is_over()
 
 
@@ -262,7 +262,7 @@ def test_mix_string_assigns_kinds_round_robin():
         "greedy",
     ]
     assert seat_kinds("greedy-hold", 2) == ["greedy-hold", "greedy-hold"]
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     deciders = make_deciders(game, "mix:random,greedy-best", random.Random(1))
     assert type(deciders["P1"]).__name__ == "RandomBot"
     assert isinstance(deciders["P2"], GreedyBot)
@@ -275,17 +275,17 @@ def test_bad_bot_strings_rejected(bad):
     with pytest.raises(ValueError):
         seat_kinds(bad, 3)
     with pytest.raises(ValueError):
-        validate_tasks([GameTask("base", DEFAULT_CONFIG, 1, 3, bad)])
+        validate_tasks([GameTask("base", CLASSIC_CONFIG, 1, 3, bad)])
 
 
 def test_mixed_sweep_row_records_bot_string():
-    row = run_task(GameTask("base", DEFAULT_CONFIG, 1, 3, "mix:greedy,greedy-rs,greedy-best"))
+    row = run_task(GameTask("base", CLASSIC_CONFIG, 1, 3, "mix:greedy,greedy-rs,greedy-best"))
     assert row["bot"] == "mix:greedy,greedy-rs,greedy-best"
 
 
 def _parred_position(policy: GreedyPolicy) -> tuple[Game, Player, GreedyBot]:
     """P1 has started CEC, which has not floated; it is P1's turn again."""
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     p1 = game.players[0]
     game.apply_stock_action(p1, BuyShare("CEC", ShareSource.IPO, 100), set())
     assert not game.corp("CEC").floated
@@ -314,12 +314,12 @@ def test_default_bot_does_not_seek_float():
 
 @pytest.mark.parametrize("kind", ["greedy-rs", "greedy-max", "greedy-best"])
 def test_multi_presidency_kinds_float_corporations(kind):
-    floated = [play_one(seed, 3, kind, DEFAULT_CONFIG)[1].floated for seed in range(1, 4)]
+    floated = [play_one(seed, 3, kind, CLASSIC_CONFIG)[1].floated for seed in range(1, 4)]
     assert min(floated) >= 2
 
 
 def test_max_par_falls_back_to_highest_affordable_when_none_floats_alone():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     player = game.players[0]
     player.cash = 250  # affords a 2-share president's certificate up to 100, floats alone at none
     bot = GreedyBot(random.Random(1), GreedyPolicy(par_choice="max"))
@@ -338,7 +338,7 @@ def test_noisy_bot_plays_differently_and_legally():
 
 
 def test_fully_careless_bot_still_starts_a_corporation():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     player = game.players[0]
     bot = GreedyBot(random.Random(1), GreedyPolicy(noise=1.0))
     for _ in range(20):
@@ -348,7 +348,7 @@ def test_fully_careless_bot_still_starts_a_corporation():
 
 
 def test_fully_careless_bot_still_buys_toward_floating_its_own_corporation():
-    game = Game.new(["a", "b", "c"])
+    game = Game.new(["a", "b", "c"], CLASSIC_CONFIG)
     player = game.players[0]
     bot = GreedyBot(random.Random(1), GreedyPolicy(par_choice="max", noise=1.0))
     start = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
@@ -362,7 +362,7 @@ def test_fully_careless_bot_still_buys_toward_floating_its_own_corporation():
 
 def test_diversifier_floats_what_it_starts():
     for seed in range(1, 6):
-        game, _ = play_one(seed, 3, "diversifier", DEFAULT_CONFIG)
+        game, _ = play_one(seed, 3, "diversifier", CLASSIC_CONFIG)
         started = [c for c in game.corporations.values() if c.president != NO_PLAYER]
         assert started and all(c.floated for c in started)
 
@@ -373,7 +373,7 @@ def test_noise_out_of_range_rejected():
 
 
 def test_noisy_kind_string_builds_a_noisy_stable_bot():
-    game, _ = play_one(2, 3, "mix:baron~0.4,builder", DEFAULT_CONFIG)
+    game, _ = play_one(2, 3, "mix:baron~0.4,builder", CLASSIC_CONFIG)
     assert game.is_over()
     with pytest.raises(ValueError):
         seat_kinds("baron~lots", 3)

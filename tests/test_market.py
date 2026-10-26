@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from bby18.actions import BuyShare, PassStock, SellShares, ShareSource
-from bby18.config import DEFAULT_CONFIG, GameConfig
+from bby18.config import CLASSIC_CONFIG, GameConfig
 from bby18.game import Game
 from bby18.market import MarketCell, StockMarket
 from bby18.revenue import RevenueResult
@@ -13,7 +13,7 @@ from bby18.session import GameSession
 from bby18.state import Corporation
 
 SMALL = replace(
-    DEFAULT_CONFIG,
+    CLASSIC_CONFIG,
     stock_market=(
         (70, 80, 90, 100),
         (60, 70, 80),
@@ -61,8 +61,8 @@ def test_up_stops_at_the_top_row(market: StockMarket) -> None:
 
 
 def test_default_market_has_rows_below_every_par() -> None:
-    market = StockMarket(DEFAULT_CONFIG)
-    for par in DEFAULT_CONFIG.par_prices:
+    market = StockMarket(CLASSIC_CONFIG)
+    for par in CLASSIC_CONFIG.par_prices:
         cell = market.par_cell(par)
         assert market.price_at(market.down(cell)) < par
 
@@ -70,7 +70,7 @@ def test_default_market_has_rows_below_every_par() -> None:
 # --- rules that move the price ---------------------------------------------------------------
 
 
-def new_game(config: GameConfig = DEFAULT_CONFIG) -> Game:
+def new_game(config: GameConfig = CLASSIC_CONFIG) -> Game:
     return Game.new(["Ann", "Bo", "Cy"], config)
 
 

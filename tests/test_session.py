@@ -1,7 +1,10 @@
+"""The session driver, on the rules before the Death Star (``CLASSIC_CONFIG``)."""
+
 import random
 
 from bby18.actions import BuyShare, NoNetworkAction, PassStock
 from bby18.bots import GreedyBot
+from bby18.config import CLASSIC_CONFIG
 from bby18.game import Game
 from bby18.session import Dividend, GameSession, Phase
 from bby18.state import CorpStatus
@@ -13,7 +16,7 @@ def start_lowest_par(session):
 
 
 def test_session_walks_stock_then_operating_rounds():
-    game = Game.new(["Ann", "Bo", "Cy"])
+    game = Game.new(["Ann", "Bo", "Cy"], CLASSIC_CONFIG)
     session = GameSession(game)
     assert session.phase is Phase.STOCK
     assert session.current_player.id == "P1"
@@ -46,7 +49,7 @@ def test_session_walks_stock_then_operating_rounds():
 
 
 def test_illegal_action_is_rejected():
-    session = GameSession(Game.new(["Ann", "Bo"]))
+    session = GameSession(Game.new(["Ann", "Bo"], CLASSIC_CONFIG))
     try:
         session.apply(Dividend.PAY)
     except ValueError:
@@ -56,7 +59,7 @@ def test_illegal_action_is_rejected():
 
 
 def test_bots_play_until_a_human_is_needed_and_to_the_end():
-    game = Game.new(["Human", "Bot1", "Bot2"])
+    game = Game.new(["Human", "Bot1", "Bot2"], CLASSIC_CONFIG)
     bots = {"P2": GreedyBot(random.Random(1)), "P3": GreedyBot(random.Random(2))}
     session = GameSession(game, bots)
     session.run_bots()
@@ -78,7 +81,7 @@ def test_bots_play_until_a_human_is_needed_and_to_the_end():
 
 
 def test_undo_restores_state_before_the_last_submitted_action():
-    game = Game.new(["Ann", "Bo"])
+    game = Game.new(["Ann", "Bo"], CLASSIC_CONFIG)
     session = GameSession(game, record_undo=True)
     assert not session.can_undo
     start_lowest_par(session)
@@ -90,7 +93,7 @@ def test_undo_restores_state_before_the_last_submitted_action():
 
 
 def test_undo_takes_back_bot_moves_that_followed():
-    game = Game.new(["Human", "Bot"])
+    game = Game.new(["Human", "Bot"], CLASSIC_CONFIG)
     session = GameSession(game, {"P2": GreedyBot(random.Random(1))}, record_undo=True)
     session.run_bots()
     log_before = len(session.game.log)
@@ -102,7 +105,7 @@ def test_undo_takes_back_bot_moves_that_followed():
 
 
 def test_undo_with_nothing_recorded_raises():
-    session = GameSession(Game.new(["Ann", "Bo"]))
+    session = GameSession(Game.new(["Ann", "Bo"], CLASSIC_CONFIG))
     try:
         session.undo()
     except ValueError:
@@ -112,7 +115,7 @@ def test_undo_with_nothing_recorded_raises():
 
 
 def test_auto_forced_plays_single_legal_moves():
-    game = Game.new(["Ann", "Bo", "Cy"])
+    game = Game.new(["Ann", "Bo", "Cy"], CLASSIC_CONFIG)
     session = GameSession(game, auto_forced=True)
     start_lowest_par(session)
     for _ in range(3):
@@ -132,7 +135,7 @@ def test_auto_forced_plays_single_legal_moves():
 
 
 def test_operating_queue_stays_fixed_when_prices_change_mid_round():
-    game = Game.new(["Bot1", "Bot2", "Bot3"])
+    game = Game.new(["Bot1", "Bot2", "Bot3"], CLASSIC_CONFIG)
     bots = {p.id: GreedyBot(random.Random(i)) for i, p in enumerate(game.players)}
     session = GameSession(game, bots)
     # Step the bots one move at a time until an operating round has two corporations queued.

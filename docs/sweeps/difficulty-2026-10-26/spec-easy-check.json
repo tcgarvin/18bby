@@ -1,0 +1,53 @@
+{
+ "variants": {
+  "base": {}
+ },
+ "seeds": [
+  101,
+  30
+ ],
+ "players": [
+  3
+ ],
+ "bots": [
+  "mix:builder,baron~0.62,baron~0.62",
+  "mix:baron~0.62,builder,baron~0.62",
+  "mix:baron~0.62,baron~0.62,builder",
+  "mix:builder,baron-prestige~0.77,baron-prestige~0.77",
+  "mix:baron-prestige~0.77,builder,baron-prestige~0.77",
+  "mix:baron-prestige~0.77,baron-prestige~0.77,builder",
+  "mix:builder,baron-tycoon~0.51,baron-tycoon~0.51",
+  "mix:baron-tycoon~0.51,builder,baron-tycoon~0.51",
+  "mix:baron-tycoon~0.51,baron-tycoon~0.51,builder",
+  "mix:builder,builder~0.57,builder~0.57",
+  "mix:builder~0.57,builder,builder~0.57",
+  "mix:builder~0.57,builder~0.57,builder",
+  "mix:builder,churner~0.33,churner~0.33",
+  "mix:churner~0.33,builder,churner~0.33",
+  "mix:churner~0.33,churner~0.33,builder",
+  "mix:builder,diversifier~0.59,diversifier~0.59",
+  "mix:diversifier~0.59,builder,diversifier~0.59",
+  "mix:diversifier~0.59,diversifier~0.59,builder",
+  "mix:builder,early-builder~0.71,early-builder~0.71",
+  "mix:early-builder~0.71,builder,early-builder~0.71",
+  "mix:early-builder~0.71,early-builder~0.71,builder",
+  "mix:builder,hoarder~0.57,hoarder~0.57",
+  "mix:hoarder~0.57,builder,hoarder~0.57",
+  "mix:hoarder~0.57,hoarder~0.57,builder",
+  "mix:builder,prestige~0.72,prestige~0.72",
+  "mix:prestige~0.72,builder,prestige~0.72",
+  "mix:prestige~0.72,prestige~0.72,builder",
+  "mix:builder,spoiler~0.46,spoiler~0.46",
+  "mix:spoiler~0.46,builder,spoiler~0.46",
+  "mix:spoiler~0.46,spoiler~0.46,builder",
+  "mix:builder,straight~0.35,straight~0.35",
+  "mix:straight~0.35,builder,straight~0.35",
+  "mix:straight~0.35,straight~0.35,builder",
+  "mix:builder,targeted~0.57,targeted~0.57",
+  "mix:targeted~0.57,builder,targeted~0.57",
+  "mix:targeted~0.57,targeted~0.57,builder",
+  "mix:builder,tycoon~0.5,tycoon~0.5",
+  "mix:tycoon~0.5,builder,tycoon~0.5",
+  "mix:tycoon~0.5,tycoon~0.5,builder"
+ ]
+}

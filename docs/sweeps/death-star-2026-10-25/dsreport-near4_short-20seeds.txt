@@ -1,0 +1,32 @@
+variant near4_short: 34560 games, Death Star rules on
+  rounds played: mean 7.49, median 8, range 4-8
+  withheld operating turns (forced ones included): 22.1% (n=1.47768e+06)
+  shares sold per stock round after the first: 0.33 (n=224304)
+  ended by the station launching: 43% (backstop 57%)
+  stage fills (clock: OR r.i = k(r-1)+i, SR r = k(r-1)+0.5; k = 2 by default):
+    stage 1 (Frame)            filled in 100% of games, at mean 4.7, median 4, range 2-8.5
+    stage 2 (Superstructure)   filled in  85% of games, at mean 7.1, median 7, range 4-16
+    stage 3 (Superlaser)       filled in  52% of games, at mean 10.6, median 10.5, range 6-16
+    stage 4 (Completion)       filled in  43% of games, at mean 12.9, median 13, range 7-16
+  cubes per game: contracts 8.4, Empire 7.5
+  fleets per corporation that operated (105286): bought 3.37, spent 246, seized 1.41, left at the end 1.95
+  fleets sold per game 10.3; next fleet's tier at the end: tier 1 2%, tier 2 66%, tier 3 32%
+  fleets owned at the end of each round (games that reached it): R1 5.6 R2 5.1 R3 5.7 R4 6.1 R5 5.9 R6 5.9 R7 6.2 R8 6.3
+  bankruptcies per game 0.02 (games with one: 2%); by round R3 1, R4 23, R5 95, R6 340, R7 112, R8 10; by corporation CEC 31, CSC 285, KDY 104, KTG 161
+  bankruptcies by the president's strategy (count, per 100 seats played):
+    baron-tycoon      213    2.5
+    contractor        121    1.4
+    baron             109    1.3
+    raider             97    1.1
+    baron-prestige     22    0.3
+    builder             5    0.1
+    staller             5    0.1
+    targeted            5    0.1
+    admiral             2    0.0
+    early-builder       2    0.0
+    investor            0    0.0
+    saver               0    0.0
+  withheld dividend choices (positive revenue only): near a seizure 23.5% (n=293162), elsewhere 20.5% (n=1.16625e+06)
+  shares sold per stock round (after the first): before a seizure or site move 0.56 (n=81967), elsewhere 0.19 (n=142337)
+  price change per corporation between operating-round ends: across the site move +7.38 (n=82939), all rounds +7.27 (n=1.37239e+06)
+  contract revenue: 14.1% of all revenue; contract pairs per corporation that operated 2.74

@@ -1,6 +1,6 @@
 /**
  * Derived views of the Death Star track, its construction sites and the fleet supply (the
- * experimental Death Star rules). Everything here reads the server's `deathStar` block; the rules
+ * Death Star rules). Everything here reads the server's `deathStar` block; the rules
  * themselves stay on the server.
  */
 

@@ -1,0 +1,67 @@
+variant near4_short
+17280 games, 12 strategies, 3 players, 10 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  admiral           36.5%   wins  57.8%
+  early-builder     35.6%   wins  40.7%
+  baron-prestige    35.2%   wins  41.8%
+  contractor        34.9%   wins  42.8%
+  builder           34.7%   wins  43.3%
+  targeted          34.7%   wins  43.3%
+  baron             34.7%   wins  37.7%
+  staller           32.8%   wins  33.5%
+  baron-tycoon      31.1%   wins  24.6%
+  raider            31.1%   wins   6.7%
+  saver             30.3%   wins  15.3%
+  investor          28.5%   wins  12.5%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- baron- builde contra early- invest raider  saver stalle target
+  admiral         33.3   34.2   35.4   38.9   35.6   36.0   35.7   56.3   40.0   39.3   35.1   35.6
+  baron           37.4   33.3   31.6   35.3   33.2   32.0   32.9   37.7   39.9   38.2   36.1   33.2
+  baron-prestige  36.0   34.4   33.3   37.0   36.2   33.6   33.2   39.7   40.5   39.3   35.2   36.2
+  baron-tycoon    32.8   30.5   27.0   33.3   28.7   30.5   28.0   36.7   38.8   35.2   32.3   28.7
+  builder         36.8   32.1   31.0   35.0   33.3   32.3   31.6   38.0   41.5   37.6   36.3   33.3
+  contractor      35.4   34.3   32.3   35.9   35.3   33.3   33.7   37.6   39.3   38.1   36.4   35.3
+  early-builder   36.7   33.4   33.7   37.6   36.0   34.2   33.3   60.7   42.1   38.0   36.0   36.0
+  investor        15.9   33.2   35.1   39.6   33.5   31.6    3.9   33.3   34.6   33.3   34.5   33.5
+  raider          35.5   28.3   30.8   32.0   30.1   32.3   34.6   38.3   33.3   32.9   27.8   30.1
+  saver           30.5   29.1   27.2   32.4   29.1   28.7   27.7   37.4   37.5   33.3   31.1   29.1
+  staller         36.3   30.8   29.6   32.7   30.9   29.1   30.7   38.0   40.6   34.7   33.3   30.9
+  targeted        36.8   32.1   31.0   35.0   33.3   32.3   31.6   38.0   41.5   37.6   36.3   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-tycoon 38.9±0.8, investor 56.3±0.2, raider 40.0±1.4, saver 39.3±1.9
+  baron          invades baron-tycoon 35.3±0.7, investor 37.7±0.1, raider 39.9±1.4, saver 38.2±1.7
+  baron-prestige invades baron-tycoon 37.0±0.8, investor 39.7±1.1, raider 40.5±1.4, saver 39.3±1.8
+  baron-tycoon   invades investor 36.7±0.9, raider 38.8±1.5
+  builder        invades investor 38.0±0.1, raider 41.5±1.5, saver 37.6±2.1
+  contractor     invades baron-tycoon 35.9±0.9, investor 37.6±0.1, raider 39.3±1.5, saver 38.1±1.6
+  early-builder  invades baron-tycoon 37.6±0.8, investor 60.7±0.2, raider 42.1±1.4, saver 38.0±1.9
+  investor       invades baron-tycoon 39.6±0.9, staller 34.5±0.2
+  raider         invades investor 38.3±1.4
+  saver          invades investor 37.4±0.1, raider 37.5±1.4
+  staller        invades investor 38.0±0.1, raider 40.6±1.5
+  targeted       invades investor 38.0±0.1, raider 41.5±1.5, saver 37.6±2.1
+
+Best response counts over 78 opponent sets:
+  admiral          41
+  early-builder    12
+  baron-prestige   8
+  baron            7
+  builder          5
+  contractor       3
+  raider           1
+  investor         1
+
+Equilibria (replicator dynamics, share >= 5%):
+  4 viable: baron 41%, admiral 34%, contractor 17%, early-builder 8%
+
+Bootstrap over seeds (20 runs, uniform start): viable count mean 2.9, min 2, max 4
+  admiral          survives 100%  largest  25%
+  early-builder    survives  60%  largest  30%
+  baron            survives  50%  largest  30%
+  contractor       survives  45%  largest   5%
+  baron-prestige   survives  20%  largest  10%
+  raider           survives  15%  largest   0%

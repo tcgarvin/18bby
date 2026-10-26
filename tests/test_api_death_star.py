@@ -1,22 +1,22 @@
-"""The API under the experimental Death Star rules, switched on by ``BBY18_DEATH_STAR_RULES``."""
+"""The API under the Death Star rules, the only rules it serves since 2026-10-26."""
 
 import random
-from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from bby18.api.app import create_app
 from bby18.api.auth import AuthError
-from bby18.api.saves import DEATH_STAR_RULES_ENV, api_config, new_session
-from bby18.api.serialize import fleet_tiers_to_json, session_to_json
+from bby18.api.saves import new_session
+from bby18.api.serialize import fleet_tiers_to_json, rules_to_json, session_to_json
 from bby18.api.store import MemoryStore, Seat
-from bby18.config import DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG
 from bby18.revenue import RevenueResult, ScoredPair
 from bby18.session import GameSession
 from bby18.state import CorpStatus
 
-RULES_ON = replace(DEFAULT_CONFIG, death_star_rules=True)
+RULES_ON = DEFAULT_CONFIG
+"""The rules the API serves."""
 
 # The rules-off state as it was before the Death Star fields were added; new fields may only be
 # added alongside these, never replace them.
@@ -76,8 +76,9 @@ class HeaderUser:
 
 
 @pytest.fixture
-def rules_on(monkeypatch):
-    monkeypatch.setenv(DEATH_STAR_RULES_ENV, "1")
+def classic_rules(monkeypatch):
+    """Serve new games and replays under the rules before the Death Star was adopted."""
+    monkeypatch.setattr("bby18.api.saves.DEFAULT_CONFIG", CLASSIC_CONFIG)
 
 
 @pytest.fixture
@@ -125,38 +126,16 @@ def _play(client, state: dict, game_id: str, rng: random.Random, until) -> dict:
     return state
 
 
-# --- the switch -------------------------------------------------------------------------------
-
-
-def test_api_config_is_the_default_without_the_switch(monkeypatch):
-    monkeypatch.delenv(DEATH_STAR_RULES_ENV, raising=False)
-    assert api_config() is DEFAULT_CONFIG
-    monkeypatch.setenv(DEATH_STAR_RULES_ENV, "0")
-    assert api_config() is DEFAULT_CONFIG
-
-
-def test_api_config_turns_on_the_death_star_rules(rules_on):
-    assert api_config() == RULES_ON
-
-
-def test_api_config_rejects_an_unclear_switch(monkeypatch):
-    monkeypatch.setenv(DEATH_STAR_RULES_ENV, "yes")
-    with pytest.raises(ValueError, match=DEATH_STAR_RULES_ENV):
-        api_config()
-
-
 # --- /api/rules -------------------------------------------------------------------------------
 
 
-def test_rules_list_the_death_star_numbers_and_whether_they_apply(client, monkeypatch):
-    monkeypatch.delenv(DEATH_STAR_RULES_ENV, raising=False)
-    off = client.get("/api/rules").json()
-    assert off["deathStarRules"] is False
-    monkeypatch.setenv(DEATH_STAR_RULES_ENV, "1")
+def test_rules_list_the_death_star_numbers_and_whether_they_apply(client):
     on = client.get("/api/rules").json()
     assert on["deathStarRules"] is True
     numbers = on["deathStar"]
-    assert numbers == off["deathStar"]
+    off = rules_to_json(CLASSIC_CONFIG)
+    assert off["deathStarRules"] is False
+    assert set(off["deathStar"]) == set(numbers)
     assert numbers["fleetLimit"] == RULES_ON.fleet_limit
     assert [t["price"] for t in numbers["fleetTiers"]] == [t.price for t in RULES_ON.fleet_tiers]
     assert numbers["fleetTiers"][-1]["count"] == "unlimited"
@@ -172,8 +151,7 @@ def test_rules_list_the_death_star_numbers_and_whether_they_apply(client, monkey
 # --- session JSON -----------------------------------------------------------------------------
 
 
-def test_rules_off_state_only_adds_fields(client, monkeypatch):
-    monkeypatch.delenv(DEATH_STAR_RULES_ENV, raising=False)
+def test_rules_off_state_only_adds_fields(client, classic_rules):
     body = client.post("/api/games", json={"seats": SEATS, "seed": 4}).json()
     state = _play(
         client,
@@ -188,10 +166,10 @@ def test_rules_off_state_only_adds_fields(client, monkeypatch):
         for pair in corp["revenue"]["pairs"]:
             assert pair["contract"] is False
     assert all("deathStar" not in move["after"] for move in state["moves"])
-    assert state["totalRounds"] == DEFAULT_CONFIG.total_rounds
+    assert state["totalRounds"] == CLASSIC_CONFIG.total_rounds
 
 
-def test_new_rules_on_game_shows_the_track_and_both_sites(client, rules_on):
+def test_new_rules_on_game_shows_the_track_and_both_sites(client):
     state = client.post("/api/games", json={"seats": SEATS, "seed": 4}).json()["state"]
     track = state["deathStar"]
     assert [s["status"] for s in track["sites"]] == ["active", "reserved"]
@@ -208,7 +186,7 @@ def test_new_rules_on_game_shows_the_track_and_both_sites(client, rules_on):
     assert all("fleetRevenue" in corp for corp in state["corporations"])
 
 
-def test_fleet_step_through_the_api(client, rules_on):
+def test_fleet_step_through_the_api(client):
     body = client.post("/api/games", json={"seats": SEATS, "seed": 4}).json()
     game_id = body["gameId"]
     state = _play(
@@ -235,7 +213,7 @@ def test_fleet_step_through_the_api(client, rules_on):
     assert move["after"]["deathStar"]["fleets"]["sold"] == after["deathStar"]["fleets"]["sold"]
 
 
-def test_rules_on_game_replays_from_its_save(client, store, monkeypatch, rules_on):
+def test_rules_on_game_replays_from_its_save(client, store, monkeypatch):
     body = client.post("/api/games", json={"seats": SEATS, "seed": 9}).json()
     game_id = body["gameId"]
     state = _play(client, body["state"], game_id, random.Random(9), lambda s: s["roundNumber"] >= 3)
@@ -253,7 +231,7 @@ def _session() -> GameSession:
     return GameSession(new_session(2, seats).game)
 
 
-def test_site_move_vacates_the_first_site(rules_on):
+def test_site_move_vacates_the_first_site():
     session = _session()
     game = session.game
     game.death_star.cubes = 2 * RULES_ON.death_star_cubes_per_stage
@@ -265,7 +243,7 @@ def test_site_move_vacates_the_first_site(rules_on):
     assert [s["resolved"] for s in track["stages"]] == [True, True, False, False]
 
 
-def test_launch_ends_the_game_after_this_round(rules_on):
+def test_launch_ends_the_game_after_this_round():
     session = _session()
     game = session.game
     game.death_star.cubes = 4 * RULES_ON.death_star_cubes_per_stage
@@ -284,7 +262,7 @@ def test_fleet_tiers_count_down_across_tiers():
     assert [t["remaining"] for t in tiers] == [0, 4, 6, "unlimited"]
 
 
-def test_closed_corporation_is_listed_as_closed(rules_on):
+def test_closed_corporation_is_listed_as_closed():
     session = _session()
     game = session.game
     corp = next(iter(game.corporations.values()))
@@ -298,7 +276,7 @@ def test_closed_corporation_is_listed_as_closed(rules_on):
     assert corp.id not in session_to_json(session)["players"][0]["shares"]
 
 
-def test_contract_pairs_are_marked(rules_on, monkeypatch):
+def test_contract_pairs_are_marked(monkeypatch):
     session = _session()
     game = session.game
     corp = next(iter(game.corporations.values()))

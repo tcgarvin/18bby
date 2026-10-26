@@ -1,0 +1,69 @@
+variant base
+17280 games, 12 strategies, 3 players, 10 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  baron             35.9%   wins  54.9%
+  contractor        35.9%   wins  54.9%
+  raider            35.9%   wins  54.9%
+  saver             35.9%   wins  54.9%
+  staller           35.0%   wins  43.8%
+  targeted          35.0%   wins  43.8%
+  admiral           34.4%   wins  28.1%
+  baron-prestige    33.2%   wins  23.2%
+  early-builder     30.8%   wins  10.3%
+  builder           30.4%   wins   8.5%
+  investor          29.4%   wins   8.8%
+  baron-tycoon      27.9%   wins  13.9%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- baron- builde contra early- invest raider  saver stalle target
+  admiral         33.3   31.4   34.1   37.9   37.8   31.4   36.4   57.5   31.4   31.4   32.6   32.6
+  baron           35.5   33.3   36.0   38.6   38.8   33.3   38.9   38.4   33.3   33.3   34.4   34.4
+  baron-prestige  31.1   29.7   33.3   36.8   37.3   29.7   34.8   38.5   29.7   29.7   30.8   30.8
+  baron-tycoon    26.0   24.9   24.4   33.3   30.9   24.9   26.9   37.6   24.9   24.9   25.4   25.4
+  builder         30.0   27.5   29.2   34.5   33.3   27.5   31.1   37.9   27.5   27.5   28.5   28.5
+  contractor      35.5   33.3   36.0   38.6   38.8   33.3   38.9   38.4   33.3   33.3   34.4   34.4
+  early-builder   29.0   25.7   30.9   35.7   36.1   25.7   33.3   62.9   25.7   25.7   28.5   28.5
+  investor        13.1   34.5   35.6   35.4   34.3   34.5    2.6   33.3   34.5   34.5   34.5   34.5
+  raider          35.5   33.3   36.0   38.6   38.8   33.3   38.9   38.4   33.3   33.3   34.4   34.4
+  saver           35.5   33.3   36.0   38.6   38.8   33.3   38.9   38.4   33.3   33.3   34.4   34.4
+  staller         34.4   32.3   34.0   37.9   38.1   32.3   37.8   38.4   32.3   32.3   33.3   33.3
+  targeted        34.4   32.3   34.0   37.9   38.1   32.3   37.8   38.4   32.3   32.3   33.3   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-tycoon 37.9±0.4, builder 37.8±0.8, early-builder 36.4±0.7, investor 57.5±0.1
+  baron          invades admiral 35.5±1.0, baron-prestige 36.0±0.9, baron-tycoon 38.6±0.4, builder 38.8±1.0, early-builder 38.9±0.8, investor 38.4±0.0
+  baron-prestige invades baron-tycoon 36.8±0.5, builder 37.3±0.8, early-builder 34.8±0.6, investor 38.5±0.0
+  baron-tycoon   invades investor 37.6±0.6
+  builder        invades baron-tycoon 34.5±0.4, investor 37.9±0.0
+  contractor     invades admiral 35.5±1.0, baron-prestige 36.0±0.9, baron-tycoon 38.6±0.4, builder 38.8±1.0, early-builder 38.9±0.8, investor 38.4±0.0
+  early-builder  invades baron-tycoon 35.7±0.5, builder 36.1±0.9, investor 62.9±0.1
+  investor       invades baron 34.5±0.1, baron-prestige 35.6±0.6, baron-tycoon 35.4±0.3, builder 34.3±0.1, contractor 34.5±0.1, raider 34.5±0.1, saver 34.5±0.1, staller 34.5±0.1, targeted 34.5±0.1
+  raider         invades admiral 35.5±1.0, baron-prestige 36.0±0.9, baron-tycoon 38.6±0.4, builder 38.8±1.0, early-builder 38.9±0.8, investor 38.4±0.0
+  saver          invades admiral 35.5±1.0, baron-prestige 36.0±0.9, baron-tycoon 38.6±0.4, builder 38.8±1.0, early-builder 38.9±0.8, investor 38.4±0.0
+  staller        invades baron-tycoon 37.9±0.4, builder 38.1±1.0, early-builder 37.8±0.9, investor 38.4±0.1
+  targeted       invades baron-tycoon 37.9±0.4, builder 38.1±1.0, early-builder 37.8±0.9, investor 38.4±0.1
+
+Best response counts over 78 opponent sets:
+  baron            52
+  investor         21
+  staller          2
+  baron-prestige   1
+  admiral          1
+  early-builder    1
+
+Equilibria (replicator dynamics, share >= 5%):
+  5 viable: baron 20%, contractor 20%, raider 20%, saver 20%, investor 18%
+  5 viable: baron 33%, saver 21%, investor 18%, raider 15%, contractor 12%
+  4 viable: contractor 46%, investor 18%, baron 16%, saver 15%
+  3 viable: contractor 51%, saver 24%, investor 18%
+  5 viable: saver 46%, investor 18%, contractor 15%, baron 11%, raider 9%
+  4 viable: baron 59%, investor 18%, saver 14%, contractor 7%
+
+Bootstrap over seeds (20 runs, uniform start): viable count mean 5.0, min 5, max 5
+  baron            survives 100%  largest 100%
+  contractor       survives 100%  largest   0%
+  investor         survives 100%  largest   0%
+  raider           survives 100%  largest   0%
+  saver            survives 100%  largest   0%

@@ -1,5 +1,10 @@
 # Easy opponents: noise calibration (2026-10-25)
 
+> **Superseded (2026-10-26).** This calibration is for the rules without the Death Star. The
+> Death Star rules became the default on 2026-10-26 and Easy was recalibrated for them in
+> `docs/sweeps/difficulty-2026-10-26`. To rerun the specs here under the rules they measured, add
+> `"death_star_rules": false` to the `base` variant (`CLASSIC_CONFIG` in `config.py`).
+
 The web app's named opponents (`src/bby18/bots/roster.py`) each play one stable strategy with a
 `noise` (carelessness) level per difficulty. Noise makes a share-round decision a random pass or
 buy, makes a build one of the next three by score, and flips a dividend decision at half the

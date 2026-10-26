@@ -4,7 +4,7 @@ A player picks a difficulty, not a strategy; bot seats are filled with character
 game seed, so a saved game rebuilds with the same opponents. The strategy is revealed when the
 game ends. A character's carelessness at each difficulty comes from ``BOT_NOISE`` in
 ``config.py``, calibrated per strategy so every character at one difficulty is about equally hard
-to beat (see ``docs/sweeps/difficulty-2026-10-25``).
+to beat (see ``docs/sweeps/difficulty-2026-10-26``).
 """
 
 from __future__ import annotations

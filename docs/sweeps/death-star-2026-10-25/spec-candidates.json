@@ -27,7 +27,8 @@
     70,
     80,
     90
-   ]
+   ],
+   "death_star_cubes_per_stage": 6
   }
  },
  "seeds": [

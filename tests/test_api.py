@@ -347,7 +347,10 @@ def test_new_game_with_a_bot_first_returns_its_opening_moves(client):
     state = client.post("/api/games", json={"seats": seats, "seed": 3}).json()["state"]
     assert state["moves"]
     assert all(m["automatic"] and m["actor"] == "P1" for m in state["moves"])
-    assert [e for m in state["moves"] for e in m["log"]] == state["log"]
+    # Before the first move, setting up the board logs where the Death Star is being built.
+    setup, played = state["log"][:1], state["log"][1:]
+    assert "begins the Death Star" in setup[0]["text"]
+    assert [e for m in state["moves"] for e in m["log"]] == played
     assert state["moves"][-1]["after"]["currentPlayer"] == state["currentPlayer"] == "P2"
 
 

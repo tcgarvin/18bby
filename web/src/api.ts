@@ -427,7 +427,7 @@ export interface Rules {
   certificateLimit: number;
   totalRounds: number;
   operatingRoundsPerStockRound: number;
-  /** Whether the experimental Death Star and fleet rules are in force. */
+  /** Whether the Death Star and fleet rules are in force (always, since 2026-10-26). */
   deathStarRules: boolean;
   /** Their numbers, listed whether or not they are in force. */
   deathStar: DeathStarRules;

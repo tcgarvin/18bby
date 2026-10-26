@@ -1,12 +1,34 @@
 {
-  "variants": {
-    "base": {},
-    "death_star": {"death_star_rules": true}
+ "variants": {
+  "base": {
+   "death_star_rules": false
   },
-  "seeds": [1, 10],
-  "players": [3],
-  "tournament": [
-    "baron", "saver", "admiral", "contractor", "staller", "raider", "targeted",
-    "early-builder", "investor", "baron-tycoon", "baron-prestige", "builder"
-  ]
+  "death_star": {
+   "death_star_rules": true,
+   "death_star_cubes_per_stage": 6,
+   "death_star_max_homeworld_distance": 99,
+   "death_star_near_homeworlds": 1
+  }
+ },
+ "seeds": [
+  1,
+  10
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "baron",
+  "saver",
+  "admiral",
+  "contractor",
+  "staller",
+  "raider",
+  "targeted",
+  "early-builder",
+  "investor",
+  "baron-tycoon",
+  "baron-prestige",
+  "builder"
+ ]
 }

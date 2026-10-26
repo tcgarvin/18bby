@@ -1,6 +1,7 @@
 import io
 import json
 import pickle
+from dataclasses import replace
 
 import pytest
 
@@ -63,6 +64,15 @@ def test_grid_expands_cartesian_product_with_readable_names():
 def test_parse_spec_without_grid_has_only_named_variants():
     spec = parse_spec({"variants": {"baseline": {}}, "seeds": [1, 2]})
     assert list(spec.variants) == ["baseline"]
+
+
+def test_an_empty_spec_variant_plays_the_adopted_death_star_rules():
+    spec = parse_spec(
+        {"variants": {"base": {}, "classic": {"death_star_rules": False}}, "seeds": [1, 2]}
+    )
+    assert spec.variants["base"] == DEFAULT_CONFIG
+    assert spec.variants["base"].death_star_rules
+    assert spec.variants["classic"] == replace(DEFAULT_CONFIG, death_star_rules=False)
 
 
 def test_parse_spec_combines_named_and_grid_variants():

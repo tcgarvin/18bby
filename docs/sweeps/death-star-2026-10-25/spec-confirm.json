@@ -1,0 +1,31 @@
+{
+ "variants": {
+  "near4_short": {
+   "death_star_rules": true,
+   "death_star_max_homeworld_distance": 4,
+   "death_star_near_homeworlds": 2,
+   "death_star_cubes_per_stage": 5
+  }
+ },
+ "seeds": [
+  11,
+  10
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "baron",
+  "saver",
+  "admiral",
+  "contractor",
+  "staller",
+  "raider",
+  "targeted",
+  "early-builder",
+  "investor",
+  "baron-tycoon",
+  "baron-prestige",
+  "builder"
+ ]
+}

@@ -28,8 +28,8 @@ cd web
 npm run dev
 ```
 
-To try the experimental Death Star and fleet rules, start the API with
-`BBY18_DEATH_STAR_RULES=1 uv run bby18 serve --port 8000` (see `docs/DEPLOYMENT.md`).
+The API serves the Death Star and fleet rules, the default since 2026-10-26 (see
+`docs/DECISIONS.md`).
 
 Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`.
 The current game id goes in the URL as `?game=<id>`, so a reload returns you to the same game.
@@ -53,7 +53,7 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
 - `src/selectors.ts`: derived views of the game state: legal trades per corporation, the
   round stepper, the operating order with who is done, dividend payouts.
   Tested in `selectors.test.ts`.
-- `src/deathstar.ts`: derived views of the experimental Death Star rules (the state's optional
+- `src/deathstar.ts`: derived views of the Death Star rules (the state's optional
   `deathStar` block): the active and reserved sites, cubes per stage, what the next stage does,
   when the game ends, the fleet supply, a corporation's fleet-step options, the seizure it should
   plan for, and how many of its pairs its fleets run. Tested in `deathstar.test.ts`.

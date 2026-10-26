@@ -113,10 +113,11 @@ after the last one who bought or sold.
 
 ## Game length
 
-- **Fixed rounds** (placeholder): six repetitions of one stock round followed by two
-  operating rounds. The end condition is an isolated strategy so an in-universe trigger
-  (Empire escalation, rebellion, and so on) can replace it later without touching round
-  logic.
+- **The Death Star ends the game** (adopted 2026-10-26; see "Death Star and fleets"): the game
+  ends after the set of operating rounds in which the station launches, or after round 8 if it
+  never does. The end condition stays isolated in `Game.is_over`.
+- **Fixed rounds** (the rule before 2026-10-26, kept in `CLASSIC_CONFIG` for comparison): six
+  repetitions of one stock round followed by two operating rounds.
 - **Final score:** cash plus share value at final market price.
 
 ## Capital is meant to bind (decided 2026-09-28)
@@ -171,12 +172,22 @@ instead of 34-35%, and final share prices fall 22-31% (3 players: 219 to 154), t
 player worth down 19-28%. Capital binds harder; the 2026-09-28 note that "slightly over-tight
 is acceptable" still applies, but this is the tightest the economy has been.
 
-## Death Star and fleets (decided 2026-10-25, experimental)
+## Death Star and fleets (decided 2026-10-25, adopted 2026-10-26)
 
-**Status:** designed with the user and being built behind one config switch,
-`death_star_rules` (default off), so the strategy stable can compare it with the current rules.
-It is not the adopted rule set until a sweep supports it. Every number below is a placeholder in
-`config.py`.
+**Status:** **adopted 2026-10-26** as the default rules (`death_star_rules=True`) for human
+playtesting, with contested construction sites and a shorter track:
+
+- **Contested placement:** each site is within **4** hexes of at least **2** homeworlds
+  (`death_star_max_homeworld_distance`, `death_star_near_homeworlds`). On a seed with no such hex
+  the distance is relaxed one hex at a time. On this map (seeds 1-300) the Mid Rim site is within
+  4 of two homeworlds on 299 seeds and the Outer Rim site on two in three; the rest are relaxed to
+  5 or 6 hexes.
+- **5 cubes per stage** (`death_star_cubes_per_stage`, was 6), so 20 to launch.
+
+The rules before adoption (fixed six rounds, no fleets) are `CLASSIC_CONFIG` in `config.py`, kept
+for comparison sweeps and tests. Every other number below is still a placeholder in `config.py`.
+
+Evidence: docs/sweeps/death-star-2026-10-25/README.md
 
 **Why:** nothing ever declined. Revenue was a permanent function of a network that only grew,
 treasury cash was worth nothing at the end, and the game ran a fixed twelve operating rounds, so
@@ -221,8 +232,9 @@ contract give that.
   half of a basic route like any planet; only contract pairs count as deliveries.
 - **Two sites, placed by seed** with the terrain: the first on a space hex in the **Outer Rim**,
   the second in the **Mid Rim** (a space hex's region is that of its nearest planet, as on the
-  map). Neither is on terrain, each has at least two chartable neighbours, and each is at least
-  three hexes from every homeworld. Both are shown from the start.
+  map). Neither is on terrain, each has at least two chartable neighbours, each is at least
+  three hexes from every homeworld, and each is within four hexes of at least two homeworlds
+  (relaxed hex by hex on a seed that has no such hex). Both are shown from the start.
 - **The second site is reserved** until the site moves there: it cannot be charted, so no
   network passes through it yet, but tiles may point at it, so corporations can build toward it
   in advance. *(Placeholder chosen while building, not discussed: without it someone could chart
@@ -230,7 +242,7 @@ contract give that.
 - **The track:** each contract pair a corporation scores puts one cube on the Death Star track,
   whether the revenue is paid or withheld. The Empire adds one cube at the end of every stock
   round.
-- **Stages** need 6 cubes each. Extra cubes carry over. A stage's result applies at the end of
+- **Stages** need 5 cubes each (6 until 2026-10-26). Extra cubes carry over. A stage's result applies at the end of
   the operating round (or stock round) in which it fills; if two stages fill together, they apply
   in order.
 
@@ -262,6 +274,11 @@ contract give that.
   move. A closed corporation has no president, so its former president may start another one.
 - With the rules on, `total_rounds` is ignored: the backstop (`death_star_backstop_rounds`) and
   the launch end the game.
+- The contest distance is relaxed for the first site and the second separately, and only as far
+  as the first distance at which some hex qualifies; the minimum distance from every homeworld
+  (3) is never relaxed.
+- Saved games do not record their rules, so a game saved before 2026-10-26 replays under the
+  Death Star rules and is usually reported as outdated.
 
 ## Explicitly deferred
 

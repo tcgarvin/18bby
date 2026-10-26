@@ -1,4 +1,5 @@
-"""Experimental rule variants behind GameConfig fields; the defaults are the current rules."""
+"""Experimental rule variants behind GameConfig fields, tested on the rules before the Death
+Star (``CLASSIC_CONFIG``) so that each variant is compared with the game it was built against."""
 
 from dataclasses import replace
 
@@ -6,7 +7,7 @@ import pytest
 
 from bby18.actions import BuyShare, ShareSource
 from bby18.api.serialize import session_to_json
-from bby18.config import DEFAULT_CONFIG, GameConfig
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, GameConfig
 from bby18.game import Game
 from bby18.market import MarketCell
 from bby18.playtest import play_one
@@ -17,7 +18,7 @@ from bby18.sweep import variant
 
 
 def new_game(**overrides: object) -> Game:
-    return Game.new(["Ann", "Bo", "Cy"], replace(DEFAULT_CONFIG, **overrides))
+    return Game.new(["Ann", "Bo", "Cy"], replace(CLASSIC_CONFIG, **overrides))
 
 
 def buy(game: Game, player_index: int, corp_id: str, par: int = 0) -> None:
@@ -221,7 +222,7 @@ def test_income_floor_does_not_reduce_higher_revenue() -> None:
     assert result.total == 30 and result.pair_total == 0
     game = new_game(homeworld_basic_income=30)
     corp = float_corp(game)
-    base = Game.new(["Ann", "Bo", "Cy"]).revenue(corp).total
+    base = Game.new(["Ann", "Bo", "Cy"], CLASSIC_CONFIG).revenue(corp).total
     assert game.revenue(corp).total == max(base, 30)
 
 
@@ -239,15 +240,15 @@ def test_variant_without_overrides_is_the_default_config() -> None:
 
 
 def test_sweep_coerces_experimental_field_types() -> None:
-    config = variant(DEFAULT_CONFIG, payout_step_fractions=[1, 2], zero_revenue_moves_price=False)
+    config = variant(CLASSIC_CONFIG, payout_step_fractions=[1, 2], zero_revenue_moves_price=False)
     assert config.payout_step_fractions == (1.0, 2.0)
     assert config.zero_revenue_moves_price is False
     with pytest.raises(ValueError):
-        variant(DEFAULT_CONFIG, zero_revenue_moves_price=0)
+        variant(CLASSIC_CONFIG, zero_revenue_moves_price=0)
 
 
 PRE_TERRAIN_RULES = replace(
-    DEFAULT_CONFIG,
+    CLASSIC_CONFIG,
     chart_cost=50,
     upgrade_cost=50,
     service_cost=50,
@@ -270,10 +271,11 @@ def test_pre_terrain_rules_still_reproduce_the_old_reference_game() -> None:
     assert len(game.log) == 165
 
 
-def test_default_rules_reproduce_the_reference_game() -> None:
-    """Worths captured when network actions rose to 60/80/60 (3 greedy players, seed 1). A
-    change here means the default rules or bot changed."""
-    game, _ = play_one(1, 3, "greedy", DEFAULT_CONFIG)
+def test_classic_rules_reproduce_the_reference_game() -> None:
+    """Worths captured when network actions rose to 60/80/60 (3 greedy players, seed 1), under
+    the rules before the Death Star (``CLASSIC_CONFIG``). A change here means those rules or the
+    bot changed."""
+    game, _ = play_one(1, 3, "greedy", CLASSIC_CONFIG)
     assert {p.id: game.player_worth(p) for p in game.players} == {
         "P1": 2428,
         "P2": 1840,
