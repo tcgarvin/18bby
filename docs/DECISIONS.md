@@ -201,8 +201,15 @@ for comparison sweeps and tests. Every other number below is still a placeholder
   - players sell three times as often before a seizure or site move.
 
   Under the old rules, always-pay won on every map.
+- **Rerun with the bots as adopted** (2026-10-26: distinct cushion strategies, wider seizure
+  margin; 34,560 games on maps 1-20): always-pay is the most robust strategy but never the best
+  on any single map. The equilibrium is always-pay 75%, early withholding 9%, targeted
+  withholding 9% and early fleet grab 7%. A seed resample keeps 3.0 viable strategies on
+  average (minimum 1), and always-pay is the largest in half of them (early withholding in
+  30%). The early fleet grab leads on 9 of 20 maps. Bankruptcies all but vanish (17 in 34,560
+  games).
 - **Caveats:**
-  - Most games (57%) still end at the round-8 backstop.
+  - Most games (62%) still end at the round-8 backstop.
   - Contract values sit close to the point where site-rushing dominates.
   - Seat 3 is weaker than before (29% of worth).
 

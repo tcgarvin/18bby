@@ -1,0 +1,32 @@
+variant adopted: 34560 games, Death Star rules on
+  rounds played: mean 7.59, median 8, range 4-8
+  withheld operating turns (forced ones included): 21.8% (n=1.50479e+06)
+  shares sold per stock round after the first: 0.37 (n=227683)
+  ended by the station launching: 38% (backstop 62%)
+  stage fills (clock: OR r.i = k(r-1)+i, SR r = k(r-1)+0.5; k = 2 by default):
+    stage 1 (Frame)            filled in 100% of games, at mean 4.7, median 4, range 2-8.5
+    stage 2 (Superstructure)   filled in  86% of games, at mean 7.1, median 7, range 4-16
+    stage 3 (Superlaser)       filled in  51% of games, at mean 11.1, median 11, range 6-16
+    stage 4 (Completion)       filled in  38% of games, at mean 13.1, median 13, range 8-16
+  cubes per game: contracts 8.0, Empire 7.6
+  fleets per corporation that operated (105815): bought 3.43, spent 252, seized 1.39, left at the end 2.03
+  fleets sold per game 10.5; next fleet's tier at the end: tier 1 2%, tier 2 61%, tier 3 38%
+  fleets owned at the end of each round (games that reached it): R1 5.7 R2 5.2 R3 5.8 R4 6.4 R5 6.4 R6 6.4 R7 6.5 R8 6.3
+  bankruptcies per game 0.00 (games with one: 0%); by round R5 6, R8 5; by corporation CEC 1, CSC 6, KDY 4
+  bankruptcies by the president's strategy (count, per 100 seats played):
+    raider              5    0.1
+    baron-tycoon        4    0.0
+    baron               1    0.0
+    saver               1    0.0
+    admiral             0    0.0
+    baron-prestige      0    0.0
+    builder             0    0.0
+    contractor          0    0.0
+    early-builder       0    0.0
+    investor            0    0.0
+    staller             0    0.0
+    targeted            0    0.0
+  withheld dividend choices (positive revenue only): near a seizure 22.3% (n=290350), elsewhere 20.5% (n=1.19573e+06)
+  shares sold per stock round (after the first): before a seizure or site move 0.54 (n=81424), elsewhere 0.28 (n=146259)
+  price change per corporation between operating-round ends: across the site move +7.53 (n=83035), all rounds +7.31 (n=1.39898e+06)
+  contract revenue: 12.7% of all revenue; contract pairs per corporation that operated 2.61

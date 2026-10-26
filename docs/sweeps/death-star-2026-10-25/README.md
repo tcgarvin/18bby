@@ -117,9 +117,41 @@ allowed.
 | Fleets per corporation | — | bought 3.4, seized 1.4, 2.0 at the end |
 | Seat shares (1/2/3) | 32.8 / 35.4 / 31.8 | 34.4 / 36.2 / 29.4 |
 
+## Rerun with the bots as adopted (`spec-adopted.json`, 2026-10-26)
+
+After adoption, the bots were fixed so that builder, targeted and hoarder play differently
+again. The seizure margin of the re-fleet reserve also went from 2 to 4 cubes, which changes
+every bot's Death Star play. The same 12-strategy tournament on maps 1-20 under the adopted
+default: 34,560 games, `report-adopted.txt`, `dsreport-adopted.txt`.
+
+| | Before the bot fix (`near4_short`, 20 seeds) | Bots as adopted |
+|---|---|---|
+| Equilibrium | baron 47%, admiral 25%, early-builder 16%, contractor 11% | baron 75%, early-builder 9%, targeted 9%, admiral 7% |
+| Bootstrap viable (mean/min) | 3.2 / 2 | 3.0 / 1 |
+| Largest basin | early-builder 40%, baron 30% | baron 50%, early-builder 30%, staller 10% |
+| Best response to the 78 opponent pairs | — | admiral 31, early-builder 23, five others 4 each |
+| Station launched | 43% | 38% |
+| Bankruptcies | 2% of games | 17 in 34,560 games |
+| Contract share of revenue | 14% | 12.7% |
+| Sales per SR, before a seizure/move vs elsewhere | 0.56 / 0.19 | 0.54 / 0.28 |
+| Seat shares | 34.4 / 36.2 / 29.4 | 34.3 / 36.1 / 29.6 |
+
+- **Map leaders** (`seats.py`): admiral leads on 9 of 20 maps, early-builder 5, staller 3,
+  contractor 2, raider 1.
+- **Baron never leads a map.** It is the safe generalist: nothing clearly invades it, but it
+  clearly invades none of early-builder, targeted, contractor or staller either (32.7-34.2 both
+  ways). Most of the top six are close to neutral against one another.
+
+**Reading.** Coexistence is weaker than before the fix: one resample in the bootstrap collapses
+to a single strategy, and replicator dynamics drift toward always-pay. That is still far from
+the old rules, where always-pay is the largest basin in every resample and the new archetypes
+are its clones. The rule numbers are unchanged; what changed is that the bots stopped losing
+corporations to seizures. Contract value and cubes per stage remain the levers if the designer
+wants a stronger push away from always-pay.
+
 ## Open points for the designer
 
-- **Most games still end on the clock** (57%), and a launch lands only about a round before the
+- **Most games still end on the clock** (57%; 62% with the bots as adopted), and a launch lands only about a round before the
   backstop. If the Battle of Yavin should be the usual ending, try 4 cubes per stage (Fable's
   suggestion); expect more early bankruptcies.
 - **Contract values are a cliff:** +20 per stage hands the game to contractor.

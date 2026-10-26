@@ -1,0 +1,26 @@
+{
+ "variants": {
+  "adopted": {}
+ },
+ "seeds": [
+  1,
+  20
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "baron",
+  "saver",
+  "admiral",
+  "contractor",
+  "staller",
+  "raider",
+  "targeted",
+  "early-builder",
+  "investor",
+  "baron-tycoon",
+  "baron-prestige",
+  "builder"
+ ]
+}
