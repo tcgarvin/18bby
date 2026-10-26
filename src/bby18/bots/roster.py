@@ -82,7 +82,7 @@ PLANS: dict[str, str] = {
     "tycoon": "run two cheap companies",
     "hoarder": "keep cash in the treasury and pay only when flush",
     "churner": "sell any share that fell below par",
-    "diversifier": "buy other players' companies rather than its own",
+    "diversifier": "float its own company, then buy other players' companies rather than its own",
     "straight": "plan routes in straight lines, ignoring terrain",
     "investor": "never run a company, only buy shares",
 }

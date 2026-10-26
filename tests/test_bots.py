@@ -8,7 +8,7 @@ from bby18.config import DEFAULT_CONFIG
 from bby18.game import Game
 from bby18.playtest import BOT_KINDS, make_deciders, play_one, seat_kinds
 from bby18.runner import run_game
-from bby18.state import Player
+from bby18.state import NO_PLAYER, CorpStatus, Player
 from bby18.sweep import GameTask, run_task, validate_tasks
 
 
@@ -335,6 +335,36 @@ def test_noisy_bot_plays_differently_and_legally():
     game = _play(3, GreedyPolicy(noise=0.5))
     assert game.is_over()
     assert _log(game) != _log(_play(3, None))
+
+
+def test_fully_careless_bot_still_starts_a_corporation():
+    game = Game.new(["a", "b", "c"])
+    player = game.players[0]
+    bot = GreedyBot(random.Random(1), GreedyPolicy(noise=1.0))
+    for _ in range(20):
+        choice = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
+        assert isinstance(choice, BuyShare)
+        assert game.corp(choice.corp_id).status is CorpStatus.UNSTARTED
+
+
+def test_fully_careless_bot_still_buys_toward_floating_its_own_corporation():
+    game = Game.new(["a", "b", "c"])
+    player = game.players[0]
+    bot = GreedyBot(random.Random(1), GreedyPolicy(par_choice="max", noise=1.0))
+    start = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
+    assert isinstance(start, BuyShare)
+    game.apply_stock_action(player, start, set())
+    assert game.corp(start.corp_id).status is CorpStatus.PARRED
+    for _ in range(20):
+        choice = bot.choose_stock_action(game, player, game.legal_stock_actions(player, set()))
+        assert choice == BuyShare(start.corp_id, ShareSource.IPO)
+
+
+def test_diversifier_floats_what_it_starts():
+    for seed in range(1, 6):
+        game, _ = play_one(seed, 3, "diversifier", DEFAULT_CONFIG)
+        started = [c for c in game.corporations.values() if c.president != NO_PLAYER]
+        assert started and all(c.floated for c in started)
 
 
 def test_noise_out_of_range_rejected():

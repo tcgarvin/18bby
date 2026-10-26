@@ -151,7 +151,7 @@ and who is acting.
 - **Opponents' moves replay.** After your move, each bot or forced move plays out in turn on the
   view for its phase: share certificates and coins fly, new lanes draw in, and a bot's dividend shows
   the card it chose. A caption at the bottom says what happened, with a counter. Pick the speed
-  there (1×, 2×, 4× or Off, which shows the result at once); the choice is remembered.
+  there (1×, 2×, 4×, 8× or Off, which shows the result at once); the choice is remembered.
   **Skip** (<kbd>Space</kbd> or <kbd>Esc</kbd>) jumps to the end. Other shortcuts and Undo are
   paused while a replay runs. A new game's opening bot moves are not replayed; they are listed
   in the ribbon.

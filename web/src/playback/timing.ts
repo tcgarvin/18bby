@@ -3,22 +3,22 @@
 import type { MoveKindName } from "./frames";
 
 /** A multiplier on the base durations, or "instant" to show only the final state. */
-export type PlaybackSpeed = 1 | 2 | 4 | "instant";
+export type PlaybackSpeed = 1 | 2 | 4 | 8 | "instant";
 
-export const PLAYBACK_SPEEDS: PlaybackSpeed[] = [1, 2, 4, "instant"];
+export const PLAYBACK_SPEEDS: PlaybackSpeed[] = [1, 2, 4, 8, "instant"];
 
 /** Milliseconds each step shows at 1×. Network and dividend moves have more to watch. */
 export const BASE_DURATION_MS: Record<MoveKindName, number> = {
-  buy: 900,
-  sell: 900,
-  pass: 600,
-  chart: 1200,
-  upgrade: 1200,
-  service: 1200,
-  no_action: 600,
-  dividend: 1600,
-  phase: 1100,
-  unknown: 900,
+  buy: 1800,
+  sell: 1800,
+  pass: 1200,
+  chart: 2400,
+  upgrade: 2400,
+  service: 2400,
+  no_action: 1200,
+  dividend: 3200,
+  phase: 2200,
+  unknown: 1800,
 };
 
 /**

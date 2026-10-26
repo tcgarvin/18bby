@@ -49,9 +49,10 @@ ordinary buys, and above the cash-reserve cutoff so the bot never passes instead
 class GreedyPolicy:
     """Knobs for ``GreedyBot``. The defaults reproduce the original greedy bot exactly.
 
-    When ``max_presidencies > 1`` or ``par_choice != "min"``, the bot also seeks to float what
-    it starts: it starts another corporation only once all its presidencies have floated, and
-    ranks IPO buys in its own unfloated corporations just below starting one.
+    When ``max_presidencies > 1``, ``par_choice != "min"`` or ``own_share_bonus < 1``, the bot
+    also seeks to float what it starts: it starts another corporation only once all its
+    presidencies have floated, and ranks IPO buys in its own unfloated corporations just below
+    starting one.
     """
 
     start_order: str = "fixed"
@@ -104,7 +105,8 @@ class GreedyPolicy:
     noise: float = 0.0
     """Carelessness, 0 to 1: the chance that a stock decision is a random pass or buy and that
     a build is one of the next few by score instead of the best. Dividends flip at
-    ``CARELESS_DIVIDEND_FRACTION`` of this rate. 0 plays exactly as without the knob."""
+    ``CARELESS_DIVIDEND_FRACTION`` of this rate. Starting a corporation and buying toward
+    floating one's own never slip. 0 plays exactly as without the knob."""
 
     def __post_init__(self) -> None:
         if self.start_order not in START_ORDERS:
@@ -124,9 +126,11 @@ class GreedyBot:
         self.rng = rng
         self.policy = policy
         # The original bot (min par, one presidency) never needs help floating; any policy
-        # that raises the par or allows a second start can strand parred corporations, so
-        # those policies finish floating what they start before starting more.
-        self.seeks_float = policy.max_presidencies > 1 or policy.par_choice != "min"
+        # that raises the par, allows a second start or discounts its own shares can strand
+        # parred corporations, so those policies finish floating what they start first.
+        self.seeks_float = (
+            policy.max_presidencies > 1 or policy.par_choice != "min" or policy.own_share_bonus < 1
+        )
 
     # --- stock round ---------------------------------------------------------
 
@@ -138,8 +142,30 @@ class GreedyBot:
     def choose_stock_action(
         self, game: Game, player: Player, legal: list[StockAction]
     ) -> StockAction:
+        intended = self._intended_stock_action(game, player, legal)
+        # Noise is carelessness in carrying out a plan, not a different plan: a careless bot
+        # that never got round to starting or floating its own corporation would have no plan
+        # at all, so those buys never slip.
+        if self._runs_own_corporation(game, player, intended):
+            return intended
         if self._slips(self.policy.noise):
             return self._careless_stock_action(game, legal)
+        return intended
+
+    @staticmethod
+    def _runs_own_corporation(game: Game, player: Player, action: StockAction) -> bool:
+        """Whether ``action`` starts a corporation or buys toward floating one this player
+        presides over."""
+        if not isinstance(action, BuyShare):
+            return False
+        corp = game.corp(action.corp_id)
+        return corp.status is CorpStatus.UNSTARTED or GreedyBot._helps_own_float(
+            corp, player, action
+        )
+
+    def _intended_stock_action(
+        self, game: Game, player: Player, legal: list[StockAction]
+    ) -> StockAction:
         if self.policy.dump_rivals:
             sale = self._rival_sale(game, player, legal)
             if sale is not None:

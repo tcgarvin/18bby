@@ -8,11 +8,12 @@ import type { PlaybackSpeed } from "./timing";
 import { PLAYBACK_SPEEDS } from "./timing";
 import "./playback.css";
 
-const SPEED_LABEL: Record<string, string> = { "1": "1×", "2": "2×", "4": "4×", instant: "Off" };
+const SPEED_LABEL: Record<string, string> = { "1": "1×", "2": "2×", "4": "4×", "8": "8×", instant: "Off" };
 const SPEED_TITLE: Record<string, string> = {
   "1": "Replay opponents' moves at normal speed",
   "2": "Replay opponents' moves at double speed",
   "4": "Replay opponents' moves at four times speed",
+  "8": "Replay opponents' moves at eight times speed",
   instant: "Don't replay; show the result at once",
 };
 

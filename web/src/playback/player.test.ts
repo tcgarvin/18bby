@@ -33,19 +33,19 @@ describe("PlaybackPlayer", () => {
     const player = new PlaybackPlayer(1);
     player.play(steps, target);
     expect(showing(player)).toBe("buy");
-    vi.advanceTimersByTime(899);
+    vi.advanceTimersByTime(1799);
     expect(showing(player)).toBe("buy");
     vi.advanceTimersByTime(1);
     expect(showing(player)).toBe("chart");
-    vi.advanceTimersByTime(1200);
+    vi.advanceTimersByTime(2400);
     expect(showing(player)).toBe("dividend");
     expect(player.getSnapshot()).toMatchObject({ playing: true, index: 2, total: 3, target });
-    vi.advanceTimersByTime(1600);
+    vi.advanceTimersByTime(3200);
     expect(player.getSnapshot()).toMatchObject({ playing: false, current: null, target: null });
   });
 
-  it("holds a step that switches the view for a moment, even at 4x", () => {
-    const player = new PlaybackPlayer(4);
+  it("holds a step that switches the view for a moment, even at 8x", () => {
+    const player = new PlaybackPlayer(8);
     const switching = { ...steps[1], state: gameState({ phase: "network", roundLabel: "chart" }) };
     player.play([steps[0], switching, steps[2]], target);
     vi.advanceTimersByTime(225);
@@ -61,7 +61,7 @@ describe("PlaybackPlayer", () => {
   it("runs faster at higher speeds", () => {
     const player = new PlaybackPlayer(4);
     player.play(steps, target);
-    vi.advanceTimersByTime(225);
+    vi.advanceTimersByTime(450);
     expect(showing(player)).toBe("chart");
   });
 
@@ -96,7 +96,7 @@ describe("PlaybackPlayer", () => {
     player.play(steps, target);
     vi.advanceTimersByTime(500);
     player.setSpeed(2);
-    vi.advanceTimersByTime(449);
+    vi.advanceTimersByTime(899);
     expect(showing(player)).toBe("buy");
     vi.advanceTimersByTime(1);
     expect(showing(player)).toBe("chart");
@@ -112,7 +112,7 @@ describe("PlaybackPlayer", () => {
     const idle = player.getSnapshot();
     expect(player.getSnapshot()).toBe(idle);
     player.play(steps, target);
-    vi.advanceTimersByTime(900);
+    vi.advanceTimersByTime(1800);
     expect(listener).toHaveBeenCalledTimes(2);
     unsubscribe();
     player.skip();
@@ -126,12 +126,12 @@ describe("timing", () => {
   });
 
   it("scales base durations by speed", () => {
-    expect(stepDuration("dividend", 1)).toBe(1600);
-    expect(stepDuration("dividend", 2)).toBe(800);
-    expect(stepDuration("chart", 4)).toBe(300);
+    expect(stepDuration("dividend", 1)).toBe(3200);
+    expect(stepDuration("dividend", 2)).toBe(1600);
+    expect(stepDuration("chart", 8)).toBe(300);
     expect(stepDuration("buy", "instant")).toBe(0);
-    expect(stepDuration("no_action", 4, true)).toBe(VIEW_SWITCH_MIN_MS);
-    expect(stepDuration("dividend", 1, true)).toBe(1600);
+    expect(stepDuration("no_action", 8, true)).toBe(VIEW_SWITCH_MIN_MS);
+    expect(stepDuration("dividend", 1, true)).toBe(3200);
   });
 
   it("defaults to 1x, or instant for reduced motion, without storage", () => {
