@@ -31,7 +31,9 @@ always-pay wins everywhere. As first designed, the rules changed little: the sta
   and staller like targeted. In the rules-off reports they are clones, and their "viability"
   there is baron's. Found afterwards: with the rules on, `builder` and `targeted` (and `hoarder`)
   also played identical games, because the bots' Death Star dividend logic overrode the knobs
-  that told them apart. Treat their rows as one strategy.
+  that told them apart. Treat their rows as one strategy. (Fixed 2026-10-26, together with a
+  wider seizure margin for the re-fleet reserve, which changes every bot's play; these results
+  predate both. See `docs/sweeps/difficulty-2026-10-26`.)
 - Every spec spells out its Death Star numbers. They were written when the default was the old
   rules (6 cubes per stage, sites anywhere); the adopted default differs.
 

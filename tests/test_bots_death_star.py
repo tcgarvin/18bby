@@ -24,7 +24,7 @@ from bby18.bots.forecast import (
     turns_to_round_limit,
 )
 from bby18.bots.stable import STABLE
-from bby18.config import CLASSIC_CONFIG
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG
 from bby18.death_star import SITE_NAME
 from bby18.game import Game
 from bby18.hexgrid import Hex
@@ -77,6 +77,14 @@ def seizure_next(game, round_label="OR2.2"):
     game.round_number = 1
     game.round_label = round_label
     game.death_star.cubes = 5
+    game.death_star.stages_resolved = 0
+
+
+def seizure_far(game):
+    """Put the track just after the first seizure, with the next one (stage 3) more cubes away
+    than the Empire adds before the backstop."""
+    game.death_star.cubes = RULES.death_star_cubes_per_stage
+    game.death_star.stages_resolved = 1
 
 
 def _log(game):
@@ -172,6 +180,7 @@ def test_bot_keeps_a_replacement_fleets_price_from_builds_before_a_seizure():
     game = new_game(OPEN_RULES)
     cec = float_corp(game, "CEC")
     cec.fleets, cec.treasury = 1, 110
+    seizure_far(game)
     legal = game.legal_network_actions(cec)
     assert bot().choose_network_action(game, cec, legal) != NoNetworkAction()
     seizure_next(game)
@@ -182,6 +191,7 @@ def test_bot_with_no_fleet_never_builds_into_the_mandatory_fleets_price():
     game = new_game(OPEN_RULES)
     cec = float_corp(game, "CEC")
     cec.treasury = 100
+    seizure_far(game)
     legal = game.legal_network_actions(cec)
     assert bot().choose_network_action(game, cec, legal) == NoNetworkAction()
     cec.treasury = 130
@@ -193,6 +203,7 @@ def test_even_a_baron_withholds_when_paying_would_leave_no_replacement_fleet():
     game = new_game()
     cec = float_corp(game, "CEC")
     cec.fleets, cec.treasury = 1, 20
+    seizure_far(game)
     baron = GreedyBot(random.Random(0), STABLE["baron"])
     assert baron.choose_pay_dividends(game, cec, 30)
     seizure_next(game)
@@ -458,6 +469,127 @@ def test_treasury_reserve_fleets_withholds_and_keeps_builds_out_of_the_chest():
     )
     cec.treasury = 200
     assert saver.choose_pay_dividends(game, cec, 30)
+
+
+def _cushion_position(treasury, fleets=4):
+    """CEC with ``treasury``, no seizure ahead, no build that would raise revenue on its own and
+    (at the fleet limit) no fleet to want: only the cushion rules decide its dividend."""
+    game = new_game()
+    cec = float_corp(game, "CEC")
+    cec.fleets, cec.treasury = fleets, treasury
+    seizure_far(game)
+    game.legal_network_actions = lambda corp: [NoNetworkAction()]  # type: ignore[method-assign]
+    return game, cec
+
+
+def _with_connection(name, route_cost):
+    """The stable strategy ``name``, seeing a planet that would raise revenue at the end of a
+    route costing ``route_cost``."""
+    greedy = GreedyBot(random.Random(0), STABLE[name])
+    greedy._gaining_connection_within = (  # type: ignore[method-assign]
+        lambda game, forecast, corp, budget: route_cost <= budget
+    )
+    return greedy
+
+
+def test_builder_withholds_below_two_builds_only_for_a_connection_the_cushion_would_pay_for():
+    game, cec = _cushion_position(treasury=60)
+    assert not _with_connection("builder", 120).choose_pay_dividends(game, cec, 100)
+    assert _with_connection("builder", 180).choose_pay_dividends(game, cec, 100)
+    cec.treasury = 2 * RULES.chart_cost
+    assert _with_connection("builder", 60).choose_pay_dividends(game, cec, 100)
+
+
+def test_hoarder_keeps_four_builds_and_looks_further():
+    game, cec = _cushion_position(treasury=150)
+    assert _with_connection("builder", 60).choose_pay_dividends(game, cec, 100)
+    assert not _with_connection("hoarder", 60).choose_pay_dividends(game, cec, 100)
+    cec.treasury = 60
+    assert not _with_connection("hoarder", 240).choose_pay_dividends(game, cec, 100)
+    assert _with_connection("hoarder", 300).choose_pay_dividends(game, cec, 100)
+    cec.treasury = 4 * RULES.chart_cost
+    assert _with_connection("hoarder", 60).choose_pay_dividends(game, cec, 100)
+
+
+def test_targeted_withholds_only_for_a_gaining_build_it_cannot_afford():
+    game, cec = _cushion_position(treasury=60, fleets=1)
+    game.reachable_planets = lambda corp: planets("A")  # type: ignore[method-assign]
+    chart = next(
+        a for a in new_game().legal_network_actions(cec) if not isinstance(a, NoNetworkAction)
+    )
+    game.legal_network_actions = lambda corp: [  # type: ignore[method-assign]
+        NoNetworkAction(),
+        replace(chart, cost=90),
+    ]
+    gaining = _with_connection("targeted", 0)  # a connection alone never moves it
+    gaining._planets_after = lambda *args: planets("AM")  # type: ignore[method-assign]
+    assert not gaining.choose_pay_dividends(game, cec, 30)
+    cec.treasury = 90
+    assert gaining.choose_pay_dividends(game, cec, 30), "affordable, even below two builds"
+    flat = _with_connection("targeted", 0)
+    flat._planets_after = lambda *args: planets("A")  # type: ignore[method-assign]
+    cec.treasury = 0
+    assert flat.choose_pay_dividends(game, cec, 30), "nothing would gain"
+
+
+def test_the_cushion_counts_only_what_the_fleet_reserve_leaves():
+    game, cec = _cushion_position(treasury=150, fleets=1)
+    builder = _with_connection("builder", 60)
+    assert builder.choose_pay_dividends(game, cec, 30)
+    seizure_next(game)  # a replacement's price is reserved, leaving 90 to spend
+    assert not builder.choose_pay_dividends(game, cec, 30)
+
+
+def _all_frontier_hexes_cost(cost):
+    return lambda game, corp, targets, blocked: {h: cost for h in game.board.hexes}
+
+
+def test_a_connection_counts_planets_that_raise_revenue_and_the_route_to_them():
+    game, cec = _cushion_position(treasury=0, fleets=1)
+    # Any pair adds revenue.
+    game.reachable_planets = lambda corp: planets("A")  # type: ignore[method-assign]
+    greedy = bot(pay_threshold=2)
+    greedy._route_costs = _all_frontier_hexes_cost(60)  # type: ignore[method-assign]
+    forecast = TrackForecast.of(game)
+    assert greedy._gaining_connection_within(game, forecast, cec, 60)
+    assert not greedy._gaining_connection_within(game, forecast, cec, 59)
+
+
+def test_a_connection_that_needs_another_fleet_must_also_pay_for_it():
+    game, cec = _cushion_position(treasury=0, fleets=2)
+    # Two typed pairs keep both fleets busy; a new planet pairs with B only with a third fleet.
+    game.reachable_planets = lambda corp: planets("AMRSB")  # type: ignore[method-assign]
+    greedy = bot(pay_threshold=2, contract_weight=0.0)
+    greedy._route_costs = _all_frontier_hexes_cost(60)  # type: ignore[method-assign]
+    forecast = TrackForecast.of(game)
+    price = forecast.cautious_price
+    assert greedy._gaining_connection_within(game, forecast, cec, 60 + price)
+    assert not greedy._gaining_connection_within(game, forecast, cec, 59 + price)
+    # At the fleet limit with every fleet running a typed pair, no planet can add anything.
+    cec.fleets = RULES.fleet_limit
+    game.reachable_planets = lambda corp: planets("AMRSIMIS")  # type: ignore[method-assign]
+    assert not greedy._gaining_connection_within(game, forecast, cec, 10**6)
+
+
+def _withheld_and_settled(game):
+    texts = [e.text for e in game.log]
+    withheld = sum(1 for t in texts if t.startswith("withholds ") and t.split()[1] != "0;")
+    settled = sum(1 for t in texts if t.startswith(("pays ", "withholds ")) and " 0;" not in t)
+    return withheld, settled
+
+
+def test_builder_targeted_and_hoarder_play_different_games_under_the_default_rules():
+    totals = {}
+    for name in ("targeted", "builder", "hoarder"):
+        withheld = settled = 0
+        for seed in (1, 2, 3, 4):
+            game, _ = play_one(seed, 3, name, DEFAULT_CONFIG)
+            w, s = _withheld_and_settled(game)
+            withheld, settled = withheld + w, settled + s
+            totals.setdefault(seed, set()).add(tuple(str(e) for e in game.log))
+        totals[name] = withheld / settled
+    assert all(len(totals[seed]) == 3 for seed in (1, 2, 3, 4))
+    assert totals["targeted"] < totals["builder"] < totals["hoarder"]
 
 
 # --- archetypes and the standard rules -------------------------------------------------------

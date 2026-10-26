@@ -187,7 +187,24 @@ playtesting, with contested construction sites and a shorter track:
 The rules before adoption (fixed six rounds, no fleets) are `CLASSIC_CONFIG` in `config.py`, kept
 for comparison sweeps and tests. Every other number below is still a placeholder in `config.py`.
 
-Evidence: docs/sweeps/death-star-2026-10-25/README.md
+**Evidence** (`docs/sweeps/death-star-2026-10-25/README.md`, about 140,000 tournament games):
+
+- **As first designed** (sites anywhere in their region, 6 cubes per stage), the station launched
+  in 3% of games, contracts were 6% of revenue, and always-pay still dominated.
+- **Contested placement** made contracts worth chasing. Faster Empire cubes alone only made a
+  timer, and richer contracts (60/70/80/90) handed the game to the site-rushing strategy.
+- **With the adopted numbers, pooled over 20 maps:**
+  - four strategies coexist (always-pay, early fleet grab, early withholding, site rush);
+  - every seed resample keeps at least two;
+  - the best strategy varies by map, and on some maps a strategy that withholds and avoids the
+    site wins;
+  - players sell three times as often before a seizure or site move.
+
+  Under the old rules, always-pay won on every map.
+- **Caveats:**
+  - Most games (57%) still end at the round-8 backstop.
+  - Contract values sit close to the point where site-rushing dominates.
+  - Seat 3 is weaker than before (29% of worth).
 
 **Why:** nothing ever declined. Revenue was a permanent function of a network that only grew,
 treasury cash was worth nothing at the end, and the game ran a fixed twelve operating rounds, so

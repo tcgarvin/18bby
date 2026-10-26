@@ -72,7 +72,9 @@ class GreedyPolicy:
     max_presidencies: int = 1
     """How many corporations this player will start."""
     pay_threshold: int = 2
-    """Pay dividends when treasury >= pay_threshold * chart_cost."""
+    """Pay dividends when treasury >= pay_threshold * chart_cost. Under the Death Star rules the
+    cushion is counted beyond the fleet reserve, and a corporation below it still pays when
+    nothing needs the cash soon (see ``GreedyBot._intended_death_star_dividend``)."""
     withhold_when_revenue_below: int = 0
     """Withhold when this turn's revenue is below this (0 = never withhold for low revenue)."""
     sell_losers: bool = False
@@ -103,7 +105,9 @@ class GreedyPolicy:
     """Withhold every turn before this round (0-based), then follow the other dividend knobs."""
     withhold_for_builds: bool = False
     """Withhold exactly when a revenue-gaining build exists that the treasury cannot afford;
-    otherwise pay. Replaces ``pay_threshold`` and ``withhold_when_revenue_below``."""
+    otherwise pay. Replaces ``pay_threshold`` and ``withhold_when_revenue_below``. Under the
+    Death Star rules a wanted fleet it cannot pay for also counts, and a build is affordable
+    only from what the fleet reserve leaves."""
     pay_when_steps: int = 0
     """Pay whenever paying would move the price at least this many columns, before the other
     dividend knobs are consulted (0 = off)."""
@@ -861,10 +865,17 @@ class GreedyBot:
         """The dividend decision under the Death Star rules.
 
         Survival comes first: withhold while the treasury is below the fleet reserve or the
-        policy's war chest. Then the usual knobs, except that a treasury below the
-        ``pay_threshold`` target withholds only when the cash would buy something: a fleet the
-        corporation wants or a build that would raise revenue. Paying when nothing needs the
-        money avoids withholding turn after turn for builds that are never made.
+        policy's war chest. The rest is judged on what builds may spend: the treasury less that
+        reserve (``_build_reserve``).
+
+        - ``withhold_for_builds`` withholds exactly when the corporation wants a fleet it cannot
+          pay for, or a build that would raise revenue costs more than it may spend.
+        - Otherwise it pays once it may spend ``pay_threshold`` charts' worth, the cushion.
+          Below that it withholds only while there is something to spend the cash on soon:
+          what ``withhold_for_builds`` would withhold for, or a planet that would raise revenue
+          and that the cushion would pay to reach (``_gaining_connection_within``). Paying when
+          nothing needs the money avoids withholding turn after turn for builds that are never
+          made, or that only add planets its fleets cannot run.
         """
         forecast = TrackForecast.of(game)
         if corp.treasury < forecast.fleet_reserve(
@@ -878,31 +889,95 @@ class GreedyBot:
             return True
         if game.round_number < self.policy.withhold_until_round:
             return False
+        spendable = corp.treasury - self._build_reserve(game, forecast, corp)
         if self.policy.withhold_for_builds:
-            return not self._needs_cash_death_star(game, forecast, corp)
+            return not self._needs_cash_death_star(game, forecast, corp, spendable)
         if revenue < self.policy.withhold_when_revenue_below:
             return False
-        if corp.treasury >= game.config.chart_cost * self.policy.pay_threshold:
+        target = game.config.chart_cost * self.policy.pay_threshold
+        # A zero target (the always-pay policies) pays whatever the reserve.
+        if target == 0 or spendable >= target:
             return True
-        return not self._needs_cash_death_star(game, forecast, corp)
+        if self._needs_cash_death_star(game, forecast, corp, spendable):
+            return False
+        return not self._gaining_connection_within(game, forecast, corp, target)
 
-    def _needs_cash_death_star(
+    def _wants_unaffordable_fleet(
         self, game: Game, forecast: TrackForecast, corp: Corporation
     ) -> bool:
-        """Whether the treasury cannot pay for a fleet this policy wants, or for a build that
-        would raise revenue with the fleets the corporation owns."""
+        """Whether this policy wants another fleet that the treasury cannot pay for."""
+        price = game.fleet_price()
+        if corp.fleets >= game.config.fleet_limit or price <= corp.treasury:
+            return False
         weight = self._site_weight(game, forecast)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
-        price = game.fleet_price()
-        if corp.fleets < game.config.fleet_limit and price > corp.treasury:
-            if self._wants_fleet(game, forecast, corp.fleets, planets, contract_value, price):
+        return self._wants_fleet(game, forecast, corp.fleets, planets, contract_value, price)
+
+    def _gaining_connection_within(
+        self, game: Game, forecast: TrackForecast, corp: Corporation, budget: int
+    ) -> bool:
+        """Whether ``budget`` would pay for reaching an unreached planet (or the construction
+        site, valued as when planning builds) that raises revenue: a route from the network to a
+        planet that gains with the fleets the corporation owns, or a route plus one more fleet
+        at the cautious price to a planet that gains only with that fleet."""
+        weight = self._site_weight(game, forecast)
+        reach = game.reachable(corp)
+        planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
+        fleets = corp.fleets
+        now = self._capped_revenue(game, planets, fleets, contract_value)
+        more = fleets < game.config.fleet_limit
+        # A planet gains "with a fleet" only beyond what the fleet alone would add.
+        fleet_alone = (
+            max(now, self._capped_revenue(game, planets, fleets + 1, contract_value))
+            if more
+            else now
+        )
+        gaining: list[Hex] = []
+        gaining_with_fleet: list[Hex] = []
+        for planet in game.board.planets:
+            if planet.hex in reach:
+                continue
+            after, _ = self._planning_view(game, weight, planets + [planet])
+            if self._capped_revenue(game, after, fleets, contract_value) > now:
+                gaining.append(planet.hex)
+            elif more and self._capped_revenue(game, after, fleets + 1, contract_value) > (
+                fleet_alone
+            ):
+                gaining_with_fleet.append(planet.hex)
+        frontier = {
+            n
+            for h in reach
+            for _, n in game.board.neighbors(h)
+            if n not in reach and not game.board.is_planet(n)
+        }
+        blocked = self._blocked_hexes(game)
+        for targets, route_budget in (
+            (gaining, budget),
+            (gaining_with_fleet, budget - forecast.cautious_price),
+        ):
+            if not targets or route_budget <= 0:
+                continue
+            # A route's cost counts every hex it enters, the first beside the network included.
+            to_go = self._route_costs(game, corp, targets, blocked)
+            if any(to_go.get(h, route_budget + 1) <= route_budget for h in frontier):
                 return True
+        return False
+
+    def _needs_cash_death_star(
+        self, game: Game, forecast: TrackForecast, corp: Corporation, budget: int
+    ) -> bool:
+        """Whether the treasury cannot pay for a fleet this policy wants, or a build costing
+        more than ``budget`` would raise revenue with the fleets the corporation owns."""
+        if self._wants_unaffordable_fleet(game, forecast, corp):
+            return True
+        weight = self._site_weight(game, forecast)
+        planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
         unlimited = copy.copy(corp)
         unlimited.treasury = 10**9
         reach = game.reachable(corp)
         current = self._capped_revenue(game, planets, corp.fleets, contract_value)
         for action in game.legal_network_actions(unlimited):
-            if isinstance(action, NoNetworkAction) or action.cost <= corp.treasury:
+            if isinstance(action, NoNetworkAction) or action.cost <= budget:
                 continue
             after, _ = self._planning_view(
                 game, weight, self._planets_after(game, corp, action, reach)

@@ -304,24 +304,24 @@ REVENUE_CACHE_SIZE = 1 << 16
 DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
 """Per difficulty, the worth share a reference player (the stable's ``builder``) should take
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
-Death Star rules the 1.0 noise maximum gives 0.49-0.58, depending on the strategy."""
+Death Star rules the 1.0 noise maximum gives 0.45-0.55, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
     # Calibrated 2026-10-26 for DIFFICULTY_TARGET_SHARE under the Death Star rules
     # (docs/sweeps/difficulty-2026-10-26).
     "easy": {
-        "baron": 0.62,
-        "baron-prestige": 0.77,
-        "baron-tycoon": 0.51,
-        "builder": 0.57,
-        "churner": 0.33,
-        "diversifier": 0.59,
-        "early-builder": 0.71,
-        "hoarder": 0.57,
-        "prestige": 0.72,
-        "spoiler": 0.46,
-        "straight": 0.35,
-        "targeted": 0.57,
-        "tycoon": 0.5,
+        "baron": 0.81,
+        "baron-prestige": 0.88,
+        "baron-tycoon": 0.62,
+        "builder": 0.65,
+        "churner": 0.03,
+        "diversifier": 0.71,
+        "early-builder": 0.83,
+        "hoarder": 0.33,
+        "prestige": 0.8,
+        "spoiler": 0.39,
+        "straight": 0.2,
+        "targeted": 0.74,
+        "tycoon": 0.52,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

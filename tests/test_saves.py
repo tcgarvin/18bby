@@ -84,8 +84,10 @@ def test_dividend_frames_carry_the_revenue_being_settled():
     assert any(f["revenue"] > 0 for f in dividends)
     for frame in dividends:
         verb = "pays" if frame["action"]["choice"] == "pay" else "withholds"
-        assert frame["log"][0]["text"].startswith(f"{verb} {frame['revenue']}")
-        assert frame["corporation"] == frame["log"][0]["actor"]
+        # Contract cubes, and any stage they fill, are logged just before the settlement.
+        settled = next(e for e in frame["log"] if e["text"].startswith(("pays ", "withholds ")))
+        assert settled["text"].startswith(f"{verb} {frame['revenue']}")
+        assert frame["corporation"] == settled["actor"]
     assert all(f["revenue"] == 0 for f in frames if f["action"]["type"] != "dividend")
 
 

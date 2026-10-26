@@ -21,9 +21,12 @@ from bby18.state import CorpStatus
 
 NOTHING_AHEAD = sys.maxsize
 """Operating rounds or cubes until a stage result that will not come."""
-SEIZURE_MARGIN_CUBES = 2
+SEIZURE_MARGIN_CUBES = 4
 """Extra cubes allowed for when judging how soon a seizure could come: a bot would rather keep
-a reserve one cube early than lose its corporation one cube late."""
+a reserve one cube early than lose its corporation one cube late. The cube rate is read from
+current revenue only and jumps when a rival reaches the site; with 2, always-pay bots on the
+adopted rules still lost about 4 corporations per 100 seats to seizures that came early
+(2026-10-26 smoke, 20 seeds); with 4, none did."""
 MIN_EXPECTED_TURNS = 2
 """Floor on the estimate of operating turns left from the cube rate (the backstop still caps
 it): the rate is noisy, and a station is rarely finished in one round."""
