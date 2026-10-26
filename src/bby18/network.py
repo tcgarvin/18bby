@@ -33,17 +33,36 @@ class HyperspaceNetwork:
 
     MAX_EXITS = 3
 
-    def __init__(self, board: Board) -> None:
+    def __init__(self, board: Board, reserved: frozenset[Hex] = frozenset()) -> None:
         self.board = board
+        self.reserved = reserved
+        """Space hexes that may not be charted yet, though tiles may point at them (the future
+        Death Star construction site)."""
         self._tiles: dict[Hex, Tile] = {}
         self._service: dict[str, set[Hex]] = {}
 
     def copy(self) -> HyperspaceNetwork:
         """A cheap copy sharing the immutable board, for what-if evaluation."""
-        clone = HyperspaceNetwork(self.board)
+        clone = HyperspaceNetwork(self.board, self.reserved)
         clone._tiles = dict(self._tiles)
         clone._service = {c: set(h) for c, h in self._service.items()}
         return clone
+
+    def rebase(self, board: Board, reserved: frozenset[Hex]) -> None:
+        """Lay the existing tiles and service over ``board``, the same geometry with planets
+        added or removed (the Death Star site arriving or leaving). Tiles stay as they are, so
+        a tile pointing into a hex that stops being a planet now leads nowhere."""
+        if board.hexes != self.board.hexes:
+            raise ValueError("A network can only move to a board with the same hexes")
+        clashes = sorted(h for h in self._tiles if board.is_planet(h))
+        if clashes:
+            raise ValueError(f"Charted hexes {clashes} cannot become planets")
+        self.board = board
+        self.reserved = reserved
+
+    def remove_service(self, corp: str) -> None:
+        """Drop all of ``corp``'s service. Its tiles stay charted for everyone else."""
+        self._service.pop(corp, None)
 
     # --- queries -------------------------------------------------------------
 
@@ -70,12 +89,17 @@ class HyperspaceNetwork:
         return tile is not None and direction in tile.exits
 
     def connected(self, a: Hex, b: Hex) -> bool:
-        """Adjacent hexes are connected when each has an exit facing the other."""
+        """Adjacent hexes are connected when each has an exit facing the other. Two hubs
+        (planets, or a planet and the Death Star site) never connect directly: traffic between
+        them needs at least one charted lane."""
+        if self.board.is_planet(a) and self.board.is_planet(b):
+            return False
         direction = a.direction_to(b)
         return self.has_exit(a, direction) and self.has_exit(b, direction.opposite)
 
     def reachable(self, corp: str, origin: Hex) -> frozenset[Hex]:
-        """All hexes ``corp`` can reach from ``origin`` through its own service."""
+        """All hexes ``corp`` can reach from ``origin`` through its own service. Adjacent hubs
+        do not connect directly (see ``connected``)."""
         service = self._service.get(corp, set())
         board = self.board
         seen = {origin}
@@ -85,7 +109,10 @@ class HyperspaceNetwork:
             for direction, nxt in board.neighbors(current):
                 if nxt in seen:
                     continue
-                if not board.is_planet(nxt) and nxt not in service:
+                if board.is_planet(nxt):
+                    if board.is_planet(current):
+                        continue
+                elif nxt not in service:
                     continue
                 if self.has_exit(current, direction) and self.has_exit(nxt, _OPPOSITE[direction]):
                     seen.add(nxt)
@@ -109,6 +136,8 @@ class HyperspaceNetwork:
             raise IllegalAction(f"{hex} is an asteroid field and cannot be charted")
         if hex in self._tiles:
             raise IllegalAction(f"{hex} is already charted")
+        if hex in self.reserved:
+            raise IllegalAction(f"{hex} is reserved for the Death Star and cannot be charted")
         if len(exits) != 2:
             raise IllegalAction("A new tile must have exactly two exits")
         illegal = exits - self.legal_exits(hex)

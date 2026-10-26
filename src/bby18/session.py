@@ -21,7 +21,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
-from bby18.actions import NetworkAction, NoNetworkAction, PassStock, StockAction
+from bby18.actions import (
+    FinishFleets,
+    FleetAction,
+    NetworkAction,
+    NoNetworkAction,
+    PassStock,
+    StockAction,
+)
 from bby18.game import Game
 from bby18.state import Corporation, Player
 
@@ -39,12 +46,24 @@ class Decider(Protocol):
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool: ...
 
+    def choose_fleet_action(
+        self, game: Game, corp: Corporation, legal: list[FleetAction]
+    ) -> FleetAction:
+        """Buy a fleet or finish the fleet step; called only under the Death Star rules."""
+        ...
+
 
 class Phase(Enum):
     STOCK = "stock"
     NETWORK = "network"
+    FLEET = "fleet"
+    """Buying fleets, between network actions and revenue; only under the Death Star rules."""
     DIVIDEND = "dividend"
     GAME_OVER = "game_over"
+
+
+OPERATING_PHASES = (Phase.NETWORK, Phase.FLEET, Phase.DIVIDEND)
+"""Phases in which a corporation is operating."""
 
 
 class Dividend(Enum):
@@ -52,7 +71,7 @@ class Dividend(Enum):
     WITHHOLD = "withhold"
 
 
-Action = StockAction | NetworkAction | Dividend
+Action = StockAction | NetworkAction | FleetAction | Dividend
 
 
 @dataclass(frozen=True)
@@ -123,13 +142,13 @@ class GameSession:
         """The player who must act now. Raises when the game is over."""
         if self.phase is Phase.STOCK:
             return self.game.players[self._stock.current]
-        if self.phase in (Phase.NETWORK, Phase.DIVIDEND):
+        if self.phase in OPERATING_PHASES:
             return self.game.player(self.current_corporation.president)
         raise ValueError("The game is over; nobody acts")
 
     @property
     def current_corporation(self) -> Corporation:
-        if self.phase not in (Phase.NETWORK, Phase.DIVIDEND):
+        if self.phase not in OPERATING_PHASES:
             raise ValueError(f"No corporation acts during {self.phase.value}")
         return self.game.corp(self._operating.queue[self._operating.position])
 
@@ -139,6 +158,8 @@ class GameSession:
             return list(self.game.legal_stock_actions(player, self._stock.sold[player.id]))
         if self.phase is Phase.NETWORK:
             return list(self.game.legal_network_actions(self.current_corporation))
+        if self.phase is Phase.FLEET:
+            return list(self.game.legal_fleet_actions(self.current_corporation))
         if self.phase is Phase.DIVIDEND:
             if self.game.revenue(self.current_corporation).total == 0:
                 return [Dividend.WITHHOLD]
@@ -152,7 +173,7 @@ class GameSession:
         During an operating round this is the queue fixed when the round began, which stays put
         even when prices change mid-round. Otherwise it is the order the next round would use.
         """
-        if self.phase in (Phase.NETWORK, Phase.DIVIDEND):
+        if self.phase in OPERATING_PHASES:
             return list(self._operating.queue)
         return [c.id for c in self.game.operating_order()]
 
@@ -213,7 +234,7 @@ class GameSession:
         observer(self, move)
 
     def _describe(self, action: Action, automatic: bool) -> PlayedMove:
-        operating = self.phase in (Phase.NETWORK, Phase.DIVIDEND)
+        operating = self.phase in OPERATING_PHASES
         corp = self.current_corporation if operating else None
         return PlayedMove(
             action=action,
@@ -257,6 +278,9 @@ class GameSession:
         if self.phase is Phase.NETWORK:
             net_legal = [a for a in legal if not isinstance(a, Dividend)]
             return bot.choose_network_action(self.game, corp, net_legal)  # type: ignore[arg-type]
+        if self.phase is Phase.FLEET:
+            fleet_legal = [a for a in legal if not isinstance(a, Dividend)]
+            return bot.choose_fleet_action(self.game, corp, fleet_legal)  # type: ignore[arg-type]
         revenue = self.game.revenue(corp).total
         if revenue == 0:
             return Dividend.WITHHOLD
@@ -274,6 +298,8 @@ class GameSession:
             self._stock_step(action)  # type: ignore[arg-type]
         elif self.phase is Phase.NETWORK:
             self._network_step(action)  # type: ignore[arg-type]
+        elif self.phase is Phase.FLEET:
+            self._fleet_step(action)  # type: ignore[arg-type]
         elif self.phase is Phase.DIVIDEND:
             self._dividend_step(action)  # type: ignore[arg-type]
         else:
@@ -302,6 +328,7 @@ class GameSession:
         self._stock.current = (self._stock.current + 1) % n
         if self._stock.consecutive_passes >= n:
             game.finish_stock_round()
+            game.resolve_death_star()
             self._begin_operating_round(0)
 
     # --- operating rounds ------------------------------------------------------
@@ -320,9 +347,13 @@ class GameSession:
         queue = [c.id for c in game.operating_order()]
         self._operating = _OperatingState(index=index, queue=queue)
         if not queue:
-            self._begin_operating_round(index + 1)
+            self._end_operating_round()
             return
         self.phase = Phase.NETWORK
+
+    def _end_operating_round(self) -> None:
+        self.game.resolve_death_star()
+        self._begin_operating_round(self._operating.index + 1)
 
     def _network_step(self, action: NetworkAction) -> None:
         self.game.apply_network_action(self.current_corporation, action)
@@ -330,13 +361,33 @@ class GameSession:
         # Passing ends the corporation's network actions for this turn.
         done = isinstance(action, NoNetworkAction)
         if done or self._operating.actions_taken >= self.game.config.network_actions_per_turn:
+            if self.game.config.death_star_rules:
+                self._begin_fleet_step()
+            else:
+                self.phase = Phase.DIVIDEND
+
+    def _begin_fleet_step(self) -> None:
+        """Enter the fleet step, or close the corporation if it is bankrupt."""
+        corp = self.current_corporation
+        if self.game.must_close(corp):
+            self.game.close_bankrupt(corp)
+            self._next_corporation()
+            return
+        self.phase = Phase.FLEET
+
+    def _fleet_step(self, action: FleetAction) -> None:
+        self.game.apply_fleet_action(self.current_corporation, action)
+        if isinstance(action, FinishFleets):
             self.phase = Phase.DIVIDEND
 
     def _dividend_step(self, action: Dividend) -> None:
         self.game.settle_revenue(self.current_corporation, pay=action is Dividend.PAY)
+        self._next_corporation()
+
+    def _next_corporation(self) -> None:
         self._operating.position += 1
         self._operating.actions_taken = 0
         if self._operating.position >= len(self._operating.queue):
-            self._begin_operating_round(self._operating.index + 1)
+            self._end_operating_round()
         else:
             self.phase = Phase.NETWORK

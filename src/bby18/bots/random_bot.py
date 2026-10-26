@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from bby18.actions import NetworkAction, StockAction
+from bby18.actions import FleetAction, NetworkAction, StockAction
 from bby18.game import Game
 from bby18.state import Corporation, Player
 
@@ -25,3 +25,9 @@ class RandomBot:
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool:
         return self.rng.random() < 0.5
+
+    def choose_fleet_action(
+        self, game: Game, corp: Corporation, legal: list[FleetAction]
+    ) -> FleetAction:
+        # Only called under the Death Star rules, so games without them draw exactly as before.
+        return self.rng.choice(legal)

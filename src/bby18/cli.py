@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from bby18.config import DEFAULT_CONFIG
+from bby18.death_star_report import death_star_report
 from bby18.playtest import BOT_KINDS, play_many, play_one, seat_kinds
 from bby18.terrain_report import terrain_report
 from bby18.sweep import SweepError, load_spec, read_rows, row_keys, run_sweep, summarize
@@ -87,6 +88,14 @@ def main() -> None:
     p_tournament.add_argument("--variant", help="only this variant (required if several)")
     p_tournament.add_argument("--bootstrap", type=int, default=40)
 
+    p_death_star = sub.add_parser(
+        "death-star-report",
+        help="compare variants of a sweep on the Death Star clock, fleets, bankruptcies and "
+        "contracts",
+    )
+    p_death_star.add_argument("--rows", type=Path, required=True, help="sweep results JSONL")
+    p_death_star.add_argument("--variant", help="only this variant (default: every variant)")
+
     p_serve = sub.add_parser("serve", help="run the HTTP API for the web frontend")
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--reload", action="store_true")
@@ -109,6 +118,8 @@ def main() -> None:
         sys.exit(sweep_command(args))
     if args.command == "tournament-report":
         sys.exit(tournament_command(args))
+    if args.command == "death-star-report":
+        sys.exit(death_star_command(args))
     if args.command == "terrain-report":
         report = terrain_report(range(1, args.seeds + 1), DEFAULT_CONFIG)
         print(json.dumps(report, indent=1))
@@ -187,6 +198,17 @@ def sweep_command(args: argparse.Namespace) -> int:
         summary = summarize(existing + rows)
         args.summary.write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     return status
+
+
+def death_star_command(args: argparse.Namespace) -> int:
+    rows = read_rows(args.rows)
+    if args.variant is not None:
+        rows = [r for r in rows if r["variant"] == args.variant]
+        if not rows:
+            print(f"No rows of variant {args.variant!r} in {args.rows}", file=sys.stderr)
+            return 2
+    print(death_star_report(rows))
+    return 0
 
 
 def tournament_command(args: argparse.Namespace) -> int:

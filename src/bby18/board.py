@@ -10,6 +10,10 @@ from importlib import resources
 
 from bby18.hexgrid import Direction, Hex, hexes_within_radius
 
+REGION_TIE_PRIORITY: tuple[str, ...] = ("Core", "Mid Rim", "Outer Rim")
+"""Which region a space hex takes when planets of several regions are equally near, as in the
+map JSON's ``region_shading``. Regions not listed come after these, alphabetically."""
+
 
 class Terrain(Enum):
     """What fills a non-planet hex. Planets have no terrain."""
@@ -101,6 +105,37 @@ class Board:
     def with_terrain(self, terrain: Mapping[Hex, Terrain]) -> Board:
         """The same board with ``terrain`` laid over its space hexes."""
         return Board(self.radius, self.hexes, self.planets, terrain)
+
+    def with_planet(self, planet: Planet) -> Board:
+        """The same board with one more planet (it must be on an empty space hex)."""
+        if self.terrain_at(planet.hex) is not Terrain.SPACE:
+            raise ValueError(f"{planet.name} at {planet.hex} would sit on terrain")
+        return Board(self.radius, self.hexes, self.planets + (planet,), self.terrain)
+
+    def without_planet(self, name: str) -> Board:
+        """The same board with the named planet's hex turned into empty space."""
+        self.planet_named(name)  # raises if absent
+        planets = tuple(p for p in self.planets if p.name != name)
+        return Board(self.radius, self.hexes, planets, self.terrain)
+
+    def region_of(self, hex: Hex) -> str:
+        """A planet's own region, or for a space hex the region of its nearest planet by axial
+        distance, ties broken by ``REGION_TIE_PRIORITY``."""
+        if hex in self._by_hex:
+            return self._by_hex[hex].region
+        if not self.planets:
+            raise ValueError("A board without planets has no regions")
+
+        def rank(planet: Planet) -> tuple[int, int, str]:
+            region = planet.region
+            priority = (
+                REGION_TIE_PRIORITY.index(region)
+                if region in REGION_TIE_PRIORITY
+                else len(REGION_TIE_PRIORITY)
+            )
+            return planet.hex.distance(hex), priority, region
+
+        return min(self.planets, key=rank).region
 
     def planet_at(self, hex: Hex) -> Planet:
         try:

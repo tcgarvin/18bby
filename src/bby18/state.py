@@ -16,6 +16,9 @@ class CorpStatus(Enum):
     UNSTARTED = "unstarted"
     PARRED = "parred"
     FLOATED = "floated"
+    CLOSED = "closed"
+    """Bankrupt under the experimental Death Star rules: its shares are gone and it never
+    operates again."""
 
 
 @dataclass
@@ -42,6 +45,8 @@ class Corporation:
     president: str = NO_PLAYER
     float_order: int = -1
     last_revenue: int = 0
+    fleets: int = 0
+    """Fleets owned; each runs one revenue pair (experimental Death Star rules only)."""
 
     @property
     def id(self) -> str:

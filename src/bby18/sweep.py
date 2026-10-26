@@ -20,7 +20,14 @@ from statistics import mean, pstdev
 from typing import IO, Any, get_args, get_origin, get_type_hints
 
 from bby18.bots.stable import STABLE
-from bby18.config import DEFAULT_CONFIG, CorporationSpec, GameConfig
+from bby18.config import (
+    UNLIMITED,
+    DEFAULT_CONFIG,
+    CorporationSpec,
+    FleetTier,
+    GameConfig,
+    Unlimited,
+)
 from bby18.game import Game
 from bby18.playtest import play_one, seat_kinds
 from bby18.tournament import tournament_bots
@@ -86,6 +93,8 @@ def _coerce(hint: Any, value: Any) -> Any:
         if isinstance(value, Mapping):
             return CorporationSpec(**value)
         return CorporationSpec(*value)
+    if hint is FleetTier:
+        return _coerce_fleet_tier(value)
     if origin is tuple:
         if isinstance(value, (str, Mapping)):
             raise TypeError("expected a list")
@@ -107,6 +116,21 @@ def _coerce(hint: Any, value: Any) -> Any:
     raise TypeError(f"unsupported field type {hint}")
 
 
+def _coerce_fleet_tier(value: Any) -> FleetTier:
+    """A fleet tier from ``[count, price]`` or ``{"count": ..., "price": ...}``; the count may be
+    ``"unlimited"``."""
+    if isinstance(value, FleetTier):
+        return value
+    if isinstance(value, Mapping):
+        count, price = value["count"], value["price"]
+    elif isinstance(value, (list, tuple)) and len(value) == 2:
+        count, price = value
+    else:
+        raise TypeError("expected a fleet tier as [count, price]")
+    tier_count = UNLIMITED if count == UNLIMITED.value else _coerce(int, count)
+    return FleetTier(tier_count, _coerce(int, price))
+
+
 def variant(config: GameConfig, **overrides: Any) -> GameConfig:
     """``config`` with some fields replaced. Unknown field names raise ``ValueError``.
 
@@ -123,6 +147,9 @@ def to_jsonable(value: Any) -> Any:
     """A JSON-friendly form of a config value, with sets sorted for stable output."""
     if isinstance(value, CorporationSpec):
         return {"id": value.id, "name": value.name, "homeworld": value.homeworld}
+    if isinstance(value, FleetTier):
+        count = value.count.value if isinstance(value.count, Unlimited) else value.count
+        return [count, value.price]
     if isinstance(value, (tuple, list)):
         return [to_jsonable(v) for v in value]
     if isinstance(value, frozenset):

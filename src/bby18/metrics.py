@@ -15,7 +15,6 @@ from statistics import mean, pstdev
 
 from bby18.game import Game, LogEntry
 from bby18.hexgrid import Hex
-from bby18.revenue import compute_revenue
 from bby18.state import CorpStatus
 
 _PAYS = re.compile(r"^pays \d+ .*; price (\d+)$")
@@ -212,7 +211,7 @@ def planet_metrics(game: Game) -> dict[str, PlanetMetrics]:
             continue
         for planet in game.reachable_planets(corp):
             reached_by[planet.name] += 1
-        for pair in compute_revenue(game.reachable_planets(corp), game.config).pairs:
+        for pair in game.revenue(corp).pairs:
             value[pair.a.name] += pair.value / 2
             value[pair.b.name] += pair.value / 2
     return {p.name: PlanetMetrics(reached_by[p.name], value[p.name]) for p in game.board.planets}
@@ -239,7 +238,8 @@ def near_pair_links(game: Game) -> tuple[int, int, int]:
 
 
 def final_revenue_split(game: Game) -> tuple[int, int]:
-    """Typed-pair and basic-route revenue summed over floated corporations.
+    """Typed-pair (with Death Star contract) and basic-route revenue summed over floated
+    corporations.
 
     The network does not change after the last operating turn, so this is the split of the
     final operating round's revenue.
@@ -249,7 +249,8 @@ def final_revenue_split(game: Game) -> tuple[int, int]:
         if not corp.floated:
             continue
         for pair in game.revenue(corp).pairs:
-            if pair.typed:
+            # Death Star contracts are deliveries too, so they count with typed pairs.
+            if pair.typed or pair.contract:
                 typed += pair.value
             else:
                 basic += pair.value

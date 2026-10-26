@@ -9,12 +9,16 @@ from __future__ import annotations
 import copy
 import heapq
 import random
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from bby18.actions import (
+    BuyFleet,
     BuyShare,
     Chart,
     ExtendService,
+    FinishFleets,
+    FleetAction,
     NetworkAction,
     NoNetworkAction,
     PassStock,
@@ -24,6 +28,7 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Planet
+from bby18.bots.forecast import TrackForecast, is_fragile, next_fleet_prices
 from bby18.game import Game
 from bby18.hexgrid import Hex
 from bby18.revenue import compute_revenue
@@ -43,6 +48,9 @@ CARELESS_DIVIDEND_FRACTION = 0.5
 FLOAT_SEEKING_SCORE = 0.9
 """Stock score of an IPO buy toward floating one's own corporation: below starting one, above
 ordinary buys, and above the cash-reserve cutoff so the bot never passes instead."""
+RESERVED_SITE_LEAD_TURNS = 3
+"""Death Star rules: the reserved next site becomes a build target once the site is expected to
+move within this many operating rounds."""
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,24 @@ class GreedyPolicy:
     ``CARELESS_DIVIDEND_FRACTION`` of this rate. Starting a corporation and buying toward
     floating one's own never slip. 0 plays exactly as without the knob."""
 
+    # The knobs below matter only under the experimental Death Star rules.
+    fleet_payback_turns: float = 4.0
+    """Buy a fleet when the revenue it adds, over at most this many operating turns (and no more
+    than the turns the game is expected to last), covers its price."""
+    fleet_target: int = 0
+    """0: buy fleets by value (``fleet_payback_turns``). N > 0: own exactly N, buying whenever
+    affordable regardless of value, and no more."""
+    contract_weight: float = 1.0
+    """How much a build values the Death Star site: its contract value is scaled by this when
+    planning builds and routes. 0 never builds toward or routes through the site (it still
+    scores a contract if its network happens to reach it); 2 rushes it."""
+    treasury_reserve_fleets: float = 0.0
+    """Keep this many fleet prices in the treasury: never spend them on builds and withhold
+    until they are there. Fleets themselves may be bought from it."""
+    sell_own_before_seizure: bool = False
+    """In a stock round before a likely seizure, sell shares of corporations this player
+    presides over down to what keeps the presidency."""
+
     def __post_init__(self) -> None:
         if self.start_order not in START_ORDERS:
             raise ValueError(f"start_order must be one of {START_ORDERS}, not {self.start_order!r}")
@@ -119,6 +145,14 @@ class GreedyPolicy:
             raise ValueError("noise must be between 0 and 1")
         if self.routing not in ROUTING_MODES:
             raise ValueError(f"routing must be one of {ROUTING_MODES}, not {self.routing!r}")
+        if self.fleet_payback_turns <= 0:
+            raise ValueError("fleet_payback_turns must be positive")
+        if self.fleet_target < 0:
+            raise ValueError("fleet_target must be non-negative")
+        if self.contract_weight < 0:
+            raise ValueError("contract_weight must be non-negative")
+        if self.treasury_reserve_fleets < 0:
+            raise ValueError("treasury_reserve_fleets must be non-negative")
 
 
 class GreedyBot:
@@ -166,15 +200,31 @@ class GreedyBot:
     def _intended_stock_action(
         self, game: Game, player: Player, legal: list[StockAction]
     ) -> StockAction:
+        death_star = game.config.death_star_rules
+        fragile: frozenset[str] = frozenset()
+        if death_star:
+            forecast = TrackForecast.of(game)
+            fragile = self._fragile_corporations(game, forecast)
+            if self.policy.sell_own_before_seizure:
+                sale = self._own_sale_before_seizure(game, player, legal, forecast)
+                if sale is not None:
+                    return sale
         if self.policy.dump_rivals:
             sale = self._rival_sale(game, player, legal)
             if sale is not None:
                 return sale
         if self.policy.sell_losers:
+            if death_star:
+                sale = self._fragile_sale(game, player, legal, fragile)
+                if sale is not None:
+                    return sale
             sale = self._loser_sale(game, player, legal)
             if sale is not None:
                 return sale
         buys = [a for a in legal if isinstance(a, BuyShare)]
+        if death_star:
+            # A corporation that may close this round would take its shares with it.
+            buys = [a for a in buys if a.corp_id not in fragile]
         if not buys:
             return PassStock()
         starts = self._start_options(game, player, buys)
@@ -285,7 +335,7 @@ class GreedyBot:
         """
         home = game.homeworld(corp)
         nearby = [p for p in game.board.planets if p.hex.distance(home) <= self.policy.home_radius]
-        return compute_revenue(nearby, game.config).total
+        return game.planet_revenue(nearby).total
 
     def _loser_sale(
         self, game: Game, player: Player, legal: list[StockAction]
@@ -302,6 +352,55 @@ class GreedyBot:
             if worst is None or ratio < worst[0]:
                 worst = (ratio, action)
         return None if worst is None else worst[1]
+
+    @staticmethod
+    def _fragile_corporations(game: Game, forecast: TrackForecast) -> frozenset[str]:
+        """Floated corporations that may close in the coming round (Death Star rules)."""
+        return frozenset(
+            c.id
+            for c in game.corporations.values()
+            if c.status is CorpStatus.FLOATED and is_fragile(game, c.id, forecast)
+        )
+
+    @staticmethod
+    def _fragile_sale(
+        game: Game, player: Player, legal: list[StockAction], fragile: frozenset[str]
+    ) -> SellShares | None:
+        """The largest legal sale of a ``fragile`` corporation this player does not preside
+        over."""
+        sales = [
+            a
+            for a in legal
+            if isinstance(a, SellShares)
+            and a.corp_id in fragile
+            and game.corp(a.corp_id).president != player.id
+        ]
+        return max(sales, key=lambda a: a.count, default=None)
+
+    @staticmethod
+    def _own_sale_before_seizure(
+        game: Game, player: Player, legal: list[StockAction], forecast: TrackForecast
+    ) -> SellShares | None:
+        """Before a likely seizure, the largest legal sale of a corporation this player presides
+        over that still leaves it the presidency."""
+        if not forecast.seizure_within_round:
+            return None
+        best: SellShares | None = None
+        for action in legal:
+            if not isinstance(action, SellShares):
+                continue
+            corp = game.corp(action.corp_id)
+            if corp.president != player.id:
+                continue
+            rivals = max(
+                (p.shares_in(corp.id) for p in game.players if p.id != player.id), default=0
+            )
+            keep = max(game.config.president_share_size, rivals)
+            if player.shares_in(corp.id) - action.count < keep:
+                continue
+            if best is None or action.count > best.count:
+                best = action
+        return best
 
     @staticmethod
     def _rival_sale(game: Game, player: Player, legal: list[StockAction]) -> SellShares | None:
@@ -326,22 +425,45 @@ class GreedyBot:
         self, game: Game, corp: Corporation, legal: list[NetworkAction]
     ) -> NetworkAction:
         candidates = [a for a in legal if not isinstance(a, NoNetworkAction)]
+        death_star = game.config.death_star_rules
+        if death_star:
+            forecast = TrackForecast.of(game)
+            # Never spend what the fleets the corporation needs to survive will cost.
+            budget = corp.treasury - self._build_reserve(game, forecast, corp)
+            candidates = [a for a in candidates if a.cost <= budget]
         if not candidates:
             return NoNetworkAction()
-        current = game.revenue(corp).total
         reach = game.reachable(corp)
-        unreached = [p for p in game.board.planets if p.hex not in reach]
-        to_go = self._route_costs(game, corp, unreached) if self.policy.routing == "path" else {}
+        gains: Sequence[float]
+        if death_star:
+            revenue_gains = self._death_star_gains(game, forecast, corp, candidates, reach)
+            # A build that costs revenue (by taking the money for a fleet) is never worth it.
+            kept = [(a, g) for a, g in zip(candidates, revenue_gains) if g >= 0]
+            if not kept:
+                return NoNetworkAction()
+            candidates = [a for a, _ in kept]
+            targets = self._death_star_targets(game, forecast, reach)
+            blocked = self._blocked_hexes(game)
+            rush = self._rush_bonuses(game, forecast, corp, candidates, reach, blocked)
+            gains = [g + r for (_, g), r in zip(kept, rush)]
+        else:
+            current = game.revenue(corp).total
+            gains = [self._revenue_after(game, corp, a, reach) - current for a in candidates]
+            targets = {p.hex: 1.0 for p in game.board.planets if p.hex not in reach}
+            blocked = frozenset()
+        to_go = (
+            self._weighted_route_costs(game, corp, targets, blocked)
+            if self.policy.routing == "path"
+            else {}
+        )
         scored: list[tuple[float, NetworkAction]] = []
-        for action in candidates:
-            gain = self._revenue_after(game, corp, action, reach) - current
+        for action, gain in zip(candidates, gains):
             if self.policy.routing == "path":
                 remaining = self._remaining_route_cost(game, action, reach, to_go)
                 progress_penalty = remaining * self.policy.path_cost_weight
             else:
                 progress_penalty = (
-                    self._straight_distance(action, unreached)
-                    * self.policy.lookahead_distance_weight
+                    self._straight_distance(action, targets) * self.policy.lookahead_distance_weight
                 )
             score = (
                 gain * 100
@@ -361,25 +483,53 @@ class GreedyBot:
         return best[1]
 
     @staticmethod
-    def _straight_distance(action: NetworkAction, unreached: list[Planet]) -> int:
-        """Hexes from where ``action`` builds to the nearest unreached planet, ignoring terrain."""
+    def _straight_distance(action: NetworkAction, targets: dict[Hex, float]) -> float:
+        """Hexes from where ``action`` builds to the nearest target, ignoring terrain. Targets
+        map to weights (1 for a planet); a target of weight w counts as 1/w as far."""
         if isinstance(action, (Chart, ExtendService)):
             position: Hex = action.hex
         else:
             assert isinstance(action, Upgrade)
             position = action.hex.neighbor(action.new_exit)
-        return min((p.hex.distance(position) for p in unreached), default=0)
+        return min(
+            (_weighted(h.distance(position), weight) for h, weight in targets.items()), default=0
+        )
 
     @staticmethod
-    def _route_costs(game: Game, corp: Corporation, unreached: list[Planet]) -> dict[Hex, int]:
-        """Cheapest cost to build from each hex to some unreached planet, charged per hex entered.
+    def _weighted_route_costs(
+        game: Game, corp: Corporation, targets: dict[Hex, float], blocked: frozenset[Hex]
+    ) -> dict[Hex, float]:
+        """``_route_costs`` to the nearest target, where targets map to weights (1 for a
+        planet) and a route to a target of weight w costs 1/w as much."""
+        by_weight: dict[float, list[Hex]] = {}
+        for hex, weight in targets.items():
+            by_weight.setdefault(weight, []).append(hex)
+        combined: dict[Hex, float] = {}
+        for weight, hexes in by_weight.items():
+            for hex, cost in GreedyBot._route_costs(game, corp, hexes, blocked).items():
+                scaled = _weighted(cost, weight)
+                if hex not in combined or scaled < combined[hex]:
+                    combined[hex] = scaled
+        return combined
+
+    @staticmethod
+    def _route_costs(
+        game: Game, corp: Corporation, targets: list[Hex], blocked: frozenset[Hex]
+    ) -> dict[Hex, int]:
+        """Cheapest cost to build from each hex to some target, charged per hex entered.
 
         Open space costs the chart cost, a nebula adds its surcharge, a tile someone already
         charted costs the service cost, and the corporation's own service is free. Asteroid
-        fields are not on the board's adjacency, so routes go around them.
+        fields are not on the board's adjacency, so routes go around them, as they go around
+        ``blocked`` hexes. Two hubs never connect directly, so a route never steps from a
+        planet (or a reserved construction site, a future hub) straight to an adjacent one.
         """
         board, net = game.board, game.network
         served = net.service_of(corp.id)
+        future_hubs = frozenset(game.death_star_reserved_sites())
+
+        def is_hub(hex: Hex) -> bool:
+            return board.is_planet(hex) or hex in future_hubs
 
         def entry_cost(hex: Hex) -> int:
             if board.is_planet(hex) or hex in served:
@@ -388,7 +538,7 @@ class GreedyBot:
                 return game.config.service_cost
             return game.chart_cost(hex)
 
-        dist: dict[Hex, int] = {p.hex: 0 for p in unreached}
+        dist: dict[Hex, int] = {h: 0 for h in targets}
         heap = [(0, h) for h in dist]
         heapq.heapify(heap)
         while heap:
@@ -396,6 +546,8 @@ class GreedyBot:
             if d > dist.get(hex, d):
                 continue
             for _, nxt in board.neighbors(hex):
+                if nxt in blocked or (is_hub(nxt) and is_hub(hex)):
+                    continue
                 nd = d + entry_cost(nxt)
                 if nd < dist.get(nxt, nd + 1):
                     dist[nxt] = nd
@@ -404,8 +556,8 @@ class GreedyBot:
 
     @staticmethod
     def _remaining_route_cost(
-        game: Game, action: NetworkAction, reach: frozenset[Hex], to_go: dict[Hex, int]
-    ) -> int:
+        game: Game, action: NetworkAction, reach: frozenset[Hex], to_go: Mapping[Hex, float]
+    ) -> float:
         """Route cost still to pay beyond ``action``, judged by the hexes its far exits lead to.
 
         Exits that lead back into the corporation's own network make no progress, so a build
@@ -431,10 +583,12 @@ class GreedyBot:
         ]
         return min((to_go[h] for h in far if h in to_go), default=NO_ROUTE_COST)
 
-    def _revenue_after(
-        self, game: Game, corp: Corporation, action: NetworkAction, reach: frozenset[Hex]
-    ) -> int:
-        """Revenue after ``action``; ``reach`` is the corporation's current reachable set."""
+    @staticmethod
+    def _planets_after(
+        game: Game, corp: Corporation, action: NetworkAction, reach: frozenset[Hex]
+    ) -> list[Planet]:
+        """The planets ``corp`` would reach after ``action``; ``reach`` is its reachable set
+        now."""
         net = game.network.copy()
         if isinstance(action, Chart):
             net.chart(corp.id, action.hex, action.exits, reach)
@@ -442,9 +596,33 @@ class GreedyBot:
             net.upgrade(corp.id, action.hex, action.new_exit, reach)
         elif isinstance(action, ExtendService):
             net.extend_service(corp.id, action.hex, reach)
-        reach = net.reachable(corp.id, game.homeworld(corp))
-        planets = [game.board.planet_at(h) for h in reach if game.board.is_planet(h)]
-        return compute_revenue(planets, game.config).total
+        after = net.reachable(corp.id, game.homeworld(corp))
+        return [game.board.planet_at(h) for h in after if game.board.is_planet(h)]
+
+    def _revenue_after(
+        self, game: Game, corp: Corporation, action: NetworkAction, reach: frozenset[Hex]
+    ) -> int:
+        """Revenue after ``action`` under the standard rules, with no pair cap."""
+        planets = self._planets_after(game, corp, action, reach)
+        return game.planet_revenue(planets).total
+
+    def choose_fleet_action(
+        self, game: Game, corp: Corporation, legal: list[FleetAction]
+    ) -> FleetAction:
+        """Buy the mandatory first fleet, then fleets by ``fleet_target`` or by value (see
+        ``_wants_fleet``)."""
+        buys = [a for a in legal if isinstance(a, BuyFleet)]
+        if not buys:
+            return FinishFleets()
+        wanted = self._wants_fleet(
+            game,
+            TrackForecast.of(game),
+            corp.fleets,
+            game.reachable_planets(corp),
+            game.contract_value(),
+            buys[0].cost,
+        )
+        return buys[0] if wanted else FinishFleets()
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool:
         intended = self._intended_dividend(game, corp, revenue)
@@ -453,6 +631,8 @@ class GreedyBot:
         return intended
 
     def _intended_dividend(self, game: Game, corp: Corporation, revenue: int) -> bool:
+        if game.config.death_star_rules:
+            return self._intended_death_star_dividend(game, corp, revenue)
         steps = self.policy.pay_when_steps
         if steps and game.payout_steps(revenue, game.price(corp)) >= steps:
             return True
@@ -475,6 +655,266 @@ class GreedyBot:
             for action in game.legal_network_actions(unlimited)
             if not isinstance(action, NoNetworkAction)
         )
+
+    # --- Death Star rules ------------------------------------------------------
+
+    def _wants_fleet(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        owned: int,
+        planets: list[Planet],
+        contract_value: int,
+        price: int,
+    ) -> bool:
+        """Whether a corporation owning ``owned`` fleets, reaching ``planets``, would buy one
+        more at ``price`` (assuming it can pay and is under the limit).
+
+        The first fleet is mandatory. A ``fleet_target`` policy buys up to its target and stops.
+        Otherwise it buys when the pair the fleet adds pays back its price within
+        ``fleet_payback_turns`` (and the turns the game is expected to last), or when it owns
+        one, the second would earn something, and it must otherwise keep a replacement's price
+        against a seizure: a second fleet protects it as well as the money would.
+        """
+        if owned == 0:
+            return True
+        target = self.policy.fleet_target
+        if target > 0:
+            return owned < target
+        now = self._capped_revenue(game, planets, owned, contract_value)
+        marginal = self._capped_revenue(game, planets, owned + 1, contract_value) - now
+        if owned == 1 and marginal > 0 and forecast.fleet_reserve(1, now) > 0:
+            return True
+        return marginal * min(forecast.turns_left, self.policy.fleet_payback_turns) >= price
+
+    def _fleets_to_buy(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        corp: Corporation,
+        treasury: int,
+        planets: list[Planet],
+        contract_value: int,
+    ) -> int:
+        """How many fleets this turn's fleet step would buy with ``treasury`` and ``planets``."""
+        room = max(game.config.fleet_limit - corp.fleets, 0)
+        bought = 0
+        for price in next_fleet_prices(game, room):
+            if treasury < price or not self._wants_fleet(
+                game, forecast, corp.fleets + bought, planets, contract_value, price
+            ):
+                break
+            treasury -= price
+            bought += 1
+        return bought
+
+    @staticmethod
+    def _capped_revenue(
+        game: Game, planets: list[Planet], max_pairs: int, contract_value: int
+    ) -> int:
+        return compute_revenue(
+            planets, game.config, contract_value=contract_value, max_pairs=max_pairs
+        ).total
+
+    def _build_reserve(self, game: Game, forecast: TrackForecast, corp: Corporation) -> int:
+        """Treasury no build may spend: the mandatory first fleet if the corporation has none,
+        the replacement a seizure could make necessary, and the policy's war chest."""
+        if corp.fleets == 0:
+            # It will run one pair once it has bought the mandatory fleet.
+            revenue = self._capped_revenue(
+                game, game.reachable_planets(corp), 1, game.contract_value()
+            )
+            survival = game.fleet_price() + forecast.fleet_reserve(1, revenue)
+        else:
+            survival = forecast.fleet_reserve(
+                corp.fleets, self._lasting_revenue(game, forecast, corp)
+            )
+        chest = int(self.policy.treasury_reserve_fleets * forecast.cautious_price)
+        return max(survival, chest)
+
+    @staticmethod
+    def _lasting_revenue(game: Game, forecast: TrackForecast, corp: Corporation) -> int:
+        """Revenue a turn the corporation can count on until the next seizure: its current
+        revenue, less its contract pairs if the site is expected to move away first."""
+        result = game.revenue(corp)
+        if forecast.rounds_to_site_move >= forecast.seizure_deadline:
+            return result.total
+        return result.total - sum(p.value for p in result.pairs if p.contract)
+
+    def _site_weight(self, game: Game, forecast: TrackForecast) -> float:
+        """How much builds value the active site now: ``contract_weight``, discounted by the
+        share of the game's remaining turns the site will still be there."""
+        weight = self.policy.contract_weight
+        if weight == 0 or game.death_star_site() is None or forecast.turns_left <= 0:
+            return 0.0
+        return weight * min(1.0, forecast.site_turns_left / forecast.turns_left)
+
+    def _planning_view(
+        self, game: Game, site_weight: float, planets: list[Planet]
+    ) -> tuple[list[Planet], int]:
+        """The planets and contract value builds are valued with: the site's contracts
+        weighted by ``site_weight``, and the site left out entirely at weight 0."""
+        site = game.death_star_site()
+        if site_weight == 0 and site is not None:
+            planets = [p for p in planets if p.hex != site]
+        return planets, round(game.contract_value() * site_weight)
+
+    def _death_star_gains(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        corp: Corporation,
+        candidates: Sequence[NetworkAction],
+        reach: frozenset[Hex],
+    ) -> list[int]:
+        """Each build's revenue gain under the pair cap it would really have this turn: the
+        fleets owned plus those the fleet step would buy with what the build leaves."""
+        weight = self._site_weight(game, forecast)
+        planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
+        fleets = corp.fleets + self._fleets_to_buy(
+            game, forecast, corp, corp.treasury, planets, contract_value
+        )
+        current = self._capped_revenue(game, planets, fleets, contract_value)
+        gains = []
+        for action in candidates:
+            after, _ = self._planning_view(
+                game, weight, self._planets_after(game, corp, action, reach)
+            )
+            fleets = corp.fleets + self._fleets_to_buy(
+                game, forecast, corp, corp.treasury - action.cost, after, contract_value
+            )
+            gains.append(self._capped_revenue(game, after, fleets, contract_value) - current)
+        return gains
+
+    def _death_star_targets(
+        self, game: Game, forecast: TrackForecast, reach: frozenset[Hex]
+    ) -> dict[Hex, float]:
+        """Where builds head, each target with a weight: 1 for an unreached planet, and for a
+        construction site how much it is valued, so a site of weight 2 is aimed at as if half as
+        far. The active site is left out at weight 0; the reserved next site counts only once
+        the site is expected to move within ``RESERVED_SITE_LEAD_TURNS``, weighted by the share
+        of the remaining turns it will then have."""
+        site = game.death_star_site()
+        targets: dict[Hex, float] = {
+            p.hex: 1.0 for p in game.board.planets if p.hex not in reach and p.hex != site
+        }
+        weight = self._site_weight(game, forecast)
+        if site is not None and site not in reach and weight > 0:
+            targets[site] = weight
+        reserved = game.death_star_reserved_sites()
+        to_move = forecast.rounds_to_site_move
+        turns = forecast.turns_left
+        if (
+            reserved
+            and self.policy.contract_weight > 0
+            and to_move <= RESERVED_SITE_LEAD_TURNS
+            and turns > to_move
+        ):
+            targets[reserved[0]] = self.policy.contract_weight * (turns - to_move) / turns
+        return targets
+
+    def _rush_bonuses(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        corp: Corporation,
+        candidates: Sequence[NetworkAction],
+        reach: frozenset[Hex],
+        blocked: frozenset[Hex],
+    ) -> list[float]:
+        """Extra gain, in revenue units, for builds that bring an unreached active site closer,
+        for a policy that values the site above a planet (site weight w > 1): (w - 1) times the
+        contract value per chart's worth (or hex, with straight routing) of progress. All 0
+        otherwise."""
+        site = game.death_star_site()
+        eagerness = self._site_weight(game, forecast) - 1
+        if site is None or site in reach or eagerness <= 0:
+            return [0.0] * len(candidates)
+        frontier = {
+            n
+            for h in reach
+            for _, n in game.board.neighbors(h)
+            if n not in reach and not game.board.is_planet(n)
+        }
+        per_unit = eagerness * game.contract_value()
+        if self.policy.routing == "path":
+            to_site = self._route_costs(game, corp, [site], blocked)
+            now = min((to_site[h] for h in frontier if h in to_site), default=NO_ROUTE_COST)
+            unit = game.config.chart_cost
+            after = [self._remaining_route_cost(game, a, reach, to_site) for a in candidates]
+        else:
+            now = min((h.distance(site) for h in frontier), default=0)
+            unit = 1
+            after = [self._straight_distance(a, {site: 1.0}) for a in candidates]
+        return [per_unit * max(0.0, now - left) / unit for left in after]
+
+    def _blocked_hexes(self, game: Game) -> frozenset[Hex]:
+        """Hexes routes may not pass through: reserved sites, which cannot be charted, and the
+        active site for a policy that will not go near it."""
+        blocked = set(game.death_star_reserved_sites())
+        site = game.death_star_site()
+        if site is not None and self.policy.contract_weight == 0:
+            blocked.add(site)
+        return frozenset(blocked)
+
+    def _intended_death_star_dividend(self, game: Game, corp: Corporation, revenue: int) -> bool:
+        """The dividend decision under the Death Star rules.
+
+        Survival comes first: withhold while the treasury is below the fleet reserve or the
+        policy's war chest. Then the usual knobs, except that a treasury below the
+        ``pay_threshold`` target withholds only when the cash would buy something: a fleet the
+        corporation wants or a build that would raise revenue. Paying when nothing needs the
+        money avoids withholding turn after turn for builds that are never made.
+        """
+        forecast = TrackForecast.of(game)
+        if corp.treasury < forecast.fleet_reserve(
+            corp.fleets, self._lasting_revenue(game, forecast, corp)
+        ):
+            return False
+        if corp.treasury < self.policy.treasury_reserve_fleets * forecast.cautious_price:
+            return False
+        steps = self.policy.pay_when_steps
+        if steps and game.payout_steps(revenue, game.price(corp)) >= steps:
+            return True
+        if game.round_number < self.policy.withhold_until_round:
+            return False
+        if self.policy.withhold_for_builds:
+            return not self._needs_cash_death_star(game, forecast, corp)
+        if revenue < self.policy.withhold_when_revenue_below:
+            return False
+        if corp.treasury >= game.config.chart_cost * self.policy.pay_threshold:
+            return True
+        return not self._needs_cash_death_star(game, forecast, corp)
+
+    def _needs_cash_death_star(
+        self, game: Game, forecast: TrackForecast, corp: Corporation
+    ) -> bool:
+        """Whether the treasury cannot pay for a fleet this policy wants, or for a build that
+        would raise revenue with the fleets the corporation owns."""
+        weight = self._site_weight(game, forecast)
+        planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
+        price = game.fleet_price()
+        if corp.fleets < game.config.fleet_limit and price > corp.treasury:
+            if self._wants_fleet(game, forecast, corp.fleets, planets, contract_value, price):
+                return True
+        unlimited = copy.copy(corp)
+        unlimited.treasury = 10**9
+        reach = game.reachable(corp)
+        current = self._capped_revenue(game, planets, corp.fleets, contract_value)
+        for action in game.legal_network_actions(unlimited):
+            if isinstance(action, NoNetworkAction) or action.cost <= corp.treasury:
+                continue
+            after, _ = self._planning_view(
+                game, weight, self._planets_after(game, corp, action, reach)
+            )
+            if self._capped_revenue(game, after, corp.fleets, contract_value) > current:
+                return True
+        return False
+
+
+def _weighted(cost: int, weight: float) -> float:
+    """``cost`` as it counts toward a target of ``weight``: unchanged at weight 1."""
+    return cost if weight == 1 else cost / weight
 
 
 def _is_first_par(action: BuyShare, buys: list[BuyShare]) -> bool:

@@ -15,9 +15,11 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from bby18.actions import (
+    BuyFleet,
     BuyShare,
     Chart,
     ExtendService,
+    FinishFleets,
     NoNetworkAction,
     PassStock,
     SellShares,
@@ -28,7 +30,7 @@ from bby18.config import GameConfig
 from bby18.game import Game, LogEntry
 from bby18.hexgrid import Direction, Hex
 from bby18.network import Tile
-from bby18.session import Action, Dividend, GameSession, Phase, PlayedMove
+from bby18.session import OPERATING_PHASES, Action, Dividend, GameSession, Phase, PlayedMove
 from bby18.state import Corporation, Player
 
 Json = dict[str, Any]
@@ -82,6 +84,10 @@ def action_to_json(action: Action) -> Json:
         return {"type": "service", "hex": hex_to_json(action.hex), "cost": action.cost}
     if isinstance(action, NoNetworkAction):
         return {"type": "no_action"}
+    if isinstance(action, BuyFleet):
+        return {"type": "buy_fleet", "cost": action.cost}
+    if isinstance(action, FinishFleets):
+        return {"type": "finish_fleets"}
     if isinstance(action, Dividend):
         return {"type": "dividend", "choice": action.value}
     raise TypeError(f"Cannot serialize {action!r}")
@@ -135,6 +141,7 @@ def _corp_to_json(game: Game, corp_id: str) -> Json:
         "poolShares": corp.pool_shares,
         "president": corp.president,
         "lastRevenue": corp.last_revenue,
+        "fleets": corp.fleets,
         "reachablePlanets": [p.name for p in game.reachable_planets(corp)] if corp.floated else [],
         "revenue": (
             {
@@ -190,9 +197,7 @@ def _turn_to_json(session: GameSession) -> Json:
         "roundNumber": game.round_number,
         "currentPlayer": None if over else session.current_player.id,
         "currentCorporation": (
-            session.current_corporation.id
-            if session.phase in (Phase.NETWORK, Phase.DIVIDEND)
-            else None
+            session.current_corporation.id if session.phase in OPERATING_PHASES else None
         ),
         "priorityPlayer": game.players[game.priority_player].id,
         "operatingOrder": session.operating_queue,
@@ -206,7 +211,7 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
     game = session.game
     return {
         **_turn_to_json(session),
-        "totalRounds": game.config.total_rounds,
+        "totalRounds": game.round_limit(),
         "waitingOnHuman": session.waiting_on_human(),
         "legalActions": [action_to_json(a) for a in session.legal_actions()],
         "players": [

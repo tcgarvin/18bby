@@ -171,6 +171,98 @@ instead of 34-35%, and final share prices fall 22-31% (3 players: 219 to 154), t
 player worth down 19-28%. Capital binds harder; the 2026-09-28 note that "slightly over-tight
 is acceptable" still applies, but this is the tightest the economy has been.
 
+## Death Star and fleets (decided 2026-10-25, experimental)
+
+**Status:** designed with the user and being built behind one config switch,
+`death_star_rules` (default off), so the strategy stable can compare it with the current rules.
+It is not the adopted rule set until a sweep supports it. Every number below is a placeholder in
+`config.py`.
+
+**Why:** nothing ever declined. Revenue was a permanent function of a network that only grew,
+treasury cash was worth nothing at the end, and the game ran a fixed twelve operating rounds, so
+paying every dividend dominated (stable tournament, 2026-10-25) and selling a share only ever
+swapped one ever-rising bond for another. Flat decline alone (upkeep, scarcer capital) only moves
+the winner; the mechanism needs a shared resource whose cost to one player depends on what the
+others do. Fleets drawn from a shared supply, a forced expense at known moments, and a moving
+contract give that.
+
+### Fleets
+
+- **One fleet runs one pair.** Revenue is the best matching that uses at most as many pairs as
+  the corporation owns fleets. Contract pairs use fleets too.
+- **Shared supply in price tiers:** 6 fleets at 60, 6 at 90, 6 at 120, then unlimited at 160.
+  The price rises when a tier sells out. Every fleet is identical whatever it cost: Imperial
+  transit licensing gets dearer, the ships do not get better.
+- **Limit 4** per corporation. Fleets cannot be sold, traded or discarded.
+- **Operating turn:** network actions, then **buy fleets**, then revenue and pay or withhold.
+  Each fleet bought costs the price at the moment of purchase, so one purchase step can cross a
+  tier. Buying fleets does not use a network action.
+- **Mandatory:** a corporation must end its fleet step owning at least one fleet. A corporation
+  that has just floated can always afford one.
+
+### Bankruptcy
+
+- **Trigger:** at its fleet step a corporation owns no fleets and its treasury cannot pay the
+  current fleet price.
+- **Effect:** the corporation **closes** for good. Its shares leave the game and are worth 0 to
+  every holder; nobody pays from personal cash. Its treasury goes to the bank. Its charted tiles
+  stay on the board and other corporations keep their service on them; it loses its own service.
+  It never operates again and cannot be restarted.
+- Nothing stops a president from spending the treasury on network actions first and then
+  failing; that is a playing mistake, not an illegal move.
+
+### Death Star construction
+
+- **The construction site** is a planet-like hub with the tag **W** (Imperial Works). Like any
+  planet it has every exit, needs no charting, and a network may pass through it.
+- **Contract pairs:** Resources, Industry or Shipyard with W. A contract pair scores the current
+  stage's contract value, never the regional bonus. It is chosen by the revenue matching like any
+  other pair: a president cannot refuse a contract the best matching uses. The site may also be
+  half of a basic route like any planet; only contract pairs count as deliveries.
+- **Two sites, placed by seed** with the terrain: the first on a space hex in the **Outer Rim**,
+  the second in the **Mid Rim** (a space hex's region is that of its nearest planet, as on the
+  map). Neither is on terrain, each has at least two chartable neighbours, and each is at least
+  three hexes from every homeworld. Both are shown from the start.
+- **The second site is reserved** until the site moves there: it cannot be charted, so no
+  network passes through it yet, but tiles may point at it, so corporations can build toward it
+  in advance. *(Placeholder chosen while building, not discussed: without it someone could chart
+  a tile on the future site.)*
+- **The track:** each contract pair a corporation scores puts one cube on the Death Star track,
+  whether the revenue is paid or withheld. The Empire adds one cube at the end of every stock
+  round.
+- **Stages** need 6 cubes each. Extra cubes carry over. A stage's result applies at the end of
+  the operating round (or stock round) in which it fills; if two stages fill together, they apply
+  in order.
+
+| Stage | Contract value while building it | Result when it fills |
+|---|---|---|
+| 1. Frame | 40 | **Seizure:** every corporation with a fleet loses one |
+| 2. Superstructure | 50 | **The site moves** to the Mid Rim; the old hex becomes empty, uncharted space |
+| 3. Superlaser | 60 | **Seizure:** every corporation with a fleet loses one |
+| 4. Completion | 70 | **The station launches:** the site leaves the board and its hex becomes empty space. The current set of operating rounds finishes, then the game ends (the Battle of Yavin). |
+
+- Seized fleets leave the game; they do not return to the supply.
+- When a site hex becomes empty space, tiles pointing into it stay on the board, and any network
+  that ran through the site is cut there.
+- **Backstop:** if the station is not finished, the game ends after round 8.
+
+**Readings chosen while building** (placeholders, not discussed):
+
+- A stage counts as being built until its result applies, so a contract pair scored after a stage
+  fills but before the end of that round still earns the filled stage's value.
+- A "chartable neighbour" is an on-board neighbour that is not a planet, an asteroid field or the
+  other site; a nebula counts. The two sites are placed from their own random stream, so a seed's
+  terrain is the same with the rules on or off.
+- A site may be next to a planet (about 80% of first sites and 95% of second sites on this map;
+  forbidding it leaves the Mid Rim almost no qualifying hex). **Decided by the user 2026-10-25:**
+  two hubs never connect directly. Traffic between a planet and an adjacent site needs at least
+  one charted lane, as between any two planets (no two planets on the map are adjacent, so the
+  standard rules are unaffected).
+- Every fleet step ends with an explicit "finish", even at the limit, where it is the only legal
+  move. A closed corporation has no president, so its former president may start another one.
+- With the rules on, `total_rounds` is ignored: the backstop (`death_star_backstop_rounds`) and
+  the launch end the game.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,

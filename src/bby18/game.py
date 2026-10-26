@@ -11,9 +11,12 @@ from dataclasses import dataclass, field, replace
 from itertools import combinations
 
 from bby18.actions import (
+    BuyFleet,
     BuyShare,
     Chart,
     ExtendService,
+    FinishFleets,
+    FleetAction,
     NetworkAction,
     NoNetworkAction,
     PassStock,
@@ -23,13 +26,26 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Board, Planet, Terrain, load_board
-from bby18.config import DEFAULT_CONFIG, GameConfig
+from bby18.config import COMPLETION, DEFAULT_CONFIG, SEIZURE, SITE_MOVE, GameConfig
+from bby18.death_star import (
+    SITE_NAME,
+    DeathStarTrack,
+    describe_result,
+    fleet_price,
+    fleet_tier_index,
+    place_sites,
+    site_planet,
+    stage_name,
+)
 from bby18.hexgrid import Hex
 from bby18.market import StockMarket
 from bby18.network import HyperspaceNetwork, IllegalAction
-from bby18.revenue import RevenueResult, compute_revenue
+from bby18.revenue import NO_PAIR_LIMIT, RevenueResult, compute_revenue
 from bby18.state import NO_PLAYER, Corporation, CorpStatus, Player
 from bby18.terrain import generate_terrain
+
+EMPIRE = "Empire"
+"""Log actor for Death Star track events and the fleet supply."""
 
 
 @dataclass
@@ -57,12 +73,17 @@ class Game:
     stock_rounds_played: int = 0
     log: list[LogEntry] = field(default_factory=list)
     _floats: int = 0
+    death_star: DeathStarTrack = field(default_factory=DeathStarTrack)
+    """The construction sites and track; inactive unless ``config.death_star_rules``."""
+    fleets_sold: int = 0
+    """Fleets sold from the shared supply so far (experimental Death Star rules)."""
 
     @classmethod
     def new(
         cls, player_names: list[str], config: GameConfig = DEFAULT_CONFIG, seed: int = 0
     ) -> Game:
-        """A fresh game. ``seed`` fixes the terrain layout; the same seed gives the same sky."""
+        """A fresh game. ``seed`` fixes the terrain layout (and, under the Death Star rules,
+        the construction sites); the same seed gives the same sky."""
         config.validate_rule_variants()
         board = load_board(config.map_file)
         board = board.with_terrain(generate_terrain(board, seed, config))
@@ -72,7 +93,7 @@ class Game:
         for spec in config.corporations:
             board.planet_named(spec.homeworld)  # validates the homeworld exists
             corporations[spec.id] = Corporation(spec, ipo_shares=config.shares_per_corporation)
-        return cls(
+        game = cls(
             config=config,
             board=board,
             players=players,
@@ -80,6 +101,19 @@ class Game:
             network=HyperspaceNetwork(board),
             market=StockMarket(config),
         )
+        if config.death_star_rules:
+            game.death_star = DeathStarTrack(
+                sites=place_sites(board, seed, config),
+                final_round=config.death_star_backstop_rounds,
+            )
+            game._place_site_on_board()
+            first, second = game.death_star.sites
+            game._log(
+                EMPIRE,
+                f"begins the Death Star at {first} ({game.board.region_of(first)}); the site "
+                f"will move to {second} ({board.region_of(second)}), reserved until then",
+            )
+        return game
 
     # --- helpers -------------------------------------------------------------
 
@@ -110,10 +144,25 @@ class Game:
         ]
 
     def revenue(self, corp: Corporation) -> RevenueResult:
-        result = compute_revenue(self.reachable_planets(corp), self.config)
+        """This turn's revenue: the best matching of the reachable planets, using at most one
+        pair per fleet under the Death Star rules."""
+        result = self.planet_revenue(self.reachable_planets(corp), self.pair_cap(corp))
         if self.config.homeworld_basic_income > 0:
             result = replace(result, floor=self.config.homeworld_basic_income)
         return result
+
+    def planet_revenue(
+        self, planets: list[Planet], max_pairs: int = NO_PAIR_LIMIT
+    ) -> RevenueResult:
+        """Pair revenue of ``planets`` at the current contract value, using at most
+        ``max_pairs`` pairs, without the experimental income floor. For what-if evaluation."""
+        return compute_revenue(
+            planets, self.config, contract_value=self.contract_value(), max_pairs=max_pairs
+        )
+
+    def pair_cap(self, corp: Corporation) -> int:
+        """Most pairs ``corp`` may run: its fleets under the Death Star rules, else no cap."""
+        return corp.fleets if self.config.death_star_rules else NO_PAIR_LIMIT
 
     def chart_cost(self, hex: Hex) -> int:
         """What charting ``hex`` costs: nebulae carry a surcharge."""
@@ -136,6 +185,10 @@ class Game:
             count += shares - (1 if self.corp(corp_id).president == player.id else 0)
         return count
 
+    def closed_corporations(self) -> list[Corporation]:
+        """Corporations that went bankrupt (experimental Death Star rules)."""
+        return [c for c in self.corporations.values() if c.status is CorpStatus.CLOSED]
+
     def operating_order(self) -> list[Corporation]:
         floated = [c for c in self.corporations.values() if c.floated]
         return sorted(floated, key=lambda c: (-self.price(c), c.float_order))
@@ -149,6 +202,8 @@ class Game:
         actions: list[StockAction] = [PassStock()]
         can_buy = self.certificate_count(player) < self.config.certificate_limit
         for corp in self.corporations.values():
+            if corp.status is CorpStatus.CLOSED:
+                continue
             if corp.status is CorpStatus.UNSTARTED:
                 if can_buy and corp.id not in sold_this_round:
                     for par in self.config.par_prices:
@@ -201,6 +256,8 @@ class Game:
 
     def _buy(self, player: Player, action: BuyShare, sold_this_round: set[str]) -> None:
         corp = self.corp(action.corp_id)
+        if corp.status is CorpStatus.CLOSED:
+            raise IllegalAction(f"{corp.id} is closed; its shares have left the game")
         if action.corp_id in sold_this_round:
             raise IllegalAction(f"{player.name} sold {corp.id} this round and cannot buy it")
         if self.certificate_count(player) >= self.config.certificate_limit:
@@ -369,11 +426,14 @@ class Game:
         Withholding puts it all in the treasury and moves the price left one column. Paying
         gives each player-held share its per-share amount; shares in the IPO or pool earn
         nothing, and that money and any rounding remainder stay with the bank. The price moves
-        right by ``payout_steps``.
+        right by ``payout_steps``. Under the Death Star rules each contract pair scored puts a
+        cube on the track, whether the revenue is paid or withheld.
         """
         result = self.revenue(corp)
         corp.last_revenue = result.total
         price_before = self.price(corp)
+        if self.config.death_star_rules and result.contract_pairs:
+            self._add_cubes(corp.id, result.contract_pairs)
         if result.total == 0 or not pay:
             corp.treasury += result.total
             self.bank -= result.total
@@ -403,14 +463,205 @@ class Game:
 
     def finish_stock_round(self) -> None:
         """End-of-stock-round market moves: a started corporation with no shares left in the
-        IPO or the pool is sold out and moves up one row."""
+        IPO or the pool is sold out and moves up one row. Under the Death Star rules the Empire
+        then adds its cubes to the track (``resolve_death_star`` applies any stage filled)."""
         self.stock_rounds_played += 1
         for corp in self.corporations.values():
-            if corp.status is CorpStatus.UNSTARTED:
+            if corp.status in (CorpStatus.UNSTARTED, CorpStatus.CLOSED):
                 continue
             if corp.ipo_shares == 0 and corp.pool_shares == 0:
                 corp.market_cell = self.market.up(corp.market_cell)
                 self._log(corp.id, f"is sold out; price {self.price(corp)}")
+        if self.config.death_star_rules and self.config.empire_cubes_per_stock_round > 0:
+            self._add_cubes(EMPIRE, self.config.empire_cubes_per_stock_round)
+
+    # --- fleets and bankruptcy (experimental Death Star rules) -------------------
+
+    def fleet_price(self) -> int:
+        """What the next fleet from the shared supply costs."""
+        return fleet_price(self.config.fleet_tiers, self.fleets_sold)
+
+    def fleet_tier(self) -> int:
+        """Index in ``config.fleet_tiers`` of the tier the next fleet comes from."""
+        return fleet_tier_index(self.config.fleet_tiers, self.fleets_sold)
+
+    def legal_fleet_actions(self, corp: Corporation) -> list[FleetAction]:
+        """A corporation's options in its fleet step: buy one more fleet if it is under the
+        limit and can pay, and finish once it owns at least one. Empty means it is bankrupt
+        (see ``must_close``)."""
+        self._require_death_star_rules()
+        actions: list[FleetAction] = []
+        price = self.fleet_price()
+        if corp.fleets < self.config.fleet_limit and corp.treasury >= price:
+            actions.append(BuyFleet(price))
+        if corp.fleets >= 1:
+            actions.append(FinishFleets())
+        return actions
+
+    def apply_fleet_action(self, corp: Corporation, action: FleetAction) -> None:
+        """Buy one fleet at the current price, or finish the fleet step."""
+        self._require_death_star_rules()
+        if isinstance(action, FinishFleets):
+            if corp.fleets < 1:
+                raise IllegalAction(f"{corp.id} must own a fleet before finishing")
+            self._log(corp.id, f"finishes buying fleets with {corp.fleets}")
+            return
+        if not isinstance(action, BuyFleet):
+            raise IllegalAction(f"Unknown fleet action {action!r}")
+        price = self.fleet_price()
+        if action.cost != price:
+            raise IllegalAction(f"A fleet costs {price} now, not {action.cost}")
+        if corp.fleets >= self.config.fleet_limit:
+            raise IllegalAction(f"{corp.id} already owns {corp.fleets} fleets, the limit")
+        self._require_treasury(corp, price)
+        corp.treasury -= price
+        self.bank += price
+        corp.fleets += 1
+        self.fleets_sold += 1
+        self._log(corp.id, f"buys a fleet for {price}; owns {corp.fleets}")
+        if self.fleet_price() != price:
+            self._log(EMPIRE, f"fleet price rises to {self.fleet_price()}")
+
+    def must_close(self, corp: Corporation) -> bool:
+        """Whether ``corp``, at its fleet step, is bankrupt: it owns no fleet and its treasury
+        cannot pay the current fleet price."""
+        return (
+            self.config.death_star_rules
+            and corp.floated
+            and corp.fleets == 0
+            and corp.treasury < self.fleet_price()
+        )
+
+    def close_bankrupt(self, corp: Corporation) -> None:
+        """Close a bankrupt corporation for good.
+
+        Its shares leave the game (worth 0 to every holder, nobody pays), its treasury goes to
+        the bank, and it loses its service; its tiles stay on the board for everyone else. It
+        never operates, trades or counts toward a certificate limit again.
+        """
+        if not self.must_close(corp):
+            raise IllegalAction(f"{corp.id} is not bankrupt")
+        treasury = corp.treasury
+        price = self.fleet_price()
+        for player in self.players:
+            player.shares.pop(corp.id, None)
+        corp.status = CorpStatus.CLOSED
+        corp.ipo_shares = 0
+        corp.pool_shares = 0
+        corp.president = NO_PLAYER
+        corp.last_revenue = 0
+        self.bank += treasury
+        corp.treasury = 0
+        self.network.remove_service(corp.id)
+        self._log(
+            corp.id,
+            f"is bankrupt: no fleet, and its treasury of {treasury} cannot buy one at {price}. "
+            "It closes; its shares are worthless and its tiles stay for others",
+        )
+
+    def _require_death_star_rules(self) -> None:
+        if not self.config.death_star_rules:
+            raise IllegalAction("Fleets exist only under the Death Star rules")
+
+    # --- the Death Star track (experimental Death Star rules) --------------------
+
+    def death_star_site(self) -> Hex | None:
+        """The hex of the construction site, or ``None`` when there is none on the board."""
+        return self.death_star.active_site
+
+    def death_star_reserved_sites(self) -> tuple[Hex, ...]:
+        """Future construction sites: shown on the board but not yet chartable."""
+        return self.death_star.reserved_sites
+
+    def death_star_stage(self) -> int:
+        """The 0-based index of the stage being built: stages whose result has applied."""
+        return self.death_star.stages_resolved
+
+    def contract_value(self) -> int:
+        """What a contract pair scores now: the value of the stage being built, or 0 when no
+        site is on the board."""
+        if self.death_star.active_site is None:
+            return 0
+        return self.config.death_star_stage_values[self.death_star.stages_resolved]
+
+    def _add_cubes(self, actor: str, count: int) -> None:
+        track = self.death_star
+        filled_before = track.stages_filled(self.config)
+        track.cubes += count
+        total = self.config.death_star_cubes_per_stage * len(self.config.death_star_stage_values)
+        noun = "cube" if count == 1 else "cubes"
+        self._log(actor, f"adds {count} {noun} to the Death Star track ({track.cubes}/{total})")
+        for index in range(filled_before, track.stages_filled(self.config)):
+            result = self.config.death_star_stage_results[index]
+            self._log(
+                EMPIRE,
+                f"Death Star {stage_name(index)} is built: {describe_result(result)} at the end "
+                "of this round",
+            )
+
+    def resolve_death_star(self) -> None:
+        """Apply, in order, the result of every stage filled but not yet resolved. The session
+        calls this at the end of every operating round and stock round. Does nothing with the
+        Death Star rules off."""
+        if not self.config.death_star_rules:
+            return
+        track = self.death_star
+        while track.stages_resolved < track.stages_filled(self.config):
+            result = self.config.death_star_stage_results[track.stages_resolved]
+            track.stages_resolved += 1
+            if result == SEIZURE:
+                self._seize_fleets()
+            elif result == SITE_MOVE:
+                self._move_site()
+            elif result == COMPLETION:
+                self._launch()
+            else:
+                raise ValueError(f"Unknown Death Star stage result {result!r}")
+
+    def _seize_fleets(self) -> None:
+        seized = [c for c in self.corporations.values() if c.floated and c.fleets > 0]
+        for corp in seized:
+            corp.fleets -= 1
+            self._log(EMPIRE, f"seizes a fleet from {corp.id}; it owns {corp.fleets}")
+        if not seized:
+            self._log(EMPIRE, "finds no fleets to seize")
+
+    def _move_site(self) -> None:
+        track = self.death_star
+        old = track.active_site
+        if old is None or track.site_index + 1 >= len(track.sites):
+            raise ValueError("The Death Star site has nowhere to move")
+        track.site_index += 1
+        self._place_site_on_board()
+        new = track.sites[track.site_index]
+        self._log(
+            EMPIRE,
+            f"moves the Death Star site from {old} to {new} ({self.board.region_of(new)}); "
+            f"{old} is empty space",
+        )
+
+    def _launch(self) -> None:
+        track = self.death_star
+        old = track.active_site
+        track.launched = True
+        self._place_site_on_board()
+        track.final_round = min(track.final_round, self.round_number + 1)
+        where = f"; {old} is empty space" if old is not None else ""
+        self._log(
+            EMPIRE,
+            f"launches the Death Star{where}. The game ends after this set of operating rounds",
+        )
+
+    def _place_site_on_board(self) -> None:
+        """Rebuild the board so the active site, and only it, is a planet, and reserve the
+        future sites in the network."""
+        base = self.board
+        if any(p.name == SITE_NAME for p in base.planets):
+            base = base.without_planet(SITE_NAME)
+        active = self.death_star.active_site
+        board = base if active is None else base.with_planet(site_planet(base, active, self.config))
+        self.board = board
+        self.network.rebase(board, frozenset(self.death_star.reserved_sites))
 
     # --- scoring -------------------------------------------------------------------
 
@@ -427,5 +678,17 @@ class Game:
         claim = fraction * corp.treasury / self.config.shares_per_corporation
         return self.price(corp) + int(claim)
 
+    def round_limit(self) -> int:
+        """The last round the game can run to: ``total_rounds``, or under the Death Star rules
+        the backstop (or the launch round, once the station has launched)."""
+        if self.config.death_star_rules:
+            return self.death_star.final_round
+        return self.config.total_rounds
+
     def is_over(self) -> bool:
-        return self.round_number >= self.config.total_rounds
+        """Whether the game has ended. Checked after each set of operating rounds.
+
+        Standard rules: after ``total_rounds``. Death Star rules: after the set of operating
+        rounds in which the station launched, or after ``death_star_backstop_rounds``.
+        """
+        return self.round_number >= self.round_limit()

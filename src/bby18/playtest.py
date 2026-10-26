@@ -12,6 +12,7 @@ from bby18.board import Terrain
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.bots.stable import STABLE
 from bby18.config import GameConfig
+from bby18.death_star_metrics import DeathStarMetrics, DeathStarRecorder
 from bby18.game import Game
 from bby18.metrics import (
     CorpMetrics,
@@ -63,6 +64,11 @@ class GameSummary:
     """Near pairs with a planet that no floated corporation reaches."""
     asteroid_hexes: int
     nebula_hexes: int
+    rounds_played: int
+    """Rounds (a stock round and its operating rounds) the game ran for."""
+    death_star: DeathStarMetrics | None = None
+    """Track, fleet and contract measurements; ``None`` when the Death Star rules are off, so
+    those rows carry no ``ds.*`` fields."""
 
     @property
     def planets_reached_fraction(self) -> float:
@@ -103,6 +109,9 @@ class GameSummary:
         row["near_pairs_stranded"] = self.near_pairs_stranded
         row["asteroid_hexes"] = self.asteroid_hexes
         row["nebula_hexes"] = self.nebula_hexes
+        row["rounds_played"] = self.rounds_played
+        if self.death_star is not None:
+            row.update(self.death_star.to_row())
         return row
 
 
@@ -200,12 +209,20 @@ def play_one(
 ) -> tuple[Game, GameSummary]:
     rng = random.Random(seed)
     game = Game.new([f"Player {i + 1}" for i in range(player_count)], config, seed)
-    run_game(game, make_deciders(game, kind, rng))
-    return game, summarize_game(game, seed)
+    deciders = make_deciders(game, kind, rng)
+    if not config.death_star_rules:
+        run_game(game, deciders)
+        return game, summarize_game(game, seed)
+    recorder = DeathStarRecorder(game)
+    run_game(game, deciders, observer=recorder)
+    return game, summarize_game(game, seed, recorder.metrics(game))
 
 
-def summarize_game(game: Game, seed: int) -> GameSummary:
-    """Measure a finished game."""
+def summarize_game(
+    game: Game, seed: int, death_star: DeathStarMetrics | None = None
+) -> GameSummary:
+    """Measure a finished game. ``death_star`` is what a ``DeathStarRecorder`` saw of it,
+    for a game played under the Death Star rules."""
     worth = {p.id: game.player_worth(p) for p in game.players}
     winner = max(worth, key=lambda k: worth[k])
     margin, cv = worth_spread(worth)
@@ -244,6 +261,8 @@ def summarize_game(game: Game, seed: int) -> GameSummary:
         near_pairs_stranded=near_stranded,
         asteroid_hexes=sum(1 for t in terrain if t is Terrain.ASTEROID),
         nebula_hexes=sum(1 for t in terrain if t is Terrain.NEBULA),
+        rounds_played=game.round_number,
+        death_star=death_star,
     )
 
 

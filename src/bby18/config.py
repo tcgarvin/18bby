@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,33 @@ class CorporationSpec:
     id: str
     name: str
     homeworld: str
+
+
+class Unlimited(Enum):
+    """The count of a fleet tier that never sells out."""
+
+    UNLIMITED = "unlimited"
+
+
+UNLIMITED = Unlimited.UNLIMITED
+
+
+@dataclass(frozen=True)
+class FleetTier:
+    """``count`` fleets for sale at ``price`` each, before the next tier's price applies."""
+
+    count: int | Unlimited
+    price: int
+
+
+SEIZURE = "seizure"
+"""Death Star stage result: every floated corporation with a fleet loses one."""
+SITE_MOVE = "move"
+"""Death Star stage result: the construction site moves to the second site."""
+COMPLETION = "completion"
+"""Death Star stage result: the station launches; the game ends after the current set of
+operating rounds."""
+STAGE_RESULTS = (SEIZURE, SITE_MOVE, COMPLETION)
 
 
 @dataclass(frozen=True)
@@ -117,6 +145,51 @@ class GameConfig:
     treasury_in_final_worth: float = 0.0
     """EXPERIMENTAL. Each share is worth its price plus this fraction of its corporation's
     treasury divided by shares_per_corporation, in player worth and so in final score."""
+    death_star_rules: bool = False
+    """EXPERIMENTAL. Fleets, bankruptcy and the Death Star construction track (see "Death Star
+    and fleets" in docs/DECISIONS.md and ``bby18.death_star``). When True, revenue uses at most
+    one pair per fleet owned, each operating turn has a fleet step after the network actions,
+    the construction site and its contracts are on the board, and the game ends after the set
+    of operating rounds in which the station launches, or after ``death_star_backstop_rounds``
+    (``total_rounds`` is then ignored). The ``fleet_*`` and ``death_star_*`` fields below apply
+    only when this is True."""
+    fleet_tiers: tuple[FleetTier, ...] = (
+        FleetTier(6, 60),
+        FleetTier(6, 90),
+        FleetTier(6, 120),
+        FleetTier(UNLIMITED, 160),
+    )
+    """The shared fleet supply, cheapest tier first. The price rises when a tier sells out; the
+    last tier must be ``UNLIMITED``."""
+    fleet_limit: int = 4
+    """Most fleets one corporation may own."""
+    death_star_tag: str = "W"
+    """Tag of the construction site (Imperial Works)."""
+    contract_partner_tags: frozenset[str] = frozenset({"R", "I", "S"})
+    """A planet with one of these tags paired with the site is a contract pair."""
+    death_star_stage_values: tuple[int, ...] = (40, 50, 60, 70)
+    """Contract pair value while each stage is being built, first stage first."""
+    death_star_stage_results: tuple[str, ...] = (SEIZURE, SITE_MOVE, SEIZURE, COMPLETION)
+    """What happens when each stage fills: one of ``STAGE_RESULTS``. Exactly one stage moves
+    the site, and the last stage, only, completes the station."""
+    death_star_cubes_per_stage: int = 6
+    """Cubes that fill one stage; extra cubes carry over to the next."""
+    empire_cubes_per_stock_round: int = 1
+    """Cubes the Empire adds at the end of every stock round."""
+    death_star_backstop_rounds: int = 8
+    """The game ends after this many rounds (stock round plus its operating rounds) if the
+    station has not launched."""
+    death_star_site_regions: tuple[str, ...] = ("Outer Rim", "Mid Rim")
+    """Region of the first construction site, then of the second."""
+    death_star_min_homeworld_distance: int = 3
+    """Each site is at least this many hexes from every corporation's homeworld."""
+    death_star_min_planet_distance: int = 1
+    """Each site is at least this many hexes from every planet. 1 (no constraint beyond not
+    being a planet) allows a site next to a planet, which then connects to it directly as two
+    open hubs do; 2 forbids that but leaves the Mid Rim almost no qualifying hexes on this
+    map."""
+    death_star_min_chartable_neighbors: int = 2
+    """Each site has at least this many neighbours that could be charted."""
 
     def validate_rule_variants(self) -> None:
         """Raise ``ValueError`` if an experimental rule field names an unknown rule."""
@@ -143,6 +216,51 @@ class GameConfig:
             raise ValueError("terrain_patch_size must be at least 1")
         if self.nebula_chart_surcharge < 0:
             raise ValueError("nebula_chart_surcharge cannot be negative")
+        self._validate_death_star_rules()
+
+    def _validate_death_star_rules(self) -> None:
+        """Raise ``ValueError`` if the fleet or Death Star numbers cannot make a game."""
+        tiers = self.fleet_tiers
+        if not tiers:
+            raise ValueError("fleet_tiers needs at least one tier")
+        if not isinstance(tiers[-1].count, Unlimited):
+            raise ValueError("The last fleet tier must be UNLIMITED")
+        for tier in tiers[:-1]:
+            if isinstance(tier.count, Unlimited) or tier.count < 1:
+                raise ValueError("Every fleet tier but the last needs a positive count")
+        if any(tier.price < 1 for tier in tiers):
+            raise ValueError("Fleet prices must be positive")
+        if self.fleet_limit < 1:
+            raise ValueError("fleet_limit must be at least 1")
+        if not self.death_star_tag or self.death_star_tag in self.contract_partner_tags:
+            raise ValueError("death_star_tag must be a non-empty tag that is not a partner tag")
+        results = self.death_star_stage_results
+        if len(results) != len(self.death_star_stage_values):
+            raise ValueError("death_star_stage_results and _values need one entry per stage")
+        unknown = sorted(set(results) - set(STAGE_RESULTS))
+        if unknown:
+            raise ValueError(f"Unknown Death Star stage results {unknown}; use {STAGE_RESULTS}")
+        if not results or results[-1] != COMPLETION or results.count(COMPLETION) != 1:
+            raise ValueError("The last Death Star stage, and only it, must be completion")
+        if results.count(SITE_MOVE) != 1:
+            raise ValueError("Exactly one Death Star stage must move the site")
+        if any(v < 0 for v in self.death_star_stage_values):
+            raise ValueError("death_star_stage_values cannot be negative")
+        if self.death_star_cubes_per_stage < 1:
+            raise ValueError("death_star_cubes_per_stage must be at least 1")
+        if self.empire_cubes_per_stock_round < 0:
+            raise ValueError("empire_cubes_per_stock_round cannot be negative")
+        if self.death_star_backstop_rounds < 1:
+            raise ValueError("death_star_backstop_rounds must be at least 1")
+        if len(self.death_star_site_regions) != 2:
+            raise ValueError("death_star_site_regions names the first and second site's region")
+        for name in (
+            "death_star_min_homeworld_distance",
+            "death_star_min_planet_distance",
+            "death_star_min_chartable_neighbors",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} cannot be negative")
 
     def starting_cash(self, player_count: int) -> int:
         if player_count not in self.starting_cash_by_player_count:
