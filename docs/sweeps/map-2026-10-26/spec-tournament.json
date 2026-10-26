@@ -1,0 +1,9 @@
+{
+ "variants": {
+  "map127": {"map_file": "map-127.json"},
+  "cut": {}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

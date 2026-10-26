@@ -663,6 +663,7 @@ def test_default_death_star_numbers_match_the_decisions_doc():
 def test_classic_config_is_the_default_before_the_death_star_was_adopted():
     assert CLASSIC_CONFIG == replace(
         DEFAULT_CONFIG,
+        map_file="map-127.json",
         death_star_rules=False,
         death_star_cubes_per_stage=6,
         death_star_max_homeworld_distance=99,

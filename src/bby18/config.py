@@ -42,7 +42,9 @@ STAGE_RESULTS = (SEIZURE, SITE_MOVE, COMPLETION)
 
 @dataclass(frozen=True)
 class GameConfig:
-    map_file: str = "map-127.json"
+    map_file: str = "map-117.json"
+    """The board: since 2026-10-26 the 127-hex map with the empty hexes east of Ryloth cut away.
+    ``CLASSIC_CONFIG`` keeps the full ``map-127.json``."""
     corporations: tuple[CorporationSpec, ...] = (
         CorporationSpec("CEC", "Corellian Engineering Corporation", "Corellia"),
         CorporationSpec("KDY", "Kuat Drive Yards", "Kuat"),
@@ -288,13 +290,15 @@ CAPITALIZATION_RULES = ("full", "incremental")
 DEFAULT_CONFIG = GameConfig()
 
 CLASSIC_CONFIG = GameConfig(
+    map_file="map-127.json",
     death_star_rules=False,
     death_star_cubes_per_stage=6,
     death_star_max_homeworld_distance=99,
     death_star_near_homeworlds=1,
 )
-"""The rules before 2026-10-26, kept for comparison sweeps and tests: no fleets or Death Star,
-a fixed ``total_rounds``, and the Death Star numbers the experimental switch used to default to."""
+"""The rules before 2026-10-26, kept for comparison sweeps and tests: the full 127-hex map, no
+fleets or Death Star, a fixed ``total_rounds``, and the Death Star numbers the experimental switch
+used to default to."""
 
 # Harness settings (not game rules).
 REVENUE_CACHE_SIZE = 1 << 16
@@ -306,22 +310,22 @@ DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
 Death Star rules the 1.0 noise maximum gives 0.45-0.55, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-26 for DIFFICULTY_TARGET_SHARE under the Death Star rules
-    # (docs/sweeps/difficulty-2026-10-26).
+    # Calibrated 2026-10-26 for DIFFICULTY_TARGET_SHARE under the Death Star rules on the
+    # 117-hex map (docs/sweeps/map-2026-10-26).
     "easy": {
-        "baron": 0.81,
-        "baron-prestige": 0.88,
-        "baron-tycoon": 0.62,
-        "builder": 0.65,
-        "churner": 0.03,
-        "diversifier": 0.71,
-        "early-builder": 0.83,
-        "hoarder": 0.33,
-        "prestige": 0.8,
-        "spoiler": 0.39,
-        "straight": 0.2,
-        "targeted": 0.74,
-        "tycoon": 0.52,
+        "baron": 0.75,
+        "baron-prestige": 0.89,
+        "baron-tycoon": 0.67,
+        "builder": 0.63,
+        "churner": 0.0,
+        "diversifier": 0.74,
+        "early-builder": 0.71,
+        "hoarder": 0.37,
+        "prestige": 0.82,
+        "spoiler": 0.37,
+        "straight": 0.21,
+        "targeted": 0.68,
+        "tycoon": 0.45,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

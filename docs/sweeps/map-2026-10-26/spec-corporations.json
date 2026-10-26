@@ -1,0 +1,9 @@
+{
+ "variants": {
+  "map127": {"map_file": "map-127.json"},
+  "cut": {}
+ },
+ "seeds": [1, 150],
+ "players": [4],
+ "bots": ["builder", "baron", "mix:builder,baron,early-builder,targeted", "straight"]
+}

@@ -14,8 +14,12 @@ expedience, not conviction.
 
 ## Map and network
 
-- **Board:** the 127-hex "Room for junctions" map (`docs/design/hex-map-design.md`), loaded
-  from `src/bby18/data/map-127.json`.
+- **Board:** the "Room for junctions" map (`docs/design/hex-map-design.md`) with its east edge
+  cut away (decided 2026-10-26): the ten empty hexes east of Ryloth's column (`2q + r > 8`) are
+  gone, leaving **117 hexes**, 93 of them space. No planet moved. Loaded from
+  `src/bby18/data/map-117.json`; the full 127-hex map stays in `map-127.json` for
+  `CLASSIC_CONFIG`. A board may be any subset of the hexagon of its radius. See "East edge cut"
+  below.
 - **Planet hexes are open hubs.** A planet hex permanently has all six exits. Any charted tile
   with an exit facing a planet connects to it. A corporation's network may pass through a
   planet freely. Planets never need charting and carry no service cubes: a corporation
@@ -303,6 +307,26 @@ contract give that.
   (3) is never relaxed.
 - Saved games do not record their rules, so a game saved before 2026-10-26 replays under the
   Death Star rules and is usually reported as outdated.
+
+## East edge cut (decided 2026-10-26)
+
+The empty hexes beyond Ryloth were dead space: no route needed them. They are removed (above), and
+terrain, seeded as a share of the space hexes, shrinks with them (14 asteroids and 14 nebulae
+instead of 15 and 15). Measured in `docs/sweeps/map-2026-10-26`:
+
+- **Corporations:** roughly neutral. Kashyyyk does slightly better (4-player final share price
+  74 instead of 67 with four `builder` seats); the others are unchanged.
+- **Death Star sites:** essentially unchanged; none of the cut hexes was within 4 hexes of two
+  homeworlds.
+- **Strategy balance** (3 players, 8 strategies, 20 maps): the equilibrium moves from baron 75%
+  (with early-builder, targeted, admiral) to early-builder 54%, admiral 25%, baron 21%; no single
+  strategy leads on every resample.
+
+**Considered and not adopted** (same study, with Fable consulting): Kashyyyk's opening is slow
+because every partner it can pair with is three or more hexes away. Moving Kashyyyk to (-1,0)
+(and Chandrila to (-4,-1) for Coruscant) evens the four corporations, but it moves the Death Star
+sites, halves the launch rate and lets one strategy dominate (always-pay alone, or admiral with
+the Chandrila move). Revisit together with a Death Star retune.
 
 ## Explicitly deferred
 

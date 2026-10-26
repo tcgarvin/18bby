@@ -28,7 +28,7 @@ def client(store):
 
 def test_board_endpoint(client):
     data = client.get("/api/board").json()
-    assert len(data["hexes"]) == 127
+    assert len(data["hexes"]) == 117
     assert len(data["planets"]) == 24
 
 

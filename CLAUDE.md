@@ -17,13 +17,14 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   every seat order; `bby18 tournament-report --rows rows.jsonl` finds best responses and
   equilibria. The balance goal is no single dominant strategy, not equal win rates.
 - Death Star rules in sweeps: the rules are the default, so a spec variant `{}` plays them; add
-  `"death_star_rules": false` (`CLASSIC_CONFIG`) to compare with the rules before 2026-10-26.
+  `"death_star_rules": false` (`CLASSIC_CONFIG`) to compare with the rules before 2026-10-26, and
+  `"map_file": "map-127.json"` for the board before the east edge was cut (also 2026-10-26).
   Games with `death_star_rules` on get `ds.*` row fields from a move
   observer (`src/bby18/death_star_metrics.py`, no log parsing); `bby18 death-star-report --rows
   rows.jsonl` compares variants on the clock, fleets, bankruptcies, withholds and contracts.
 - Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy with a
   per-difficulty `noise` from `BOT_NOISE` in `config.py`. Recalibrate with
-  `docs/sweeps/difficulty-2026-10-26` (script in `docs/sweeps/difficulty-2026-10-25`) when the
+  `docs/sweeps/map-2026-10-26` specs (script in `docs/sweeps/difficulty-2026-10-25`) when the
   rules or a strategy change.
 - Rule enforcement: `src/bby18/game.py` and `src/bby18/network.py`. Drivers and bots decide what
   to do; these modules decide whether it is legal and apply the consequences.

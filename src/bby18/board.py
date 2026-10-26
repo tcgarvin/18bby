@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib import resources
 
+from bby18.config import DEFAULT_CONFIG
 from bby18.hexgrid import Direction, Hex, hexes_within_radius
 
 REGION_TIE_PRIORITY: tuple[str, ...] = ("Core", "Mid Rim", "Outer Rim")
@@ -153,7 +154,7 @@ class Board:
         return sorted(h for h in self.hexes if h not in self._by_hex)
 
 
-def load_board(map_file: str = "map-127.json") -> Board:
+def load_board(map_file: str = DEFAULT_CONFIG.map_file) -> Board:
     """Load a board from a bundled map JSON file."""
     text = resources.files("bby18.data").joinpath(map_file).read_text(encoding="utf-8")
     return board_from_json(json.loads(text))
@@ -164,13 +165,14 @@ def board_from_json(data: dict[str, object]) -> Board:
     if not isinstance(map_data, dict):
         raise ValueError("Map JSON is missing the 'map' object")
     radius = int(map_data["radius"])
-    hexes = frozenset(hexes_within_radius(radius))
     raw_cells = map_data["cells"]
     if not isinstance(raw_cells, list):
         raise ValueError("Map JSON 'cells' must be a list")
-    cells = frozenset(Hex(int(c[0]), int(c[1])) for c in raw_cells)
-    if cells != hexes:
-        raise ValueError("Map cells do not match a hexagonal board of the stated radius")
+    # A board may be any subset of the hexagon of its radius, so an edge can be cut away.
+    hexes = frozenset(Hex(int(c[0]), int(c[1])) for c in raw_cells)
+    outside = sorted(hexes - frozenset(hexes_within_radius(radius)))
+    if outside:
+        raise ValueError(f"Map cells {outside} lie outside the stated radius {radius}")
     raw_planets = map_data["planets"]
     if not isinstance(raw_planets, list):
         raise ValueError("Map JSON 'planets' must be a list")
