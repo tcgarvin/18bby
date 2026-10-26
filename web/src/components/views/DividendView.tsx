@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Action, Axial, Board, CorporationState, DividendAction, GameState } from "../../api";
+import { pairUsage, pairUsageText, sitePlanet } from "../../deathstar";
 import { useHotkeys } from "../../hotkeys";
 import { useSettled } from "../../playback/useSettled";
 import { corpColor, dividendSplit, findCorporation, nearestCellWithPrice, playerName, terrainByKey } from "../../selectors";
@@ -76,6 +77,7 @@ export function DividendView({ state, board, interactive, busy, keyboard, change
               onHexClick={() => undefined}
               fitHexes={focus ? networkHexes(state, board, focus) : undefined}
               label={`${focusCorp ?? ""} network`}
+              deathStar={state.deathStar}
             />
           </div>
           {focus && <RevenueBreakdown state={state} corp={focus} />}
@@ -109,9 +111,11 @@ export function DividendView({ state, board, interactive, busy, keyboard, change
 /** Hexes the corporation's network touches: served tiles, reachable planets and its homeworld. */
 function networkHexes(state: GameState, board: Board, corp: CorporationState): Axial[] {
   const names = new Set([...corp.reachablePlanets, corp.homeworld]);
+  const site = sitePlanet(state.deathStar);
+  const hubs = site ? [...board.planets, site] : board.planets;
   return [
     ...state.tiles.filter((t) => t.service.includes(corp.id)).map((t) => t.hex),
-    ...board.planets.filter((p) => names.has(p.name)).map((p) => p.hex),
+    ...hubs.filter((p) => names.has(p.name)).map((p) => p.hex),
   ];
 }
 
@@ -322,9 +326,16 @@ function Moves({ price, treasury }: { price: [number, number]; treasury: [number
   );
 }
 
-/** The scored pairs behind the revenue, matching the arcs on the map: solid typed, dashed basic. */
+/**
+ * The scored pairs behind the revenue, matching the arcs on the map: solid typed, dashed basic,
+ * dotted contract. Under the Death Star rules it also says how many pairs the fleets run.
+ */
 function RevenueBreakdown({ state, corp }: { state: GameState; corp: CorporationState }) {
   const { total, pairs } = corp.revenue;
+  const usage = pairUsage(corp);
+  const contracts = pairs.filter((p) => p.contract).length;
+  const typed = pairs.filter((p) => p.typed && !p.contract).length;
+  const basic = pairs.length - typed - contracts;
   return (
     <div className="revenue__pairs">
       <h3 className="revenue__title">
@@ -334,6 +345,13 @@ function RevenueBreakdown({ state, corp }: { state: GameState; corp: Corporation
         revenue <strong className="num">{total}</strong>
         <Help topic="revenue" />
       </h3>
+      {usage && (
+        <p className="revenue__usage">
+          <span>{pairUsageText(usage)}</span>
+          {usage.available > usage.run && <span className="muted">one pair per fleet</span>}
+          <Help topic="fleet" />
+        </p>
+      )}
       {pairs.length === 0 ? (
         <p className="muted">No scoring pairs yet.</p>
       ) : (
@@ -342,10 +360,15 @@ function RevenueBreakdown({ state, corp }: { state: GameState; corp: Corporation
             {pairs.map((pair) => (
               <tr key={`${pair.a}-${pair.b}`}>
                 <td>
-                  <span className={`pairs__line${pair.typed ? "" : " pairs__line--basic"}`} aria-hidden />
+                  <span
+                    className={`pairs__line${pair.contract ? " pairs__line--contract" : pair.typed ? "" : " pairs__line--basic"}`}
+                    aria-hidden
+                  />
                   {pair.a} ↔ {pair.b}
                 </td>
-                <td className="muted">{pair.typed ? "typed" : "basic"}</td>
+                <td className={pair.contract ? "pairs__contract" : "muted"}>
+                  {pair.contract ? "contract" : pair.typed ? "typed" : "basic"}
+                </td>
                 <td className="num">{pair.value}</td>
               </tr>
             ))}
@@ -354,13 +377,23 @@ function RevenueBreakdown({ state, corp }: { state: GameState; corp: Corporation
             <tr>
               <td>Total</td>
               <td className="muted">
-                {pairs.filter((p) => p.typed).length} typed <Help topic="typedPair" /> · {pairs.filter((p) => !p.typed).length}{" "}
-                basic <Help topic="basicRoute" />
+                {contracts > 0 && (
+                  <>
+                    {contracts} contract <Help topic="contract" /> ·{" "}
+                  </>
+                )}
+                {typed} typed <Help topic="typedPair" /> · {basic} basic <Help topic="basicRoute" />
               </td>
               <td className="num">{total}</td>
             </tr>
           </tfoot>
         </table>
+      )}
+      {contracts > 0 && (
+        <p className="revenue__usage">
+          Paid or withheld, {contracts === 1 ? "the contract adds a cube" : `the contracts add ${contracts} cubes`} to the Death
+          Star track.
+        </p>
       )}
     </div>
   );

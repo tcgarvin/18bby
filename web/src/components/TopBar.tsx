@@ -116,8 +116,8 @@ function Acting({ state }: { state: GameState }) {
   return (
     <>
       <span className="acting__phase">
-        {state.phase === "network" ? "Build" : "Pay or withhold"}
-        <Help topic={state.phase === "network" ? "networkAction" : "dividend"} />
+        {state.phase === "network" ? "Build" : state.phase === "fleet" ? "Buy fleets" : "Pay or withhold"}
+        <Help topic={state.phase === "network" ? "networkAction" : state.phase === "fleet" ? "fleet" : "dividend"} />
       </span>
       {corp && (
         <span className="acting__who">

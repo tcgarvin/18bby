@@ -14,6 +14,8 @@ export type Effect =
 
 const GAIN = "#1e7b3c";
 const LOSS = "#b3261e";
+/** The Empire's colour, for the Death Star track and its sites. */
+const EMPIRE = "#5b4a8a";
 
 const signed = (amount: number) => (amount >= 0 ? `+${amount}` : `−${-amount}`);
 
@@ -107,9 +109,58 @@ export function effectsFor(kind: MoveKind, durationMs: number, color: (corpId: s
       }
       return effects;
     }
+    case "buy_fleet":
+      return [
+        {
+          effect: "fly",
+          from: [anchor.treasury(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)],
+          to: anchor.fleetSupply(),
+          label: signed(-kind.cost),
+          variant: "coin",
+          durationMs: travel,
+        },
+        { effect: "highlight", target: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp)], color: color(kind.corp), durationMs: settle, delayMs: later },
+        ...(kind.price.after !== kind.price.before
+          ? [{ effect: "highlight", target: anchor.fleetSupply(), color: LOSS, durationMs: settle, delayMs: later } as Effect]
+          : []),
+      ];
+    case "finish_fleets":
+      return [{ effect: "pop", at: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)], label: `${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`, durationMs: settle }];
+    case "empire":
+      return empireEffects(kind.event, settle, later);
     case "phase":
     case "unknown":
       return [];
+  }
+}
+
+function empireEffects(event: Extract<MoveKind, { kind: "empire" }>["event"], settle: number, later: number): Effect[] {
+  const track: Effect = { effect: "highlight", target: anchor.track(), color: EMPIRE, durationMs: settle };
+  switch (event.type) {
+    case "seizure":
+      return [
+        track,
+        ...event.corps.map(
+          (corp): Effect => ({
+            effect: "pop",
+            at: [anchor.fleets(corp), anchor.orderCorp(corp), anchor.corp(corp)],
+            label: "−1 fleet",
+            color: LOSS,
+            durationMs: settle,
+            delayMs: later,
+          }),
+        ),
+      ];
+    case "site_move":
+      return [
+        track,
+        { effect: "highlight", target: anchor.hex(event.from), color: LOSS, durationMs: settle },
+        { effect: "highlight", target: anchor.hex(event.to), color: EMPIRE, durationMs: settle, delayMs: later },
+      ];
+    case "launch":
+      return [track, { effect: "highlight", target: anchor.hex(event.at), color: EMPIRE, durationMs: settle }];
+    case "bankrupt":
+      return [{ effect: "pop", at: [anchor.orderCorp(event.corp), anchor.corp(event.corp)], label: "Bankrupt", color: LOSS, durationMs: settle }];
   }
 }
 

@@ -27,9 +27,10 @@ export interface Board {
   planets: Planet[];
 }
 
-export type Phase = "stock" | "network" | "dividend" | "game_over";
+export type Phase = "stock" | "network" | "fleet" | "dividend" | "game_over";
 
-export type CorpStatus = "unstarted" | "parred" | "floated";
+/** "closed": bankrupt under the Death Star rules; its shares have left the game. */
+export type CorpStatus = "unstarted" | "parred" | "floated" | "closed";
 
 export interface PassAction {
   type: "pass";
@@ -69,6 +70,15 @@ export interface DividendAction {
   type: "dividend";
   choice: "pay" | "withhold";
 }
+/** Buy one fleet at the supply's current price (Death Star rules). */
+export interface BuyFleetAction {
+  type: "buy_fleet";
+  cost: number;
+}
+/** End the fleet step; offered once the corporation owns a fleet. */
+export interface FinishFleetsAction {
+  type: "finish_fleets";
+}
 
 export type Action =
   | PassAction
@@ -78,6 +88,8 @@ export type Action =
   | UpgradeAction
   | ServiceAction
   | NoNetworkAction
+  | BuyFleetAction
+  | FinishFleetsAction
   | DividendAction;
 
 export type HexAction = ChartAction | UpgradeAction | ServiceAction;
@@ -101,6 +113,17 @@ export interface RevenuePair {
   b: string;
   value: number;
   typed: boolean;
+  /** A Death Star contract pair: the construction site with a partner planet. */
+  contract: boolean;
+}
+
+/** Revenue with more fleets than the corporation owns (Death Star rules). */
+export interface FleetRevenue {
+  /** Revenue with one more fleet than it owns now. */
+  withNextFleet: number;
+  /** Revenue with no fleet limit at all, and how many pairs that runs. */
+  uncapped: number;
+  uncappedPairs: number;
 }
 
 export interface CorporationState {
@@ -122,8 +145,71 @@ export interface CorporationState {
   /** Player id, or "" when the corporation has no president yet. */
   president: string;
   lastRevenue: number;
+  /** Fleets owned; each runs one revenue pair. Always 0 without the Death Star rules. */
+  fleets: number;
   reachablePlanets: string[];
   revenue: { total: number; pairs: RevenuePair[] };
+  /** Present only under the Death Star rules. */
+  fleetRevenue?: FleetRevenue;
+}
+
+/** What happens when a Death Star stage fills. */
+export type StageResult = "seizure" | "move" | "completion";
+
+/** A construction site and where it stands. Vacated and launched hexes are empty space again. */
+export interface DeathStarSite {
+  hex: Axial;
+  region: Region;
+  status: "active" | "reserved" | "vacated" | "launched" | "unused";
+}
+
+export interface DeathStarStage {
+  name: string;
+  /** What a contract pair scores while this stage is being built. */
+  value: number;
+  result: StageResult;
+  /** All its cubes are on the track. */
+  filled: boolean;
+  /** Its result has applied (at the end of the round it filled in). */
+  resolved: boolean;
+}
+
+/** A fleet price tier; "unlimited" for the last, which never sells out. */
+export interface FleetTierState {
+  price: number;
+  count: number | "unlimited";
+  remaining: number | "unlimited";
+}
+
+/** The Death Star track, its construction sites and the shared fleet supply. */
+export interface DeathStarState {
+  /** The active site's planet name and tag, for the map and revenue pairs. */
+  siteName: string;
+  siteTag: string;
+  contractPartnerTags: string[];
+  sites: DeathStarSite[];
+  cubes: number;
+  cubesPerStage: number;
+  totalCubes: number;
+  stages: DeathStarStage[];
+  /** Index of the stage being built: the number resolved (equal to stages.length after launch). */
+  stage: number;
+  /** What a contract pair scores now; 0 once the station has launched. */
+  contractValue: number;
+  launched: boolean;
+  /** The game ends after this round: the backstop, or the launch round. */
+  finalRound: number;
+  backstopRound: number;
+  empireCubesPerStockRound: number;
+  fleets: {
+    price: number;
+    /** Index in `tiers` of the tier the next fleet comes from. */
+    tier: number;
+    remainingInTier: number | "unlimited";
+    tiers: FleetTierState[];
+    limit: number;
+    sold: number;
+  };
 }
 
 export interface TileState {
@@ -193,6 +279,8 @@ export interface GameState {
   /** Log entries with this seq or later were played automatically (bots or forced moves). */
   automaticLogStart: number;
   config: GameConfig;
+  /** The Death Star track and fleet supply; absent when the game is played without those rules. */
+  deathStar?: DeathStarState;
   log: LogEntry[];
   /**
    * Every move played by the request that produced this state, in order: the submitted move
@@ -238,6 +326,8 @@ export interface FrameState {
   corporations: CorporationState[];
   /** Only the tiles this move changed (empty for non-map moves). Merge by hex. */
   tiles: TileState[];
+  /** The whole track after the move, under the Death Star rules; absent otherwise. */
+  deathStar?: DeathStarState;
 }
 
 export interface Seat {
@@ -337,6 +427,24 @@ export interface Rules {
   certificateLimit: number;
   totalRounds: number;
   operatingRoundsPerStockRound: number;
+  /** Whether the experimental Death Star and fleet rules are in force. */
+  deathStarRules: boolean;
+  /** Their numbers, listed whether or not they are in force. */
+  deathStar: DeathStarRules;
+}
+
+export interface DeathStarRules {
+  fleetTiers: FleetTierState[];
+  fleetLimit: number;
+  siteTag: string;
+  contractPartnerTags: string[];
+  stages: { name: string; value: number; result: StageResult }[];
+  cubesPerStage: number;
+  empireCubesPerStockRound: number;
+  backstopRounds: number;
+  /** Region of the first site, then of the second. */
+  siteRegions: Region[];
+  minHomeworldDistance: number;
 }
 
 export function fetchRules(): Promise<Rules> {

@@ -51,6 +51,7 @@ export function MapOverlay({ state, board, changedHexes, onClose }: MapOverlayPr
             preview={null}
             changedHexes={changedHexes}
             onHexClick={() => undefined}
+            deathStar={state.deathStar}
           />
         </div>
         <MapLegend state={state} focusCorp={focus} />

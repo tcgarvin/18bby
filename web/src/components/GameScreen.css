@@ -528,6 +528,17 @@
   background: var(--surface-2);
 }
 
+/* Bankrupt under the Death Star rules: kept on the board, struck out. */
+.ccard--closed {
+  background: var(--surface-2);
+  border-left-style: dashed;
+}
+
+.ccard--closed .ccard__stats,
+.ccard--closed .ccard__certs {
+  opacity: 0.45;
+}
+
 .ccard--tradable {
   border-color: #c9d6e8;
   border-left-color: var(--corp);
@@ -583,6 +594,10 @@
   grid-template-columns: minmax(96px, max-content) minmax(64px, max-content) minmax(80px, max-content);
   gap: 18px;
   margin: 0;
+}
+
+.ccard__stats--fleets {
+  grid-template-columns: minmax(96px, max-content) minmax(64px, max-content) minmax(80px, max-content) max-content;
 }
 
 .ccard__stats dd {
@@ -1806,6 +1821,310 @@
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- Death Star and fleets (experimental rules) ---------- */
+
+.dstar-glyph {
+  flex: none;
+}
+
+.fleets {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.fleet path {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.fleet--owned path {
+  fill: var(--corp, var(--ink-2));
+  stroke: color-mix(in srgb, var(--corp, var(--ink-2)) 70%, #000);
+}
+
+/* The track and supply, a strip under the top bar. */
+.dsbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  min-height: 34px;
+  padding: 4px 16px;
+  background: var(--empire-soft);
+  border-bottom: 1px solid #d9d2ea;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.dsbar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 11px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--empire);
+}
+
+.dsbar__track {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsstage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 1px 6px 3px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.dsstage__name {
+  display: flex;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink-2);
+}
+
+.dsstage__result {
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.dsstage__cubes {
+  display: flex;
+  gap: 2px;
+}
+
+.dscube {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #b7add0;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.dscube--on {
+  border-color: var(--empire);
+  background: var(--empire);
+}
+
+.dsstage--current {
+  border-color: var(--empire);
+  background: #fff;
+}
+
+.dsstage--pending {
+  border-color: var(--danger);
+  background: #fff;
+  animation: dsstage-pulse 1.6s ease-in-out infinite;
+}
+
+.dsstage--pending .dsstage__result {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.dsstage--resolved {
+  opacity: 0.55;
+}
+
+.dsstage--resolved .dsstage__name {
+  text-decoration: line-through;
+}
+
+@keyframes dsstage-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsstage--pending {
+    animation: none;
+  }
+}
+
+.dsbar__now {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.dsbar__end {
+  padding-left: 16px;
+  border-left: 1px solid #d9d2ea;
+  color: var(--ink-2);
+}
+
+.dsbar__fleets {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding-left: 16px;
+  border-left: 1px solid #d9d2ea;
+  color: var(--ink-2);
+}
+
+.dsbar__price {
+  padding: 0 7px;
+  border-radius: 4px;
+  background: var(--empire);
+  color: #fff;
+  font-size: 12.5px;
+}
+
+/* The fleet step inside the rail. */
+.fleetpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fleetpanel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fleetpanel__count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.fleetpanel__facts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.fleetpanel__facts dt {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.fleetpanel__facts dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fleetpanel__facts small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.fleetpanel__note {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--empire-soft);
+  color: var(--ink-2);
+}
+
+.fleetpanel__note--danger {
+  background: var(--danger-bg);
+  color: #7a1a14;
+}
+
+.fleetpanel__buttons {
+  display: grid;
+  gap: 6px;
+}
+
+.btn--fleet {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 12px;
+  text-align: left;
+}
+
+.btn__sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.rentry__chip--closed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.rentry--closed .rentry__summary {
+  opacity: 0.6;
+}
+
+.pairs__contract {
+  color: var(--empire);
+  font-weight: 600;
+}
+
+.pairs__line--contract {
+  border-top-style: dotted;
+  border-top-color: var(--empire);
+}
+
+.revenue__usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.final__ending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--empire-soft);
+  font-size: 13px;
+}
+
+.legend__site {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend__future {
+  width: 14px;
+  height: 14px;
+  border: 1.4px dashed var(--empire);
+  border-radius: 50%;
 }
 
 /* ---------- Smaller windows: stack the panels and let the page scroll ---------- */

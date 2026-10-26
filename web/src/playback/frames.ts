@@ -10,6 +10,7 @@ import type {
   Axial,
   BuyAction,
   CorporationState,
+  DeathStarState,
   DirectionName,
   GameState,
   LogEntry,
@@ -20,6 +21,17 @@ import type {
 } from "../api";
 import { DIRECTIONS, hexKey, neighbor, sameHex } from "../hex";
 import { playerName } from "../selectors";
+
+/**
+ * Something the Empire did as a consequence of a move: the end of the round it ended applied a
+ * Death Star stage, or the corporation it moved on from went bankrupt. Each gets its own step.
+ */
+export type EmpireEvent =
+  /** `corps` each lost one fleet; empty when nobody had one. */
+  | { type: "seizure"; corps: string[] }
+  | { type: "site_move"; from: Axial; to: Axial }
+  | { type: "launch"; at: Axial }
+  | { type: "bankrupt"; corp: string };
 
 /** A corporation's share price before and after a move. */
 export interface PriceChange {
@@ -63,6 +75,9 @@ export type MoveKind =
   | { kind: "upgrade"; corp: string; hex: Axial; exit: DirectionName; cost: number }
   | { kind: "service"; corp: string; hex: Axial; cost: number }
   | { kind: "no_action"; corp: string }
+  /** `price` is the supply's fleet price before and after, which rises when a tier sells out. */
+  | { kind: "buy_fleet"; corp: string; cost: number; fleets: number; price: PriceChange }
+  | { kind: "finish_fleets"; corp: string; fleets: number }
   | {
       kind: "dividend";
       corp: string;
@@ -76,6 +91,8 @@ export type MoveKind =
     }
   /** A new round began: a banner between moves, not a move. */
   | { kind: "phase"; phase: Phase; roundLabel: string }
+  /** What the Empire did after a move (see `EmpireEvent`); a step of its own, not a move. */
+  | { kind: "empire"; event: EmpireEvent }
   /** An action this client does not know; captioned from the frame's log. */
   | { kind: "unknown"; actor: string };
 
@@ -83,7 +100,7 @@ export type MoveKindName = MoveKind["kind"];
 
 /** One thing to show during playback, and the display state while it shows. */
 export interface PlaybackStep {
-  /** The move, or null for a round-change banner. */
+  /** The move, or null for a round-change banner. An Empire step carries the move that caused it. */
   frame: MoveFrame | null;
   kind: MoveKind;
   caption: string;
@@ -124,6 +141,7 @@ export function applyFrame(base: GameState, frame: MoveFrame): GameState {
     players,
     corporations: after.corporations,
     tiles: mergeTiles(base.tiles, after.tiles),
+    deathStar: after.deathStar ?? base.deathStar,
     log: appendLog(base.log, frame.log),
     legalActions: [],
     waitingOnHuman: false,
@@ -191,10 +209,16 @@ export function playbackSteps(before: GameState, after: GameState, planets: Plan
   frames.forEach((frame, i) => {
     const prev = state;
     state = i === frames.length - 1 ? after : applyFrame(prev, frame);
+    const staged = stagedState(prev, state, frame);
     if (frame.automatic) {
       const kind = moveKind(frame, prev);
-      const caption = describeKind(kind, frame, prev, planets);
-      steps.push({ frame, kind, caption, before: prev, state: stagedState(prev, state, frame) });
+      const caption = describeKind(kind, frame, prev, planets) + trackNote(prev.deathStar, frame.after.deathStar);
+      steps.push({ frame, kind, caption, before: prev, state: staged });
+    }
+    // The Empire's doings show even after the player's own move, since nobody chose them.
+    for (const event of empireEvents(prev, frame)) {
+      const kind: MoveKind = { kind: "empire", event };
+      steps.push({ frame, kind, caption: describeEmpire(event, prev, planets), before: prev, state: staged });
     }
     if (state.roundLabel !== prev.roundLabel) {
       const kind: MoveKind = { kind: "phase", phase: state.phase, roundLabel: state.roundLabel };
@@ -245,6 +269,17 @@ export function moveKind(frame: MoveFrame, prev: GameState): MoveKind {
     return { kind: "pass", player: frame.actor, priceChanges };
   }
   if (!corpBefore || !corpAfter) return unknown;
+  if (action.type === "buy_fleet") {
+    const supply = (ds: DeathStarState | undefined) => ds?.fleets.price ?? action.cost;
+    return {
+      kind: "buy_fleet",
+      corp: corpId,
+      cost: corpBefore.treasury - corpAfter.treasury,
+      fleets: corpAfter.fleets,
+      price: { corp: corpId, before: supply(prev.deathStar), after: supply(after.deathStar) },
+    };
+  }
+  if (action.type === "finish_fleets") return { kind: "finish_fleets", corp: corpId, fleets: corpAfter.fleets };
   const price: PriceChange = { corp: corpId, before: corpBefore.price, after: corpAfter.price };
   const player = frame.actor;
   switch (action.type) {
@@ -317,6 +352,70 @@ function dividendKind(
   };
 }
 
+/**
+ * What the Empire did in `frame`, found by comparing its `after` with `prev`: bankruptcies, then
+ * each Death Star stage result that applied, in order.
+ */
+export function empireEvents(prev: GameState, frame: MoveFrame): EmpireEvent[] {
+  const after = frame.after;
+  const events: EmpireEvent[] = [];
+  for (const corp of after.corporations) {
+    const before = corpIn(prev.corporations, corp.id);
+    if (corp.status === "closed" && before && before.status !== "closed") events.push({ type: "bankrupt", corp: corp.id });
+  }
+  const from = prev.deathStar;
+  const to = after.deathStar;
+  if (!from || !to) return events;
+  for (let index = from.stage; index < to.stage; index += 1) {
+    const result = to.stages[index]?.result;
+    if (result === "seizure") {
+      const corps = after.corporations
+        .filter((c) => {
+          const before = corpIn(prev.corporations, c.id);
+          return before !== undefined && c.fleets < before.fleets;
+        })
+        .map((c) => c.id);
+      events.push({ type: "seizure", corps });
+    } else if (result === "move") {
+      const old = from.sites.find((site) => site.status === "active");
+      const next = to.sites.find((site) => site.status === "active") ?? to.sites.find((site) => site.status === "launched");
+      if (old && next) events.push({ type: "site_move", from: old.hex, to: next.hex });
+    } else if (result === "completion") {
+      const site = to.sites.find((s) => s.status === "launched");
+      if (site) events.push({ type: "launch", at: site.hex });
+    }
+  }
+  return events;
+}
+
+/** "; +1 Death Star cube (7/24)", with any stage it filled; empty when the track did not move. */
+export function trackNote(before: DeathStarState | undefined, after: DeathStarState | undefined): string {
+  if (!before || !after || after.cubes <= before.cubes) return "";
+  const added = after.cubes - before.cubes;
+  const filled = after.stages
+    .filter((stage, i) => stage.filled && !before.stages[i]?.filled)
+    .map((stage) => `; ${stage.name} stage complete`);
+  return `; +${added} Death Star ${added === 1 ? "cube" : "cubes"} (${after.cubes}/${after.totalCubes})${filled.join("")}`;
+}
+
+function describeEmpire(event: EmpireEvent, prev: GameState, planets: Planet[]): string {
+  switch (event.type) {
+    case "seizure":
+      return event.corps.length > 0
+        ? `The Empire seizes a fleet from ${event.corps.join(", ")}`
+        : "The Empire finds no fleets to seize";
+    case "site_move":
+      return `The Death Star site moves from ${describeHex(event.from, planets)} to ${describeHex(event.to, planets)}; the old site is empty space`;
+    case "launch":
+      return "The Death Star launches! The game ends after this round";
+    case "bankrupt": {
+      const president = corpIn(prev.corporations, event.corp)?.president ?? "";
+      const owner = president ? ` (${playerName(prev, president)})` : "";
+      return `${event.corp}${owner} is bankrupt: no fleet, and no money for one. It closes and its shares are worthless`;
+    }
+  }
+}
+
 /** "(−3,1)", with a typographic minus. */
 export function formatHex(hex: Axial): string {
   return `(${hex.map((n) => String(n).replace("-", "−")).join(",")})`;
@@ -375,6 +474,14 @@ function describeKind(kind: MoveKind, frame: MoveFrame | null, prev: GameState, 
       return `${kind.corp} extends service to ${describeHex(kind.hex, planets)} for ${kind.cost}`;
     case "no_action":
       return `${kind.corp} takes no network action`;
+    case "buy_fleet": {
+      const rise = kind.price.after !== kind.price.before ? `; fleets now cost ${kind.price.after}` : "";
+      return `${kind.corp} buys a fleet for ${kind.cost}, owning ${kind.fleets}${rise}`;
+    }
+    case "finish_fleets":
+      return `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`;
+    case "empire":
+      return describeEmpire(kind.event, prev, planets);
     case "dividend":
       if (kind.pay) {
         return `${kind.corp} pays ${kind.revenue} — ${kind.perShare} per share; ${priceText(kind.price)}`;

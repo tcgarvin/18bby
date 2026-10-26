@@ -9,6 +9,7 @@ interface SavedGamesProps {
 const PHASE_NAMES: Record<GameSummary["phase"], string> = {
   stock: "stock round",
   network: "operating round",
+  fleet: "operating round",
   dividend: "operating round",
   game_over: "finished",
 };

@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import type { Rules } from "../api";
-import { GLOSSARY } from "../help/glossary";
+import { GLOSSARY, roundCount } from "../help/glossary";
+import type { GlossaryEntry } from "../help/glossary";
 import type { SectionId } from "../help/glossary";
 import { useRules } from "../help/rulesContext";
 
-const SECTIONS: { id: SectionId; title: string }[] = [
+const SECTIONS: { id: SectionId; title: string; deathStar?: boolean }[] = [
   { id: "goal", title: "The goal" },
   { id: "round-structure", title: "How a game runs" },
   { id: "map", title: "The map and networks" },
@@ -14,6 +15,8 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: "stock-round", title: "The stock round" },
   { id: "operating-turn", title: "An operating turn" },
   { id: "revenue", title: "How revenue is earned" },
+  { id: "fleets", title: "Fleets and bankruptcy", deathStar: true },
+  { id: "death-star", title: "The Death Star", deathStar: true },
   { id: "stock-market", title: "The stock market" },
   { id: "scoring", title: "Scoring and the end" },
   { id: "verify", title: "Checking the software" },
@@ -42,6 +45,10 @@ export function RulesPage({ section }: { section: SectionId | null }) {
     .map(([players, amount]) => `${players} players: ${amount}`)
     .join(", ");
   const perShare = 100 / rules.sharesPerCorporation;
+  const deathStar = rules.deathStarRules;
+  const rounds = roundCount(rules);
+  const sections = SECTIONS.filter((s) => deathStar || !s.deathStar);
+  const glossary: GlossaryEntry[] = Object.values(GLOSSARY).filter((entry: GlossaryEntry) => deathStar || !entry.deathStar);
 
   return (
     <div className="rules">
@@ -50,7 +57,7 @@ export function RulesPage({ section }: { section: SectionId | null }) {
           ← Back to 18BBY
         </a>
         <ol>
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <li key={s.id}>
               <a href={`#${s.id}`}>{s.title}</a>
             </li>
@@ -82,8 +89,16 @@ export function RulesPage({ section }: { section: SectionId | null }) {
 
         <Section id="round-structure" title="How a game runs">
           <p>
-            The game has {rules.totalRounds} rounds. Each round is one <strong>stock round</strong> followed by{" "}
-            {rules.operatingRoundsPerStockRound} <strong>operating rounds</strong>.
+            {deathStar ? (
+              <>
+                The game has up to {rounds} rounds, and ends sooner if the Death Star is finished (see The Death
+                Star).
+              </>
+            ) : (
+              <>The game has {rules.totalRounds} rounds.</>
+            )}{" "}
+            Each round is one <strong>stock round</strong> followed by {rules.operatingRoundsPerStockRound}{" "}
+            <strong>operating rounds</strong>.
           </p>
           <ul>
             <li>
@@ -266,7 +281,10 @@ export function RulesPage({ section }: { section: SectionId | null }) {
         </Section>
 
         <Section id="operating-turn" title="An operating turn">
-          <p>Each floated corporation does these three things, in order. Its president makes the choices.</p>
+          <p>
+            Each floated corporation does these {deathStar ? "four" : "three"} things, in order. Its president makes
+            the choices.
+          </p>
           <h3>1. Network actions</h3>
           <p>
             Up to <strong>{rules.networkActionsPerTurn}</strong> actions, paid from the corporation's treasury.
@@ -312,12 +330,22 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             All three need the hex to connect to the network you can already reach. A corporation that cannot
             afford an action is not offered it.
           </p>
-          <h3>2. Revenue</h3>
+          {deathStar && (
+            <>
+              <h3>2. Buy fleets</h3>
+              <p>
+                Buy fleets from the shared supply, one at a time, at the price shown, up to{" "}
+                {rules.deathStar.fleetLimit}. A corporation must end this step owning at least one fleet. Buying a
+                fleet does not use a network action. See Fleets and bankruptcy.
+              </p>
+            </>
+          )}
+          <h3>{deathStar ? "3" : "2"}. Revenue</h3>
           <p>
             The game computes the corporation's revenue for you and picks the best pairing of planets (see the next
-            section). You do not choose routes.
+            section). You do not choose routes.{deathStar && " It uses at most one pair per fleet the corporation owns."}
           </p>
-          <h3>3. Pay or withhold</h3>
+          <h3>{deathStar ? "4" : "3"}. Pay or withhold</h3>
           <ul>
             <li>
               <strong>Pay dividends</strong>: the revenue is split into {rules.sharesPerCorporation} per-share
@@ -381,6 +409,109 @@ export function RulesPage({ section }: { section: SectionId | null }) {
           </p>
         </Section>
 
+        {deathStar && (
+          <Section id="fleets" title="Fleets and bankruptcy">
+            <p>
+              <strong>One fleet runs one pair.</strong> A corporation's revenue is the best set of pairs that uses no
+              more pairs than it owns fleets; contract pairs need fleets too. A network with five good pairs and three
+              fleets earns from its best three.
+            </p>
+            <h3>The shared supply</h3>
+            <p>
+              Every corporation buys from one supply, and the price rises when a tier sells out. Every fleet is the
+              same whatever it cost: Imperial transit licensing gets dearer, the ships do not get better.
+            </p>
+            <table className="rules__table">
+              <thead>
+                <tr>
+                  <th>Fleets</th>
+                  <th>Price each</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.deathStar.fleetTiers.map((tier, i) => (
+                  <tr key={i}>
+                    <th>{tier.count === "unlimited" ? "then any number" : `next ${tier.count}`}</th>
+                    <td className="num">{tier.price}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <ul>
+              <li>At most {rules.deathStar.fleetLimit} fleets per corporation.</li>
+              <li>Fleets cannot be sold, traded or discarded.</li>
+              <li>Each fleet costs the price at the moment you buy it, so buying two can cross into a dearer tier.</li>
+              <li>A corporation must own at least one fleet when it finishes its fleet step.</li>
+            </ul>
+            <h3>Bankruptcy</h3>
+            <p>
+              A corporation that reaches its fleet step with <strong>no fleet</strong> and too little in its treasury
+              to buy one at the current price is <strong>bankrupt</strong>. It closes for good: its shares leave the
+              game and are worth nothing to anyone (nobody pays from their own cash), its treasury goes to the bank,
+              and it never operates again. Its charted tiles stay on the board for everyone else. A corporation that
+              has just floated can always afford its first fleet; the danger comes after a seizure.
+            </p>
+          </Section>
+        )}
+
+        {deathStar && (
+          <Section id="death-star" title="The Death Star">
+            <p>
+              The Empire is building a battle station, and the corporations are its contractors. The construction
+              site is a planet-like hub tagged <strong>{rules.deathStar.siteTag}</strong> (Imperial Works). Like any
+              planet it has every exit, needs no charting, and networks may pass through it.
+            </p>
+            <h3>Contracts</h3>
+            <p>
+              The site paired with a planet of type{" "}
+              {orList(rules.deathStar.contractPartnerTags.map((t) => TYPE_NAMES[t] ?? t))} is a{" "}
+              <strong>contract pair</strong>. It scores the current stage's contract value, never the
+              regional bonus, and the revenue matching picks it like any other pair: a president cannot refuse a
+              contract the best matching uses. The site can also be half of a basic route.
+            </p>
+            <h3>The track</h3>
+            <p>
+              Each contract pair a corporation scores puts one cube on the Death Star track, paid or withheld. The
+              Empire adds {rules.deathStar.empireCubesPerStockRound} at the end of every stock round. Every{" "}
+              {rules.deathStar.cubesPerStage} cubes fill a stage; extra cubes carry over. A stage's result applies at
+              the end of the round in which it fills, and contracts keep paying that stage's value until then.
+            </p>
+            <table className="rules__table">
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th>Contract value while building it</th>
+                  <th>When it fills</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.deathStar.stages.map((stage, i) => (
+                  <tr key={stage.name}>
+                    <th>
+                      {i + 1}. {stage.name}
+                    </th>
+                    <td className="num">{stage.value}</td>
+                    <td>{STAGE_RESULT_RULES[stage.result](rules)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <h3>The two sites</h3>
+            <p>
+              Both sites are placed with the terrain when the game starts and are shown from the start: the first in
+              the {rules.deathStar.siteRegions[0]}, the second in the {rules.deathStar.siteRegions[1]}, each at least{" "}
+              {rules.deathStar.minHomeworldDistance} hexes from every homeworld. The second is{" "}
+              <strong>reserved</strong> until the site moves there: it cannot be charted, but tiles may point at it,
+              so you can build toward it in advance. A site never connects straight to a neighbouring planet: as
+              between any two planets, traffic needs a charted lane.
+            </p>
+            <p>
+              When a site hex becomes empty space, tiles pointing into it stay, and any network that ran through the
+              site is cut there.
+            </p>
+          </Section>
+        )}
+
         <Section id="stock-market" title="The stock market">
           <p>
             Every started corporation has a marker on the grid below. Its cell shows the corporation's{" "}
@@ -434,11 +565,20 @@ export function RulesPage({ section }: { section: SectionId | null }) {
         </Section>
 
         <Section id="scoring" title="Scoring and the end">
-          <p>
-            After round {rules.totalRounds}'s last operating round the game ends. Each player's score is their
-            cash plus each share they own at its final share price. Highest wins. (The fixed round count is a
-            stand-in; a story-driven ending is planned.)
-          </p>
+          {deathStar ? (
+            <p>
+              The game ends after the set of operating rounds in which the Death Star launches (the Battle of
+              Yavin), or after round {rounds}'s last operating round if it never does. Each player's score is their
+              cash plus each share they own at its final share price; shares of a bankrupt corporation are worth
+              nothing. Highest wins.
+            </p>
+          ) : (
+            <p>
+              After round {rules.totalRounds}'s last operating round the game ends. Each player's score is their
+              cash plus each share they own at its final share price. Highest wins. (The fixed round count is a
+              stand-in; a story-driven ending is planned.)
+            </p>
+          )}
         </Section>
 
         <Section id="verify" title="Checking the software">
@@ -541,16 +681,45 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             {rules.payoutStepFractions[1]} × price or more. After a withhold: one column left. The button shows the
             price it will lead to.
           </Check>
+          {deathStar && (
+            <>
+              <h3>Fleets and the Death Star</h3>
+              <Check>
+                The fleet price on the Death Star bar starts at {rules.deathStar.fleetTiers[0].price} and rises to the
+                next tier's price once that tier's fleets are sold. Buying a fleet takes exactly that price from the
+                treasury.
+              </Check>
+              <Check>
+                A corporation never runs more pairs than it owns fleets: the dividend view says how many pairs run.
+                It is never offered a fleet past {rules.deathStar.fleetLimit}, nor Finish while it owns none.
+              </Check>
+              <Check>
+                Each contract pair scored adds one cube to the track, whether paid or withheld, and the Empire adds{" "}
+                {rules.deathStar.empireCubesPerStockRound} at the end of each stock round.
+              </Check>
+              <Check>
+                When a seizure stage fills, at the end of that round every corporation with a fleet has one fewer;
+                when the site-move stage fills, the site jumps to the dashed future site and the old hex is empty
+                space.
+              </Check>
+              <Check>
+                A corporation with no fleet whose treasury is below the fleet price at its fleet step is shown as
+                closed, its shares disappear from every player, and its tiles stay on the map.
+              </Check>
+            </>
+          )}
           <h3>End of game</h3>
           <Check>
-            The game stops after round {rules.totalRounds}. Final worth is cash plus shares × final price, and the
-            Players table agrees with the Game over screen.
+            {deathStar
+              ? `The game stops after the round in which the station launches, or after round ${rounds}.`
+              : `The game stops after round ${rules.totalRounds}.`}{" "}
+            Final worth is cash plus shares × final price, and the Players table agrees with the Game over screen.
           </Check>
         </Section>
 
         <Section id="glossary" title="Glossary">
           <dl className="rules__glossary">
-            {Object.values(GLOSSARY)
+            {glossary
               .slice()
               .sort((a, b) => a.term.localeCompare(b.term))
               .map((entry) => (
@@ -567,6 +736,31 @@ export function RulesPage({ section }: { section: SectionId | null }) {
       </article>
     </div>
   );
+}
+
+const STAGE_RESULT_RULES: Record<Rules["deathStar"]["stages"][number]["result"], (rules: Rules) => ReactNode> = {
+  seizure: () => (
+    <>
+      <strong>Seizure:</strong> every corporation with a fleet loses one. Seized fleets leave the game.
+    </>
+  ),
+  move: (rules) => (
+    <>
+      <strong>The site moves</strong> to its reserved hex in the {rules.deathStar.siteRegions[1]}; the old hex
+      becomes empty, uncharted space.
+    </>
+  ),
+  completion: () => (
+    <>
+      <strong>The station launches:</strong> the site leaves the board, the current round's operating rounds
+      finish, and the game ends.
+    </>
+  ),
+};
+
+/** "A, B or C". */
+function orList(items: string[]): string {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 }
 
 function percent(fraction: number): string {

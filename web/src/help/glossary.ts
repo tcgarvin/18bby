@@ -11,6 +11,8 @@ export interface GlossaryEntry {
   summary: (rules: Rules) => string;
   /** Id of the rules-page section that explains it in full. */
   section: SectionId;
+  /** Part of the experimental Death Star rules: listed only when they are in force. */
+  deathStar?: boolean;
 }
 
 export type SectionId =
@@ -22,6 +24,8 @@ export type SectionId =
   | "stock-round"
   | "operating-turn"
   | "revenue"
+  | "fleets"
+  | "death-star"
   | "stock-market"
   | "scoring"
   | "verify"
@@ -36,6 +40,8 @@ export const SECTION_IDS: SectionId[] = [
   "stock-round",
   "operating-turn",
   "revenue",
+  "fleets",
+  "death-star",
   "stock-market",
   "scoring",
   "verify",
@@ -43,6 +49,20 @@ export const SECTION_IDS: SectionId[] = [
 ];
 
 const sharePercent = (r: Rules): number => 100 / r.sharesPerCorporation;
+
+/** How many rounds the game runs at most: the backstop under the Death Star rules. */
+export const roundCount = (r: Rules): number => (r.deathStarRules ? r.deathStar.backstopRounds : r.totalRounds);
+
+const tierPrices = (r: Rules): string =>
+  r.deathStar.fleetTiers
+    .map((t) => (t.count === "unlimited" ? `then any number at ${t.price}` : `${t.count} at ${t.price}`))
+    .join(", ");
+
+const stageOf = (r: Rules, result: string): string =>
+  r.deathStar.stages
+    .filter((s) => s.result === result)
+    .map((s) => s.name)
+    .join(" and ");
 
 export const GLOSSARY = {
   share: {
@@ -251,8 +271,66 @@ export const GLOSSARY = {
   round: {
     term: "Round",
     summary: (r) =>
-      `The game lasts ${r.totalRounds} rounds. Each is one stock round followed by ${r.operatingRoundsPerStockRound} operating rounds.`,
+      r.deathStarRules
+        ? `The game lasts up to ${roundCount(r)} rounds, and ends sooner once the Death Star launches. Each is one stock round followed by ${r.operatingRoundsPerStockRound} operating rounds.`
+        : `The game lasts ${r.totalRounds} rounds. Each is one stock round followed by ${r.operatingRoundsPerStockRound} operating rounds.`,
     section: "round-structure",
+  },
+  fleet: {
+    term: "Fleet",
+    summary: (r) =>
+      `One fleet runs one revenue pair: a corporation earns from at most as many pairs as it owns fleets. It may own up to ${r.deathStar.fleetLimit}, and must own at least one after its fleet step. Fleets cannot be sold.`,
+    section: "fleets",
+    deathStar: true,
+  },
+  fleetSupply: {
+    term: "Fleet supply",
+    summary: (r) =>
+      `All corporations buy fleets from one shared supply: ${tierPrices(r)}. The price rises when a tier sells out, so every fleet bought makes the next one dearer for everybody.`,
+    section: "fleets",
+    deathStar: true,
+  },
+  bankruptcy: {
+    term: "Bankruptcy",
+    summary: () =>
+      "A corporation that reaches its fleet step with no fleet and too little in its treasury to buy one closes for good. Its shares are worth nothing to anyone, its money goes to the bank, and its tiles stay for others.",
+    section: "fleets",
+    deathStar: true,
+  },
+  deathStar: {
+    term: "Death Star track",
+    summary: (r) =>
+      `The Empire is building a battle station. Each contract pair a corporation runs adds a cube, and the Empire adds ${r.deathStar.empireCubesPerStockRound} after every stock round. Every ${r.deathStar.cubesPerStage} cubes fill a stage, and each stage does something when it fills.`,
+    section: "death-star",
+    deathStar: true,
+  },
+  contract: {
+    term: "Contract pair",
+    summary: (r) =>
+      `The construction site (${r.deathStar.siteTag}) paired with a planet tagged ${r.deathStar.contractPartnerTags.join(", ")}. It scores the current stage's contract value (${r.deathStar.stages.map((s) => s.value).join(", ")}), never the regional bonus, and adds a cube to the track. The best matching may pick it whether you like it or not.`,
+    section: "death-star",
+    deathStar: true,
+  },
+  seizure: {
+    term: "Seizure",
+    summary: (r) =>
+      `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes one fleet from every corporation that has one. A corporation left with none must buy one at its next turn or go bankrupt.`,
+    section: "death-star",
+    deathStar: true,
+  },
+  siteMove: {
+    term: "Site move",
+    summary: (r) =>
+      `When the ${stageOf(r, "move")} stage fills, the construction site moves to its reserved second hex in the ${r.deathStar.siteRegions[1]}. The old hex becomes empty space and networks through it are cut there.`,
+    section: "death-star",
+    deathStar: true,
+  },
+  launch: {
+    term: "Launch",
+    summary: (r) =>
+      `When the ${stageOf(r, "completion")} stage fills, the station launches: the site leaves the board, the current round's operating rounds finish, and the game ends (the Battle of Yavin). Otherwise it ends after round ${r.deathStar.backstopRounds}.`,
+    section: "death-star",
+    deathStar: true,
   },
   undo: {
     term: "Undo",

@@ -3,6 +3,7 @@ import { corpColor, playerName, tradeOptionsFor } from "../selectors";
 import type { CorpTradeOptions } from "../selectors";
 import { Ticker } from "../playback/Ticker";
 import { CertStack } from "./CertStack";
+import { FleetIcons } from "./DeathStar";
 import { Help } from "./Help";
 
 interface CorporationBoardProps {
@@ -17,7 +18,7 @@ interface CorporationBoardProps {
  * One card per corporation: identity, price and par, treasury, president, and the certificates
  * left in the IPO and the pool, with the legal trades for it inline. Animation anchors:
  * data-corp-id, data-ipo-for (the IPO stack), data-pool-for (the pool stack, present only when
- * the pool holds shares), data-treasury-for.
+ * the pool holds shares), data-treasury-for, data-fleets-for (under the Death Star rules).
  */
 export function CorporationBoard({ state, interactive, busy, onAct }: CorporationBoardProps) {
   return (
@@ -51,6 +52,8 @@ interface CorporationCardProps {
 function CorporationCard({ state, corp, explain, options, busy, onAct }: CorporationCardProps) {
   const color = corpColor(state, corp.id);
   const started = corp.status !== "unstarted";
+  const closed = corp.status === "closed";
+  const fleetLimit = state.deathStar?.fleets.limit;
   const tradable = options !== null && (options.ipoBuys.length > 0 || options.poolBuy !== null || options.sells.length > 0);
   return (
     <article
@@ -66,20 +69,20 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
           </span>
           <span className="ccard__sub">
             {corp.homeworld}
-            <span className={`status status--${corp.status}`}>{corp.status}</span>
-            {explain && <Help topic="float" />}
+            <span className={`status status--${corp.status}`}>{closed ? "closed · shares worthless" : corp.status}</span>
+            {closed ? <Help topic="bankruptcy" /> : explain && <Help topic="float" />}
           </span>
         </header>
 
-        <dl className="ccard__stats">
+        <dl className={`ccard__stats${fleetLimit !== undefined ? " ccard__stats--fleets" : ""}`}>
           <div className="ccard__price">
             <dt>
               Price
               {explain && <Help topic="sharePrice" />}
             </dt>
             <dd className="num">
-              {started ? <Ticker value={corp.price} /> : "—"}
-              {started && <span className="ccard__par">par {corp.par}</span>}
+              {started && !closed ? <Ticker value={corp.price} /> : "—"}
+              {started && !closed && <span className="ccard__par">par {corp.par}</span>}
             </dd>
           </div>
           <div data-treasury-for={corp.id}>
@@ -98,6 +101,17 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
             </dt>
             <dd>{corp.president ? playerName(state, corp.president) : "—"}</dd>
           </div>
+          {fleetLimit !== undefined && (
+            <div className="ccard__fleets">
+              <dt>
+                Fleets
+                {explain && <Help topic="fleet" />}
+              </dt>
+              <dd>
+                <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={fleetLimit} />
+              </dd>
+            </div>
+          )}
         </dl>
       </div>
 

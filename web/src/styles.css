@@ -26,6 +26,12 @@
   --nebula-wisp: #ee7fb8;
   --nebula-edge-line: #b99ad0;
   --nebula-ink: #8a3fae;
+  /* The Empire: the Death Star track, its sites and contract pairs. */
+  --empire: #5b4a8a;
+  --empire-soft: #ece8f5;
+  --empire-hull: #b9bec7;
+  --empire-edge: #4b525e;
+  --empire-dish: #8d939e;
   color-scheme: light;
 }
 
@@ -183,6 +189,10 @@ th.num {
 
 .status--parred {
   color: #9a6a00;
+}
+
+.status--closed {
+  color: var(--danger);
 }
 
 /* ---------- Messages ---------- */

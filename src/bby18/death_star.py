@@ -8,6 +8,7 @@ consequences; ``GameSession`` decides when each step happens.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from bby18.board import Board, Planet, Terrain
@@ -110,29 +111,55 @@ def place_sites(board: Board, seed: int, config: GameConfig) -> tuple[Hex, Hex]:
     placement is unaffected.
 
     The first site is in ``death_star_site_regions[0]``, the second in ``[1]``. Each is an
-    empty space hex at least ``death_star_min_homeworld_distance`` from every homeworld and
+    empty space hex at least ``death_star_min_homeworld_distance`` from every homeworld, within
+    ``death_star_max_homeworld_distance`` of at least ``death_star_near_homeworlds`` of them, and
     ``death_star_min_planet_distance`` from every planet, with at least
     ``death_star_min_chartable_neighbors`` neighbours that could be charted (not planets,
-    asteroid fields or the other site). Raises ``SitePlacementError`` if no hex qualifies.
+    asteroid fields or the other site). If no hex is near enough to the homeworlds, the
+    distance limit is relaxed one hex at a time. Raises ``SitePlacementError`` if no hex
+    qualifies at any distance.
     """
     rng = random.Random(f"death-star:{seed}")
     first_region, second_region = config.death_star_site_regions
-    firsts = [h for h in board.space_hexes() if _qualifies(board, config, h, first_region)]
-    if not firsts:
-        raise SitePlacementError(f"No hex qualifies for the first site in {first_region}")
-    first = rng.choice(firsts)
-    seconds = [
-        h
-        for h in board.space_hexes()
-        if h != first
-        and _qualifies(board, config, h, second_region, other_sites=frozenset({first}))
-        and _qualifies(board, config, first, first_region, other_sites=frozenset({h}))
-    ]
-    if not seconds:
-        raise SitePlacementError(
-            f"No hex qualifies for the second site in {second_region} (first site {first})"
+    first = rng.choice(
+        _candidates(
+            board,
+            config,
+            lambda h, reach: _qualifies(board, config, h, first_region, reach),
+            f"the first site in {first_region}",
         )
+    )
+
+    def second_qualifies(h: Hex, reach: int) -> bool:
+        return (
+            h != first
+            and _qualifies(board, config, h, second_region, reach, frozenset({first}))
+            and _qualifies(board, config, first, first_region, _NO_REACH, frozenset({h}))
+        )
+
+    seconds = _candidates(
+        board, config, second_qualifies, f"the second site in {second_region} (first {first})"
+    )
     return first, rng.choice(seconds)
+
+
+_NO_REACH = 1_000
+"""A reach larger than any board: no limit on distance to homeworlds."""
+
+
+def _candidates(
+    board: Board, config: GameConfig, qualifies: Callable[[Hex, int], bool], what: str
+) -> list[Hex]:
+    """Space hexes that qualify, relaxing ``death_star_max_homeworld_distance`` one hex at a
+    time when none do, so that a tight limit never leaves a seed without a site."""
+    reach = config.death_star_max_homeworld_distance
+    while True:
+        found = [h for h in board.space_hexes() if qualifies(h, reach)]
+        if found:
+            return found
+        if reach >= 4 * board.radius:
+            raise SitePlacementError(f"No hex qualifies for {what}")
+        reach += 1
 
 
 def _qualifies(
@@ -140,15 +167,21 @@ def _qualifies(
     config: GameConfig,
     hex: Hex,
     region: str,
+    reach: int,
     other_sites: frozenset[Hex] = frozenset(),
 ) -> bool:
-    """Whether ``hex`` can hold a site in ``region``, given the other sites placed so far."""
+    """Whether ``hex`` can hold a site in ``region``, given the other sites placed so far and
+    ``reach``, the distance within which enough homeworlds must lie."""
     if board.is_planet(hex) or board.terrain_at(hex) is not Terrain.SPACE:
         return False
     if board.region_of(hex) != region:
         return False
     homeworlds = [board.planet_named(c.homeworld).hex for c in config.corporations]
-    if any(hex.distance(h) < config.death_star_min_homeworld_distance for h in homeworlds):
+    distances = [hex.distance(h) for h in homeworlds]
+    if min(distances) < config.death_star_min_homeworld_distance:
+        return False
+    near = sum(1 for d in distances if d <= reach)
+    if near < config.death_star_near_homeworlds:
         return False
     if any(hex.distance(p.hex) < config.death_star_min_planet_distance for p in board.planets):
         return False

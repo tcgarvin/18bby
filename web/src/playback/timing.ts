@@ -16,8 +16,11 @@ export const BASE_DURATION_MS: Record<MoveKindName, number> = {
   upgrade: 2400,
   service: 2400,
   no_action: 1200,
+  buy_fleet: 1600,
+  finish_fleets: 1000,
   dividend: 3200,
   phase: 2200,
+  empire: 2800,
   unknown: 1800,
 };
 

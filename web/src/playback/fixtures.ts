@@ -3,7 +3,17 @@
  * responses (three seats, two corporations).
  */
 
-import type { Action, CorporationState, FrameState, GameState, LogEntry, MoveFrame, PlayerState, TileState } from "../api";
+import type {
+  Action,
+  CorporationState,
+  DeathStarState,
+  FrameState,
+  GameState,
+  LogEntry,
+  MoveFrame,
+  PlayerState,
+  TileState,
+} from "../api";
 
 export function corporation(id: string, overrides: Partial<CorporationState> = {}): CorporationState {
   return {
@@ -21,6 +31,7 @@ export function corporation(id: string, overrides: Partial<CorporationState> = {
     poolShares: 0,
     president: "",
     lastRevenue: 0,
+    fleets: 0,
     reachablePlanets: [],
     revenue: { total: 0, pairs: [] },
     ...overrides,
@@ -101,6 +112,7 @@ export function frameState(state: GameState, tiles: TileState[] = []): FrameStat
     players: state.players.map(({ id, cash, worth, shares, certificates }) => ({ id, cash, worth, shares, certificates })),
     corporations: state.corporations,
     tiles,
+    ...(state.deathStar ? { deathStar: state.deathStar } : {}),
   };
 }
 
@@ -138,4 +150,57 @@ export function withPlayer(state: GameState, id: string, changes: Partial<Player
 /** `state` with one corporation's fields changed. */
 export function withCorp(state: GameState, id: string, changes: Partial<CorporationState>): GameState {
   return { ...state, corporations: state.corporations.map((c) => (c.id === id ? { ...c, ...changes } : c)) };
+}
+
+/** A Death Star track at its start, shaped like the server's: four stages of six cubes. */
+export function deathStarState(overrides: Partial<DeathStarState> = {}): DeathStarState {
+  return {
+    siteName: "Death Star",
+    siteTag: "W",
+    contractPartnerTags: ["I", "R", "S"],
+    sites: [
+      { hex: [6, -2], region: "Outer Rim", status: "active" },
+      { hex: [-1, 5], region: "Mid Rim", status: "reserved" },
+    ],
+    cubes: 0,
+    cubesPerStage: 6,
+    totalCubes: 24,
+    stages: [
+      { name: "Frame", value: 40, result: "seizure", filled: false, resolved: false },
+      { name: "Superstructure", value: 50, result: "move", filled: false, resolved: false },
+      { name: "Superlaser", value: 60, result: "seizure", filled: false, resolved: false },
+      { name: "Completion", value: 70, result: "completion", filled: false, resolved: false },
+    ],
+    stage: 0,
+    contractValue: 40,
+    launched: false,
+    finalRound: 8,
+    backstopRound: 8,
+    empireCubesPerStockRound: 1,
+    fleets: {
+      price: 60,
+      tier: 0,
+      remainingInTier: 6,
+      tiers: [
+        { price: 60, count: 6, remaining: 6 },
+        { price: 90, count: 6, remaining: 6 },
+        { price: 120, count: 6, remaining: 6 },
+        { price: 160, count: "unlimited", remaining: "unlimited" },
+      ],
+      limit: 4,
+      sold: 0,
+    },
+    ...overrides,
+  };
+}
+
+/** `deathStar` with `cubes` on the track and the stages before `stage` resolved. */
+export function trackAt(deathStar: DeathStarState, cubes: number, stage: number): DeathStarState {
+  return {
+    ...deathStar,
+    cubes,
+    stage,
+    stages: deathStar.stages.map((s, i) => ({ ...s, filled: cubes >= (i + 1) * deathStar.cubesPerStage, resolved: i < stage })),
+    contractValue: deathStar.stages[stage]?.value ?? 0,
+  };
 }

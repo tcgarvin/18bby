@@ -62,7 +62,7 @@ export interface QueueEntry {
  * those after it are still to come.
  */
 export function operatingQueue(state: GameState): QueueEntry[] {
-  if (state.phase !== "network" && state.phase !== "dividend") return [];
+  if (state.phase !== "network" && state.phase !== "fleet" && state.phase !== "dividend") return [];
   const thisRound = state.log.filter((entry) => entry.round === state.roundLabel);
   const currentAt = state.currentCorporation === null ? -1 : state.operatingOrder.indexOf(state.currentCorporation);
   return state.operatingOrder.map((corpId, i) => {

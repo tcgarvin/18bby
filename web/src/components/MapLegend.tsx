@@ -1,5 +1,7 @@
 import type { GameState } from "../api";
+import { siteHexes } from "../deathstar";
 import { corpColor, findCorporation } from "../selectors";
+import { DeathStarGlyph } from "./DeathStar";
 import { Help } from "./Help";
 
 /** Regions, terrain and corporation colors under a map, plus a line on the focused network. */
@@ -27,6 +29,22 @@ export function MapLegend({ state, focusCorp }: { state: GameState; focusCorp: s
             <span className="legend__swatch legend__swatch--nebula" /> Nebula
           </span>
           <Help topic="terrain" />
+        </>
+      )}
+      {state.deathStar && (
+        <>
+          <span className="legend__sep" />
+          {siteHexes(state.deathStar, "active").length > 0 && (
+            <span className="legend__site">
+              <DeathStarGlyph size={14} /> Death Star ({state.deathStar.siteTag})
+            </span>
+          )}
+          {siteHexes(state.deathStar, "reserved").length > 0 && (
+            <span className="legend__site">
+              <span className="legend__future" /> future site
+            </span>
+          )}
+          <Help topic="contract" />
         </>
       )}
       <span className="legend__sep" />

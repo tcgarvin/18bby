@@ -3,6 +3,7 @@ import type {
   Axial,
   Board,
   CorporationState,
+  DeathStarState,
   DirectionName,
   HexAction,
   Planet,
@@ -23,7 +24,9 @@ import {
   neighbor,
   type Point,
 } from "../hex";
+import { siteHexes, sitePlanet } from "../deathstar";
 import { scatterBlobs } from "../terrain";
+import { DeathStarShape } from "./DeathStar";
 import "./HexMap.css";
 
 /** Hex side length in SVG units; everything else on the map scales from it. */
@@ -57,6 +60,8 @@ interface HexMapProps {
   fitHexes?: Axial[];
   /** Accessible name for the map. */
   label?: string;
+  /** The Death Star track and sites, under those rules: the active site is drawn as a hub. */
+  deathStar?: DeathStarState;
 }
 
 interface Segment {
@@ -207,6 +212,7 @@ export function HexMap(props: HexMapProps) {
     onHexClick,
     fitHexes,
     label = "Galaxy map",
+    deathStar,
   } = props;
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
@@ -217,11 +223,15 @@ export function HexMap(props: HexMapProps) {
     // fitKey stands in for fitHexes, which callers rebuild on every render.
     [board, fitKey],
   );
-  const planetsByKey = useMemo(
-    () => new Map(board.planets.map((p) => [hexKey(p.hex), p] as const)),
-    [board],
-  );
-  const planetsByName = useMemo(() => new Map(board.planets.map((p) => [p.name, p] as const)), [board]);
+  // The construction site is a hub like a planet (lanes stub into it, pairs arc to it), but region
+  // shading stays with the real planets, as on the server.
+  const site = sitePlanet(deathStar);
+  const siteKey = site ? `${site.name}@${hexKey(site.hex)}` : "";
+  const hubs = useMemo(() => (site ? [...board.planets, site] : board.planets), [board, siteKey]);
+  const reservedKey = siteHexes(deathStar, "reserved").map(hexKey).join(" ");
+  const reserved = useMemo(() => siteHexes(deathStar, "reserved"), [reservedKey]);
+  const planetsByKey = useMemo(() => new Map(hubs.map((p) => [hexKey(p.hex), p] as const)), [hubs]);
+  const planetsByName = useMemo(() => new Map(hubs.map((p) => [p.name, p] as const)), [hubs]);
   const segments = useMemo(() => buildSegments(tiles, planetsByKey), [tiles, planetsByKey]);
   const builtKeys = useMemo(
     () => segments.flatMap((seg) => [seg.key, ...seg.service.map((corpId) => `${seg.key}:${corpId}`)]),
@@ -386,9 +396,10 @@ export function HexMap(props: HexMapProps) {
                 <path
                   d={`M${pa.x},${pa.y}Q${control.x},${control.y} ${pb.x},${pb.y}`}
                   stroke={corporationColor(focus.id, corpIds)}
-                  className={`hexmap__pair${pair.typed ? "" : " hexmap__pair--basic"}`}
+                  className={`hexmap__pair${pair.contract ? " hexmap__pair--contract" : pair.typed ? "" : " hexmap__pair--basic"}`}
                 />
-                <g transform={`translate(${labelAt.x},${labelAt.y})`}>
+                <g transform={`translate(${labelAt.x},${labelAt.y})`} className={pair.contract ? "hexmap__pair-label--contract" : undefined}>
+                  {pair.contract && <title>{`Contract ${pair.a} ↔ ${pair.b}: ${pair.value}, and a cube on the Death Star track`}</title>}
                   <rect x={-13} y={-8} width={26} height={16} rx={8} className="hexmap__pair-pill" stroke={corporationColor(focus.id, corpIds)} />
                   <text className="hexmap__pair-value" dy="0.35em">
                     {pair.value}
@@ -397,6 +408,49 @@ export function HexMap(props: HexMapProps) {
               </g>
             );
           })}
+        </g>
+      )}
+
+      {reserved.length > 0 && (
+        <g className="hexmap__reserved">
+          {reserved.map((hex) => {
+            const center = hexToPixel(hex, S);
+            return (
+              <g key={hexKey(hex)}>
+                <title>
+                  Future Death Star site: the construction moves here when its site-move stage fills. Until then it
+                  cannot be charted, but lanes may point at it.
+                </title>
+                <path d={cornersToPath(center, S * 0.86)} className="hexmap__reserved-hex" />
+                <circle cx={center.x} cy={center.y} r={BADGE_RADIUS} className="hexmap__reserved-dot" />
+                <text x={center.x} y={center.y + BADGE_RADIUS + 12} className="hexmap__reserved-label">
+                  future site
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
+
+      {site && deathStar && (
+        <g
+          transform={`translate(${hexToPixel(site.hex, S).x},${hexToPixel(site.hex, S).y})`}
+          className={`hexmap__planet hexmap__site${focus !== null && !reachable.has(site.name) ? " hexmap__planet--dimmed" : ""}`}
+        >
+          <title>{`${site.name} construction site · ${site.region} · ${deathStar.siteTag} (Imperial Works): an open hub. Paired with ${deathStar.contractPartnerTags.join(", ")} it is a contract worth ${deathStar.contractValue}.`}</title>
+          {focus !== null && reachable.has(site.name) && (
+            <circle r={BADGE_RADIUS + 4} fill="none" stroke={corporationColor(focus.id, corpIds)} strokeWidth={2.5} />
+          )}
+          <DeathStarShape r={BADGE_RADIUS} />
+          <g transform={`translate(${BADGE_RADIUS * 0.8},${BADGE_RADIUS * 0.8})`}>
+            <circle r={6} className="hexmap__site-tag" />
+            <text className="hexmap__site-tag-text" dy="0.35em">
+              {deathStar.siteTag}
+            </text>
+          </g>
+          <text className="hexmap__planet-name" y={BADGE_RADIUS + 12}>
+            {site.name}
+          </text>
         </g>
       )}
 

@@ -60,7 +60,8 @@ export function StockMarket({ state, window, ghosts = [], emphasis = null, ancho
     height: `${100 / rows}%`,
   });
 
-  const started = state.corporations.filter((c) => c.marketCell !== null);
+  // A closed corporation's shares have left the game, so it has no place on the market.
+  const started = state.corporations.filter((c) => c.marketCell !== null && c.status !== "closed");
   const slotOf = new Map<string, number>();
   const crowd = new Map<string, number>();
   for (const corp of started) {

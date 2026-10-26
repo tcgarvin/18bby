@@ -28,6 +28,9 @@ cd web
 npm run dev
 ```
 
+To try the experimental Death Star and fleet rules, start the API with
+`BBY18_DEATH_STAR_RULES=1 uv run bby18 serve --port 8000` (see `docs/DEPLOYMENT.md`).
+
 Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`.
 The current game id goes in the URL as `?game=<id>`, so a reload returns you to the same game.
 The home screen lists your saved games. Locally the server keeps them in memory, so restarting
@@ -50,6 +53,10 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
 - `src/selectors.ts`: derived views of the game state: legal trades per corporation, the
   round stepper, the operating order with who is done, dividend payouts.
   Tested in `selectors.test.ts`.
+- `src/deathstar.ts`: derived views of the experimental Death Star rules (the state's optional
+  `deathStar` block): the active and reserved sites, cubes per stage, what the next stage does,
+  when the game ends, the fleet supply, a corporation's fleet-step options, the seizure it should
+  plan for, and how many of its pairs its fleets run. Tested in `deathstar.test.ts`.
 - `src/tilediff.ts`: which hexes changed between two states, for outlining others' moves.
   Tested in `tilediff.test.ts`.
 - `src/hotkeys.ts`: the `useHotkeys` hook behind the keyboard shortcuts. Tested in
@@ -75,6 +82,10 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   - `FlightLayer.tsx`, `flight.ts`, `choreography.ts`, `StepEffects.tsx`: an overlay that flies
     share certificates and coins between the anchors below, pops labels and rings highlights;
     `choreography.ts` says which effects each kind of move plays. Tested in `flight.test.ts`.
+  - Under the Death Star rules, `frames.ts` also captions fleet buys and finishes, notes cubes a
+    move put on the track, and adds an `empire` step after any move whose round end applied a
+    stage (seizure, site move, launch) or that left a corporation bankrupt, even after your own
+    move. Tested in `deathstar.test.ts`.
   - `ReplayBar.tsx` (caption, counter, speed, Skip; the round banner), `Ticker.tsx` (numbers
     that tick to a new value), `useSettled.ts` (show a "before" value for one frame so a newly
     mounted view still animates the change).
@@ -86,7 +97,8 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
     human is to move (`interactive`). `App` switches between screens and restores the game named
     in the URL.
   - `views/`: one presentational view per phase, all taking `ViewProps` (`views/types.ts`):
-    `StockRoundView`, `NetworkView`, `DividendView`, `GameOverView`.
+    `StockRoundView`, `NetworkView`, `FleetView` (Death Star rules: buy fleets, with
+    `FleetActions` in the operating rail), `DividendView`, `GameOverView`.
   - `TopBar` (round stepper, who is acting, overlay toggles, Undo), `RecentMoves` (the ribbon),
     `Overlay` and `MapOverlay` (the map, market and log over any view).
   - `PlayerStrip` (player cards, or a compact cash strip), `CorporationBoard` (corporation cards
@@ -105,6 +117,11 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
     coordinates from the trigger (`src/popover.ts`, tested in `popover.test.ts`): below the
     "?", flipped above when there is no room, clamped inside the window, and above overlays and
     the flight layer, so no panel can clip it.
+  - `DeathStar`: under the Death Star rules, `DeathStarBar` (a strip under the top bar with the
+    track's cubes per stage, the stage being built, its contract value and result, when the game
+    ends, and the fleet price), `FleetIcons` (a corporation's fleets up to the limit) and the
+    station glyph the map draws on the active site. Everything in it is hidden when a game has no
+    `deathStar` block.
   - `LogPanel`, `NewGame`, `SavedGames` (the "your games" list on the home screen),
     `RulesPage`.
 
@@ -115,7 +132,9 @@ up (`src/playback/flight.ts`): `data-player-id` (player card), `data-cash-for` (
 `data-corp-id` (corporation card, or its operating-order entry), `data-ipo-for` (the IPO
 certificate stack), `data-pool-for` (the pool stack, present only while the pool holds shares;
 effects fall back to the corporation card), `data-treasury-for`, `data-market-token` (a corporation's stock market token),
-`data-order-corp` (operating-order entry) and `data-hex="q,r"` (a map hex). Each appears at most
+`data-order-corp` (operating-order entry), `data-hex="q,r"` (a map hex), and under the Death
+Star rules `data-fleets-for` (a corporation's fleet icons), `data-fleet-supply` and
+`data-death-star-track` (on the Death Star bar). Each appears at most
 once per view; second copies in overlays leave them off. The `caption-slot` at the bottom of
 the stage holds the replay caption.
 
@@ -124,7 +143,9 @@ What each kind of move animates (`src/playback/choreography.ts`): a buy flies a 
 floats); a sale flies the certificates to the pool and lights the market token; a build flies a coin
 from the treasury to the hex, where the new lane draws in and glows in the builder's colour; a
 dividend flies a coin to each paid player's cash, or pops the withheld sum at the treasury, and
-lights the market token. Cash, treasury and prices tick to their new values, and market tokens
+lights the market token; a fleet buy flies a coin to the fleet price on the Death Star bar and
+lights the corporation's fleets; a seizure pops "−1 fleet" on each corporation that lost one, a
+site move lights the old and new hexes, and a bankruptcy pops on the corporation. Cash, treasury and prices tick to their new values, and market tokens
 slide between cells.
 
 ## Playing
@@ -143,6 +164,12 @@ and who is acting.
 - **Operating, dividend:** the corporation's revenue and its scored pairs, with Pay and Withhold
   side by side: what each shareholder receives, the treasury, and where the share price moves
   (marked on a slice of the market). The map shrinks to the corporation's network.
+- **Operating, fleets (Death Star rules):** after the network actions the corporation buys fleets
+  from the shared supply. The rail's entry shows its fleets, the next fleet's price and what it
+  adds to this turn's revenue, and warns when a coming seizure would leave it unable to replace
+  its only fleet. <kbd>B</kbd> buys, <kbd>P</kbd> finishes. The Death Star bar under the top bar
+  shows the track, the contract value and when the game ends throughout; the map draws the site
+  (W) and the dashed future site, and dotted arcs mark contract pairs.
 - **Map, market and log** open over any view that does not already show them: <kbd>M</kbd>,
   <kbd>K</kbd>, <kbd>L</kbd> or the top-bar buttons; <kbd>Esc</kbd> closes.
 - **Undo** (top bar, <kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) takes back your last move,

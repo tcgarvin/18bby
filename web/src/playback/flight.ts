@@ -86,6 +86,12 @@ export const anchor = {
   marketToken: (corpId: string) => attr("data-market-token", corpId),
   orderCorp: (corpId: string) => attr("data-order-corp", corpId),
   hex: (hex: Axial) => attr("data-hex", hexKey(hex)),
+  /** A corporation's row of fleet icons (Death Star rules). */
+  fleets: (corpId: string) => attr("data-fleets-for", corpId),
+  /** The fleet supply's price on the Death Star bar. */
+  fleetSupply: () => "[data-fleet-supply]",
+  /** The Death Star track on the Death Star bar. */
+  track: () => "[data-death-star-track]",
 };
 
 /**

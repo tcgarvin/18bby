@@ -26,7 +26,8 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Board
-from bby18.config import GameConfig
+from bby18.config import FleetTier, GameConfig, Unlimited
+from bby18.death_star import SITE_NAME, STAGE_NAMES, DeathStarTrack
 from bby18.game import Game, LogEntry
 from bby18.hexgrid import Direction, Hex
 from bby18.network import Tile
@@ -119,10 +120,26 @@ def _dividend_preview(game: Game, corp: Corporation, revenue: int) -> Json | Non
     }
 
 
+def _fleet_revenue(game: Game, corp: Corporation) -> Json:
+    """What a corporation's network would earn with one more fleet, and with no fleet limit at
+    all, so a client can show what the next fleet adds and how many pairs go unrun."""
+    if not corp.floated:
+        return {"withNextFleet": 0, "uncapped": 0, "uncappedPairs": 0}
+    planets = game.reachable_planets(corp)
+    floor = game.config.homeworld_basic_income
+    with_next = game.planet_revenue(planets, game.pair_cap(corp) + 1)
+    uncapped = game.planet_revenue(planets)
+    return {
+        "withNextFleet": max(with_next.total, floor),
+        "uncapped": max(uncapped.total, floor),
+        "uncappedPairs": len(uncapped.pairs),
+    }
+
+
 def _corp_to_json(game: Game, corp_id: str) -> Json:
     corp = game.corp(corp_id)
     revenue = game.revenue(corp) if corp.floated else None
-    return {
+    data = {
         "id": corp.id,
         "name": corp.spec.name,
         "homeworld": corp.spec.homeworld,
@@ -147,13 +164,114 @@ def _corp_to_json(game: Game, corp_id: str) -> Json:
             {
                 "total": revenue.total,
                 "pairs": [
-                    {"a": pair.a.name, "b": pair.b.name, "value": pair.value, "typed": pair.typed}
+                    {
+                        "a": pair.a.name,
+                        "b": pair.b.name,
+                        "value": pair.value,
+                        "typed": pair.typed,
+                        "contract": pair.contract,
+                    }
                     for pair in revenue.pairs
                 ],
             }
             if revenue is not None
             else {"total": 0, "pairs": []}
         ),
+    }
+    if game.config.death_star_rules:
+        data["fleetRevenue"] = _fleet_revenue(game, corp)
+    return data
+
+
+def _site_status(track: DeathStarTrack, index: int) -> str:
+    """``active`` (under construction), ``reserved`` (a future site), ``vacated`` (the site
+    moved on and the hex is empty space), ``launched`` (the station left from here and the hex
+    is empty space) or ``unused`` (a future site the station launched before reaching)."""
+    if index < track.site_index:
+        return "vacated"
+    if index == track.site_index:
+        return "launched" if track.launched else "active"
+    return "unused" if track.launched else "reserved"
+
+
+def stage_title(index: int) -> str:
+    """A stage's display name; ``index`` is 0-based."""
+    return STAGE_NAMES[index] if index < len(STAGE_NAMES) else f"Stage {index + 1}"
+
+
+def _count_json(count: int | Unlimited) -> int | str:
+    return count.value if isinstance(count, Unlimited) else count
+
+
+def fleet_tiers_to_json(tiers: tuple[FleetTier, ...], sold: int) -> list[Json]:
+    """Each tier's price, size and fleets left after ``sold`` have been sold. An unlimited
+    tier's count and remaining are the string ``"unlimited"``."""
+    result: list[Json] = []
+    left_to_place = sold
+    for tier in tiers:
+        if isinstance(tier.count, Unlimited):
+            remaining: int | str = tier.count.value
+        else:
+            taken = min(left_to_place, tier.count)
+            left_to_place -= taken
+            remaining = tier.count - taken
+        result.append(
+            {"price": tier.price, "count": _count_json(tier.count), "remaining": remaining}
+        )
+    return result
+
+
+def death_star_to_json(game: Game) -> Json:
+    """The Death Star track, its construction sites and the fleet supply (experimental Death
+    Star rules only)."""
+    config = game.config
+    track = game.death_star
+    filled = track.stages_filled(config)
+    # Regions as on the map: a space hex takes its nearest real planet's region, not the site's.
+    base = game.board.without_planet(SITE_NAME) if track.active_site is not None else game.board
+    tiers = fleet_tiers_to_json(config.fleet_tiers, game.fleets_sold)
+    tier = game.fleet_tier()
+    return {
+        "siteName": SITE_NAME,
+        "siteTag": config.death_star_tag,
+        "contractPartnerTags": sorted(config.contract_partner_tags),
+        "sites": [
+            {
+                "hex": hex_to_json(h),
+                "region": base.region_of(h),
+                "status": _site_status(track, i),
+            }
+            for i, h in enumerate(track.sites)
+        ],
+        "cubes": track.cubes,
+        "cubesPerStage": config.death_star_cubes_per_stage,
+        "totalCubes": config.death_star_cubes_per_stage * len(config.death_star_stage_values),
+        "stages": [
+            {
+                "name": stage_title(i),
+                "value": value,
+                "result": result,
+                "filled": i < filled,
+                "resolved": i < track.stages_resolved,
+            }
+            for i, (value, result) in enumerate(
+                zip(config.death_star_stage_values, config.death_star_stage_results)
+            )
+        ],
+        "stage": game.death_star_stage(),
+        "contractValue": game.contract_value(),
+        "launched": track.launched,
+        "finalRound": game.round_limit(),
+        "backstopRound": config.death_star_backstop_rounds,
+        "empireCubesPerStockRound": config.empire_cubes_per_stock_round,
+        "fleets": {
+            "price": game.fleet_price(),
+            "tier": tier,
+            "remainingInTier": tiers[tier]["remaining"],
+            "tiers": tiers,
+            "limit": config.fleet_limit,
+            "sold": game.fleets_sold,
+        },
     }
 
 
@@ -209,7 +327,7 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
     """The full game state a client renders. ``moves`` are the frames of the moves the
     current request played (see ``MoveRecorder``); empty when it played none."""
     game = session.game
-    return {
+    data = {
         **_turn_to_json(session),
         "totalRounds": game.round_limit(),
         "waitingOnHuman": session.waiting_on_human(),
@@ -245,6 +363,9 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
         "log": [log_entry_to_json(i, e) for i, e in enumerate(game.log)][-200:],
         "moves": list(moves),
     }
+    if game.config.death_star_rules:
+        data["deathStar"] = death_star_to_json(game)
+    return data
 
 
 class MoveRecorder:
@@ -266,6 +387,14 @@ class MoveRecorder:
         tiles = tile_map(game)
         changed = [tile for h, tile in tiles.items() if self._tiles.get(h) != tile]
         self._tiles = tiles
+        after: Json = {
+            **_turn_to_json(session),
+            "players": [player_to_json(game, p) for p in game.players],
+            "corporations": [_corp_to_json(game, c) for c in game.corporations],
+            "tiles": changed,
+        }
+        if game.config.death_star_rules:
+            after["deathStar"] = death_star_to_json(game)
         self.frames.append(
             {
                 "phase": move.phase.value,
@@ -278,12 +407,7 @@ class MoveRecorder:
                     log_entry_to_json(i, game.log[i]) for i in range(move.log_start, len(game.log))
                 ],
                 "revenue": move.revenue,
-                "after": {
-                    **_turn_to_json(session),
-                    "players": [player_to_json(game, p) for p in game.players],
-                    "corporations": [_corp_to_json(game, c) for c in game.corporations],
-                    "tiles": changed,
-                },
+                "after": after,
             }
         )
 
@@ -319,6 +443,30 @@ def rules_to_json(config: GameConfig) -> Json:
         "certificateLimit": config.certificate_limit,
         "totalRounds": config.total_rounds,
         "operatingRoundsPerStockRound": config.operating_rounds_per_stock_round,
+        "deathStarRules": config.death_star_rules,
+        "deathStar": death_star_rules_to_json(config),
+    }
+
+
+def death_star_rules_to_json(config: GameConfig) -> Json:
+    """The experimental Death Star and fleet numbers. Always listed; ``deathStarRules`` in
+    ``rules_to_json`` says whether they are in force."""
+    return {
+        "fleetTiers": fleet_tiers_to_json(config.fleet_tiers, 0),
+        "fleetLimit": config.fleet_limit,
+        "siteTag": config.death_star_tag,
+        "contractPartnerTags": sorted(config.contract_partner_tags),
+        "stages": [
+            {"name": stage_title(i), "value": value, "result": result}
+            for i, (value, result) in enumerate(
+                zip(config.death_star_stage_values, config.death_star_stage_results)
+            )
+        ],
+        "cubesPerStage": config.death_star_cubes_per_stage,
+        "empireCubesPerStockRound": config.empire_cubes_per_stock_round,
+        "backstopRounds": config.death_star_backstop_rounds,
+        "siteRegions": list(config.death_star_site_regions),
+        "minHomeworldDistance": config.death_star_min_homeworld_distance,
     }
 
 

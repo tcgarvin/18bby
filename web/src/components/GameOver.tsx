@@ -1,13 +1,27 @@
 import type { GameState } from "../api";
 import { corpColor } from "../selectors";
 import { CertStack } from "./CertStack";
+import { DeathStarGlyph } from "./DeathStar";
 import { botLabel } from "./PlayerStrip";
 
 /** Players ranked by final worth, each with their holdings and (for bots) the plan they played. */
 export function GameOver({ state, onNewGame }: { state: GameState; onNewGame: () => void }) {
   const ranking = [...state.players].sort((a, b) => b.worth - a.worth);
+  const deathStar = state.deathStar;
+  const closed = state.corporations.filter((c) => c.status === "closed").map((c) => c.id);
   return (
     <div className="final">
+      {deathStar && (
+        <p className="final__ending">
+          <DeathStarGlyph size={18} />
+          <span>
+            {deathStar.launched
+              ? `The Death Star launched: the Battle of Yavin ended the game after round ${deathStar.finalRound}.`
+              : `The station was never finished: the game ended at the round ${deathStar.finalRound} backstop.`}
+            {closed.length > 0 && ` Bankrupt, shares worthless: ${closed.join(", ")}.`}
+          </span>
+        </p>
+      )}
       <p className="final__lead">Final worth is cash plus shares at market price.</p>
       <ol className="ranking">
         {ranking.map((p, i) => (

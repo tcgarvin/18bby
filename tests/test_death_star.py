@@ -791,3 +791,26 @@ def test_a_charted_lane_connects_a_planet_to_an_adjacent_site():
     exits = frozenset({lane.direction_to(planet), lane.direction_to(site)})
     game.network.chart("CEC", lane, exits, frozenset({planet}))
     assert {lane, site} <= game.network.reachable("CEC", planet)
+
+
+def test_contested_sites_lie_within_reach_of_two_homeworlds():
+    config = replace(RULES, death_star_max_homeworld_distance=6, death_star_near_homeworlds=2)
+    board = load_board(config.map_file)
+    homeworlds = [board.planet_named(c.homeworld).hex for c in config.corporations]
+    for seed in range(1, 40):
+        game = new_game(config, seed=seed)
+        for site in game.death_star.sites:
+            near = [h for h in homeworlds if site.distance(h) <= 6]
+            assert len(near) >= 2
+
+
+def test_a_tight_contest_distance_relaxes_rather_than_failing():
+    config = replace(RULES, death_star_max_homeworld_distance=3, death_star_near_homeworlds=2)
+    for seed in range(1, 40):
+        first, second = new_game(config, seed=seed).death_star.sites
+        assert first != second
+
+
+def test_contest_distance_needs_enough_corporations():
+    with pytest.raises(ValueError, match="death_star_near_homeworlds"):
+        replace(RULES, death_star_near_homeworlds=5).validate_rule_variants()

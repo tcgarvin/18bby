@@ -7,9 +7,11 @@ import { newLogEntries } from "../logdiff";
 import { FlightLayer } from "../playback/FlightLayer";
 import { PhaseBanner, ReplayBar } from "../playback/ReplayBar";
 import { StepEffects } from "../playback/StepEffects";
+import { playbackSteps } from "../playback/frames";
 import { usePlayback } from "../playback/usePlayback";
 import { corpColor } from "../selectors";
 import { changedHexes } from "../tilediff";
+import { DeathStarBar } from "./DeathStar";
 import { LogPanel } from "./LogPanel";
 import { MapOverlay } from "./MapOverlay";
 import { Overlay } from "./Overlay";
@@ -17,6 +19,7 @@ import { RecentMoves } from "./RecentMoves";
 import { StockMarket } from "./StockMarket";
 import { TopBar } from "./TopBar";
 import { DividendView } from "./views/DividendView";
+import { FleetView } from "./views/FleetView";
 import { GameOverView } from "./views/GameOverView";
 import { NetworkView } from "./views/NetworkView";
 import { StockRoundView } from "./views/StockRoundView";
@@ -36,6 +39,7 @@ const NO_CHANGES = new Map<string, string[]>();
 const OVERLAYS: Record<GameState["phase"], OverlayKind[]> = {
   stock: ["map", "log"],
   network: ["market", "log"],
+  fleet: ["market", "log"],
   dividend: ["map", "market", "log"],
   game_over: ["map", "market", "log"],
 };
@@ -43,6 +47,16 @@ const OVERLAYS: Record<GameState["phase"], OverlayKind[]> = {
 /** Log lines played automatically in the request that produced `state` (bots, forced moves). */
 function automaticEntries(state: GameState): LogEntry[] {
   return state.log.filter((entry) => entry.seq >= state.automaticLogStart);
+}
+
+/**
+ * Empire log lines that the player's own move caused (a seizure at the end of the round it ended,
+ * say), which happen whether or not anyone else moved after it.
+ */
+function empireConsequences(before: GameState, after: GameState): LogEntry[] {
+  const own = (after.moves ?? []).filter((move) => !move.automatic);
+  if (!playbackSteps(before, after).some((step) => step.kind.kind === "empire" && !step.frame?.automatic)) return [];
+  return own.flatMap((move) => move.log.filter((entry) => entry.actor === "Empire"));
 }
 
 /** A new game's opening bot moves: there is no earlier state to replay them from, so list them. */
@@ -110,7 +124,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
       () => submitAction(gameId, action),
       (next) => {
         setFresh(newLogEntries(state.log, next.log));
-        const automatic = automaticEntries(next);
+        const automatic = [...empireConsequences(state, next), ...automaticEntries(next)];
         // A move nobody answered (the first of two network actions) keeps the previous summary.
         if (automatic.length === 0) return;
         playback.enqueue(state, next);
@@ -194,6 +208,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           onUndo={undo}
           onLeave={onLeave}
         />
+        {display.deathStar && <DeathStarBar deathStar={display.deathStar} over={display.phase === "game_over"} />}
         {recent.length > 0 && !replaying && (
           <RecentMoves
             state={display}
@@ -235,6 +250,8 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             <StockRoundView {...viewProps} />
           ) : display.phase === "network" ? (
             <NetworkView {...viewProps} />
+          ) : display.phase === "fleet" ? (
+            <FleetView {...viewProps} />
           ) : display.phase === "dividend" ? (
             <DividendView {...viewProps} />
           ) : (

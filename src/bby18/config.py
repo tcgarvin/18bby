@@ -183,10 +183,16 @@ class GameConfig:
     """Region of the first construction site, then of the second."""
     death_star_min_homeworld_distance: int = 3
     """Each site is at least this many hexes from every corporation's homeworld."""
+    death_star_max_homeworld_distance: int = 99
+    """Each site is at most this many hexes from at least ``death_star_near_homeworlds``
+    homeworlds, so that several corporations can contest it. The default, larger than any
+    board, is no constraint."""
+    death_star_near_homeworlds: int = 1
+    """How many homeworlds must be within ``death_star_max_homeworld_distance`` of each site."""
     death_star_min_planet_distance: int = 1
     """Each site is at least this many hexes from every planet. 1 (no constraint beyond not
-    being a planet) allows a site next to a planet, which then connects to it directly as two
-    open hubs do; 2 forbids that but leaves the Mid Rim almost no qualifying hexes on this
+    being a planet) allows a site next to a planet (two hubs still need a charted lane
+    between them to connect); 2 forbids that but leaves the Mid Rim almost no qualifying hexes on this
     map."""
     death_star_min_chartable_neighbors: int = 2
     """Each site has at least this many neighbours that could be charted."""
@@ -261,6 +267,13 @@ class GameConfig:
         ):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} cannot be negative")
+        if not 1 <= self.death_star_near_homeworlds <= len(self.corporations):
+            raise ValueError("death_star_near_homeworlds must be between 1 and the corporations")
+        if self.death_star_max_homeworld_distance < self.death_star_min_homeworld_distance:
+            raise ValueError(
+                "death_star_max_homeworld_distance cannot be below "
+                "death_star_min_homeworld_distance"
+            )
 
     def starting_cash(self, player_count: int) -> int:
         if player_count not in self.starting_cash_by_player_count:
