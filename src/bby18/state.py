@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from bby18.config import CorporationSpec
+from bby18.hexgrid import Hex
 from bby18.market import MarketCell
 
 NO_PLAYER = ""
@@ -46,7 +47,9 @@ class Corporation:
     float_order: int = -1
     last_revenue: int = 0
     fleets: int = 0
-    """Fleets owned; each runs one revenue pair (experimental Death Star rules only)."""
+    """Fleets owned; each runs one revenue pair (Death Star rules only). Under the facility
+    rules, the facilities it owns: ``Game`` keeps it equal to its entries in
+    ``Game.facilities``, so pair capacity reads the same under both rules."""
 
     @property
     def id(self) -> str:
@@ -55,3 +58,14 @@ class Corporation:
     @property
     def floated(self) -> bool:
         return self.status is CorpStatus.FLOATED
+
+
+@dataclass(frozen=True)
+class Facility:
+    """One facility on a planet (experimental facility rules)."""
+
+    planet: Hex
+    owner: str
+    """The owning corporation's id, or ``EMPIRE`` once seized."""
+    build_number: int
+    """Order of building over the whole game, from 0; a later facility has a higher number."""

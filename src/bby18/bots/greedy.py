@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from bby18.actions import (
+    BuildFacility,
     BuyFleet,
     BuyShare,
     Chart,
@@ -614,8 +615,11 @@ class GreedyBot:
         self, game: Game, corp: Corporation, legal: list[FleetAction]
     ) -> FleetAction:
         """Buy the mandatory first fleet, then fleets by ``fleet_target`` or by value (see
-        ``_wants_fleet``)."""
-        buys = [a for a in legal if isinstance(a, BuyFleet)]
+        ``_wants_fleet``). Under the facility rules the same decision builds a facility, placed
+        by ``_best_facility``."""
+        buys: Sequence[BuyFleet | BuildFacility] = [
+            a for a in legal if isinstance(a, (BuyFleet, BuildFacility))
+        ]
         if not buys:
             return FinishFleets()
         wanted = self._wants_fleet(
@@ -626,7 +630,33 @@ class GreedyBot:
             game.contract_value(),
             buys[0].cost,
         )
-        return buys[0] if wanted else FinishFleets()
+        if not wanted:
+            return FinishFleets()
+        if game.config.facility_rules:
+            return self._best_facility(
+                game, corp, [a for a in buys if isinstance(a, BuildFacility)]
+            )
+        return buys[0]
+
+    @staticmethod
+    def _best_facility(
+        game: Game, corp: Corporation, builds: Sequence[BuildFacility]
+    ) -> BuildFacility:
+        """The build whose network would earn most with one more pair, then the one farthest
+        from the construction site (the Empire takes the nearest), then the first listed."""
+        site = game.death_star_site()
+        pairs = corp.fleets + 1
+        home = game.homeworld(corp)
+
+        def key(indexed: tuple[int, BuildFacility]) -> tuple[int, int, int]:
+            index, action = indexed
+            reach = game.network_after_facility(action).reachable(corp.id, home)
+            planets = [game.board.planet_at(h) for h in sorted(reach) if game.board.is_planet(h)]
+            revenue = game.planet_revenue(planets, pairs).total
+            distance = action.planet.distance(site) if site is not None else 0
+            return revenue, distance, -index
+
+        return max(enumerate(builds), key=key)[1]
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool:
         intended = self._intended_dividend(game, corp, revenue)

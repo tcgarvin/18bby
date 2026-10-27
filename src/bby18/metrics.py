@@ -24,7 +24,8 @@ _STARTS = re.compile(r"^starts (\S+) at par \d+$")
 _SELLS = re.compile(r"^sells (\d+) (\S+) for \d+; price \d+$")
 _NO_NETWORK = "takes no network action"
 _SOLD_OUT = re.compile(r"^is sold out; price \d+$")
-_CHART = re.compile(r"^chart \S+ exits \S+ for (\d+)$")
+_CHART = re.compile(r"^chart \S+ exits \S+ for (\d+)(?:; .*)?$")
+"""A chart and its cost; under the facility rules notes on planet exits may follow."""
 
 NEAR_PAIR_DISTANCE = 3
 """Planet pairs this many hexes apart or fewer count as near neighbors."""

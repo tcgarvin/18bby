@@ -163,9 +163,21 @@ class GameConfig:
         FleetTier(UNLIMITED, 160),
     )
     """The shared fleet supply, cheapest tier first. The price rises when a tier sells out; the
-    last tier must be ``UNLIMITED``."""
+    last tier must be ``UNLIMITED``. Under ``facility_rules`` the same tiers price facilities
+    (a free home facility does not come from the supply)."""
     fleet_limit: int = 4
-    """Most fleets one corporation may own."""
+    """Most fleets one corporation may own; under ``facility_rules``, most facilities."""
+    facility_rules: bool = False
+    """EXPERIMENTAL; requires ``death_star_rules``. Facilities and planet exits (see "Facilities
+    and planet exits" in docs/DECISIONS.md): facilities replace fleets as pair capacity, one pair
+    per facility a corporation owns, and each sits on a planet. A planet (not the construction
+    site) has ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit
+    when charted (or upgraded) toward the planet, first come, first served, and the planet
+    connects only through claimed sides. A seizure turns the facility nearest the site Imperial."""
+    planet_base_exits: int = 1
+    """Exits a planet has before any facility is built on it (``facility_rules`` only)."""
+    facilities_per_planet: int = 2
+    """Most facilities, corporate or Imperial, one planet may hold (``facility_rules`` only)."""
     death_star_tag: str = "W"
     """Tag of the construction site (Imperial Works)."""
     contract_partner_tags: frozenset[str] = frozenset({"R", "I", "S"})
@@ -226,6 +238,16 @@ class GameConfig:
         if self.nebula_chart_surcharge < 0:
             raise ValueError("nebula_chart_surcharge cannot be negative")
         self._validate_death_star_rules()
+        self._validate_facility_rules()
+
+    def _validate_facility_rules(self) -> None:
+        """Raise ``ValueError`` if the facility switch or numbers cannot make a game."""
+        if self.facility_rules and not self.death_star_rules:
+            raise ValueError("facility_rules requires death_star_rules")
+        if self.planet_base_exits < 0:
+            raise ValueError("planet_base_exits cannot be negative")
+        if self.facilities_per_planet < 1:
+            raise ValueError("facilities_per_planet must be at least 1")
 
     def _validate_death_star_rules(self) -> None:
         """Raise ``ValueError`` if the fleet or Death Star numbers cannot make a game."""

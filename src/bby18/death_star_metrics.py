@@ -18,7 +18,7 @@ import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 
-from bby18.actions import BuyFleet, SellShares
+from bby18.actions import BuildFacility, BuyFleet, SellShares
 from bby18.config import SEIZURE, SITE_MOVE, GameConfig
 from bby18.game import Game
 from bby18.session import Dividend, GameSession, Phase, PlayedMove
@@ -78,8 +78,9 @@ def stock_round_before(clock: float, operating_rounds_per_stock_round: int) -> f
 @dataclass
 class CorpDeathStarMetrics:
     fleets_bought: int = 0
+    """Fleets bought; under the facility rules, facilities built (not the free home one)."""
     fleet_spend: int = 0
-    """Total paid for fleets."""
+    """Total paid for fleets (or facilities)."""
     fleets_seized: int = 0
     final_fleets: int = 0
     contract_pairs: int = 0
@@ -245,6 +246,9 @@ class DeathStarRecorder:
                 closed.closed_round = point.round
                 closed.closed_president = move.actor
         self._record_track(game, point, move)
+        # Fleets rise in fleet moves and, under the facility rules, when a corporation floats
+        # with its home facility; only a stage result lowers them, which _record_track counts.
+        self._fleets = {c.id: c.fleets for c in game.corporations.values()}
         if point.operating and game.round_label != move.round_label:
             self._or_prices.append(
                 (
@@ -265,11 +269,10 @@ class DeathStarRecorder:
         self._sales[point.clock] = self._sales.get(point.clock, 0) + sold
 
     def _record_fleet(self, move: PlayedMove) -> None:
-        if isinstance(move.action, BuyFleet):
+        if isinstance(move.action, (BuyFleet, BuildFacility)):
             corp = self.corps[move.corporation]
             corp.fleets_bought += 1
             corp.fleet_spend += move.action.cost
-            self._fleets[move.corporation] += 1
 
     def _record_dividend(self, point: RoundPoint, move: PlayedMove) -> None:
         self.corps[move.corporation].revenue_total += move.revenue
@@ -302,7 +305,6 @@ class DeathStarRecorder:
                 lost = self._fleets[state.id] - state.fleets
                 if lost > 0:
                     self.corps[state.id].fleets_seized += lost
-                self._fleets[state.id] = state.fleets
         self._contract_value = game.contract_value()
 
     def metrics(self, game: Game) -> DeathStarMetrics:

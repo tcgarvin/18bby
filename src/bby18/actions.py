@@ -87,10 +87,29 @@ class BuyFleet:
 
 @dataclass(frozen=True)
 class FinishFleets:
-    """End the fleet step and go on to revenue."""
+    """End the fleet step (the facility step under the facility rules) and go on to revenue."""
 
     def __str__(self) -> str:
         return "finish buying fleets"
 
 
-FleetAction = BuyFleet | FinishFleets
+@dataclass(frozen=True)
+class BuildFacility:
+    """Build one facility on ``planet`` at ``cost``, the current price from the shared supply
+    (experimental facility rules). The planet gains an exit: ``exit_side`` is the side, facing a
+    dangling lane, that the builder gives it to, or ``None`` to leave it unclaimed for the next
+    tile charted toward the planet."""
+
+    planet: Hex
+    exit_side: Direction | None
+    cost: int
+
+    def __str__(self) -> str:
+        if self.exit_side is None:
+            where = "exit unclaimed"
+        else:
+            where = f"exit toward {self.planet.neighbor(self.exit_side)}"
+        return f"build a facility at {self.planet} for {self.cost} ({where})"
+
+
+FleetAction = BuyFleet | FinishFleets | BuildFacility

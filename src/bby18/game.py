@@ -11,6 +11,7 @@ from dataclasses import dataclass, field, replace
 from itertools import combinations
 
 from bby18.actions import (
+    BuildFacility,
     BuyFleet,
     BuyShare,
     Chart,
@@ -37,15 +38,19 @@ from bby18.death_star import (
     site_planet,
     stage_name,
 )
-from bby18.hexgrid import Hex
+from bby18.hexgrid import Direction, Hex
 from bby18.market import StockMarket
 from bby18.network import HyperspaceNetwork, IllegalAction
 from bby18.revenue import NO_PAIR_LIMIT, RevenueResult, compute_revenue
-from bby18.state import NO_PLAYER, Corporation, CorpStatus, Player
+from bby18.state import NO_PLAYER, Corporation, CorpStatus, Facility, Player
 from bby18.terrain import generate_terrain
 
 EMPIRE = "Empire"
-"""Log actor for Death Star track events and the fleet supply."""
+"""Log actor for Death Star track events and the fleet supply, and the owner of seized
+facilities."""
+UNFLOATED = (CorpStatus.UNSTARTED, CorpStatus.PARRED)
+"""Statuses of a corporation that may still float (and so keeps a slot on its homeworld under
+the facility rules)."""
 
 
 @dataclass
@@ -76,7 +81,16 @@ class Game:
     death_star: DeathStarTrack = field(default_factory=DeathStarTrack)
     """The construction sites and track; inactive unless ``config.death_star_rules``."""
     fleets_sold: int = 0
-    """Fleets sold from the shared supply so far (experimental Death Star rules)."""
+    """Fleets (or facilities, under the facility rules) sold from the shared supply so far.
+    Free home facilities do not come from the supply."""
+    facilities: list[Facility] = field(default_factory=list)
+    """Every facility on the board, oldest first (experimental facility rules)."""
+    facilities_built: int = 0
+    """Facilities built so far, home facilities included: the next one's ``build_number``."""
+    facility_seizure_ties: int = 0
+    """Seizures at which a corporation's facilities nearest the site lay on more than one
+    planet, so the most-recently-built tie-break decided which planet the Empire took. Two on
+    one planet are the same outcome and do not count."""
 
     @classmethod
     def new(
@@ -93,12 +107,16 @@ class Game:
         for spec in config.corporations:
             board.planet_named(spec.homeworld)  # validates the homeworld exists
             corporations[spec.id] = Corporation(spec, ipo_shares=config.shares_per_corporation)
+        network = HyperspaceNetwork(board)
+        if config.facility_rules:
+            # The construction site is not on this board yet; it keeps every exit.
+            network.limit_planet_exits((p.hex for p in board.planets), config.planet_base_exits)
         game = cls(
             config=config,
             board=board,
             players=players,
             corporations=corporations,
-            network=HyperspaceNetwork(board),
+            network=network,
             market=StockMarket(config),
         )
         if config.death_star_rules:
@@ -161,7 +179,8 @@ class Game:
         )
 
     def pair_cap(self, corp: Corporation) -> int:
-        """Most pairs ``corp`` may run: its fleets under the Death Star rules, else no cap."""
+        """Most pairs ``corp`` may run: its fleets under the Death Star rules (its facilities
+        under the facility rules), else no cap."""
         return corp.fleets if self.config.death_star_rules else NO_PAIR_LIMIT
 
     def chart_cost(self, hex: Hex) -> int:
@@ -351,6 +370,8 @@ class Game:
             corp.float_order = self._floats
             self._floats += 1
             self._log(corp.id, f"floats with treasury {corp.treasury}")
+            if self.config.facility_rules:
+                self._place_home_facility(corp)
 
     # --- operating round ---------------------------------------------------------
 
@@ -398,14 +419,18 @@ class Game:
             self._log(corp.id, "takes no network action")
             return
         reach = self.reachable(corp)
+        placed: frozenset[Direction] = frozenset()
+        claimed: frozenset[Hex] = frozenset()
         if isinstance(action, Chart):
             cost = self.chart_cost(action.hex)
             self._require_treasury(corp, cost)
-            self.network.chart(corp.id, action.hex, action.exits, reach)
+            claimed = self.network.chart(corp.id, action.hex, action.exits, reach)
+            placed = action.exits
         elif isinstance(action, Upgrade):
             cost = self.config.upgrade_cost
             self._require_treasury(corp, cost)
-            self.network.upgrade(corp.id, action.hex, action.new_exit, reach)
+            claimed = self.network.upgrade(corp.id, action.hex, action.new_exit, reach)
+            placed = frozenset({action.new_exit})
         elif isinstance(action, ExtendService):
             cost = self.config.service_cost
             self._require_treasury(corp, cost)
@@ -414,7 +439,25 @@ class Game:
             raise IllegalAction(f"Unknown network action {action!r}")
         corp.treasury -= cost
         self.bank += cost
-        self._log(corp.id, f"{action} for {cost}")
+        notes = self._planet_exit_notes(action.hex, placed, claimed)
+        self._log(corp.id, f"{action} for {cost}{notes}")
+
+    def _planet_exit_notes(
+        self, hex: Hex, placed: frozenset[Direction], claimed: frozenset[Hex]
+    ) -> str:
+        """Log text for what new exits ``placed`` on the tile at ``hex`` did at exit-limited
+        planets: claimed an exit there, or dangle. Empty without the facility rules."""
+        notes = []
+        for direction in sorted(placed):
+            neighbor = hex.neighbor(direction)
+            if not self.network.has_exit_limit(neighbor):
+                continue
+            name = self.board.planet_at(neighbor).name
+            if neighbor in claimed:
+                notes.append(f"claims an exit of {name}")
+            else:
+                notes.append(f"its exit toward {name} dangles")
+        return "".join(f"; {note}" for note in notes)
 
     def _require_treasury(self, corp: Corporation, cost: int) -> None:
         if corp.treasury < cost:
@@ -488,23 +531,38 @@ class Game:
     def legal_fleet_actions(self, corp: Corporation) -> list[FleetAction]:
         """A corporation's options in its fleet step: buy one more fleet if it is under the
         limit and can pay, and finish once it owns at least one. Empty means it is bankrupt
-        (see ``must_close``)."""
+        (see ``must_close``). Under the facility rules the step builds facilities instead (see
+        ``legal_facility_builds``)."""
         self._require_death_star_rules()
         actions: list[FleetAction] = []
-        price = self.fleet_price()
-        if corp.fleets < self.config.fleet_limit and corp.treasury >= price:
-            actions.append(BuyFleet(price))
+        if self.config.facility_rules:
+            actions.extend(self.legal_facility_builds(corp))
+        else:
+            price = self.fleet_price()
+            if corp.fleets < self.config.fleet_limit and corp.treasury >= price:
+                actions.append(BuyFleet(price))
         if corp.fleets >= 1:
             actions.append(FinishFleets())
         return actions
 
     def apply_fleet_action(self, corp: Corporation, action: FleetAction) -> None:
-        """Buy one fleet at the current price, or finish the fleet step."""
+        """Buy one fleet (or, under the facility rules, build one facility) at the current
+        price, or finish the step."""
         self._require_death_star_rules()
+        facility_rules = self.config.facility_rules
         if isinstance(action, FinishFleets):
+            noun = "facility" if facility_rules else "fleet"
             if corp.fleets < 1:
-                raise IllegalAction(f"{corp.id} must own a fleet before finishing")
-            self._log(corp.id, f"finishes buying fleets with {corp.fleets}")
+                raise IllegalAction(f"{corp.id} must own a {noun} before finishing")
+            if facility_rules:
+                self._log(corp.id, f"finishes building facilities with {corp.fleets}")
+            else:
+                self._log(corp.id, f"finishes buying fleets with {corp.fleets}")
+            return
+        if facility_rules:
+            if not isinstance(action, BuildFacility):
+                raise IllegalAction(f"Under the facility rules {action!r} is not a legal move")
+            self._build_facility(corp, action)
             return
         if not isinstance(action, BuyFleet):
             raise IllegalAction(f"Unknown fleet action {action!r}")
@@ -524,13 +582,13 @@ class Game:
 
     def must_close(self, corp: Corporation) -> bool:
         """Whether ``corp``, at its fleet step, is bankrupt: it owns no fleet and its treasury
-        cannot pay the current fleet price."""
-        return (
-            self.config.death_star_rules
-            and corp.floated
-            and corp.fleets == 0
-            and corp.treasury < self.fleet_price()
-        )
+        cannot pay the current fleet price. Under the facility rules: it owns no facility and
+        cannot build one (no money, or no planet it may build on)."""
+        if not (self.config.death_star_rules and corp.floated and corp.fleets == 0):
+            return False
+        if self.config.facility_rules:
+            return not self.legal_facility_builds(corp)
+        return corp.treasury < self.fleet_price()
 
     def close_bankrupt(self, corp: Corporation) -> None:
         """Close a bankrupt corporation for good.
@@ -553,15 +611,138 @@ class Game:
         self.bank += treasury
         corp.treasury = 0
         self.network.remove_service(corp.id)
+        if not self.config.facility_rules:
+            reason = f"no fleet, and its treasury of {treasury} cannot buy one at {price}"
+        elif treasury < price:
+            reason = f"no facility, and its treasury of {treasury} cannot build one at {price}"
+        else:
+            reason = "no facility, and no planet it may build one on"
         self._log(
             corp.id,
-            f"is bankrupt: no fleet, and its treasury of {treasury} cannot buy one at {price}. "
-            "It closes; its shares are worthless and its tiles stay for others",
+            f"is bankrupt: {reason}. It closes; its shares are worthless and its tiles stay for "
+            "others",
         )
 
     def _require_death_star_rules(self) -> None:
         if not self.config.death_star_rules:
             raise IllegalAction("Fleets exist only under the Death Star rules")
+
+    # --- facilities and planet exits (experimental facility rules) ---------------
+
+    def facilities_on(self, planet: Hex) -> list[Facility]:
+        """The facilities on ``planet``, corporate and Imperial, oldest first."""
+        return [f for f in self.facilities if f.planet == planet]
+
+    def facilities_of(self, corp: Corporation) -> list[Facility]:
+        """The facilities ``corp`` owns, oldest first."""
+        return [f for f in self.facilities if f.owner == corp.id]
+
+    def free_facility_slots(self, planet: Hex) -> int:
+        """Facilities a floated corporation may still build on ``planet``: the per-planet limit,
+        less the facilities there and one slot kept on the homeworld of each corporation that
+        has not floated yet."""
+        reserved = sum(
+            1
+            for c in self.corporations.values()
+            if c.status in UNFLOATED and self.homeworld(c) == planet
+        )
+        return self.config.facilities_per_planet - len(self.facilities_on(planet)) - reserved
+
+    def facility_planets(self, corp: Corporation) -> list[Hex]:
+        """Planets ``corp`` may build a facility on, money and the facility limit aside: those
+        with a free slot that it reaches, that one of its served, reachable tiles has an exit
+        facing (a dangling lane), or that hold one of its facilities. Never the construction
+        site, whose exits are not limited."""
+        return sorted(h for h in self._facility_access(corp) if self.free_facility_slots(h) > 0)
+
+    def _facility_access(self, corp: Corporation) -> set[Hex]:
+        """Exit-limited planets ``corp`` reaches, points a served, reachable tile at, or holds
+        a facility on, whether or not they have a free slot."""
+        net = self.network
+        reach = self.reachable(corp)
+        planets = {h for h in reach if net.has_exit_limit(h)}
+        for hex in reach:
+            tile = net.tile_at(hex)
+            if tile is None:
+                continue
+            for direction in tile.exits:
+                neighbor = hex.neighbor(direction)
+                if net.has_exit_limit(neighbor):
+                    planets.add(neighbor)
+        planets.update(f.planet for f in self.facilities_of(corp))
+        return planets
+
+    def legal_facility_builds(self, corp: Corporation) -> list[BuildFacility]:
+        """Every facility ``corp`` could build now, if it is under the limit and can pay the
+        current price: for each planet in ``facility_planets``, the new exit left unclaimed and
+        the new exit given to each lane dangling there."""
+        price = self.fleet_price()
+        if corp.fleets >= self.config.fleet_limit or corp.treasury < price:
+            return []
+        builds = []
+        for planet in self.facility_planets(corp):
+            builds.append(BuildFacility(planet, None, price))
+            for side in sorted(self.network.dangling_sides(planet)):
+                builds.append(BuildFacility(planet, side, price))
+        return builds
+
+    def network_after_facility(self, action: BuildFacility) -> HyperspaceNetwork:
+        """A copy of the network with the exit ``action`` would add, for what-if evaluation.
+        Legality is not checked; the facility itself is not recorded."""
+        net = self.network.copy()
+        net.add_planet_exit(action.planet)
+        if action.exit_side is not None:
+            net.claim_exit(action.planet, action.exit_side)
+        return net
+
+    def _build_facility(self, corp: Corporation, action: BuildFacility) -> None:
+        price = self.fleet_price()
+        if action.cost != price:
+            raise IllegalAction(f"A facility costs {price} now, not {action.cost}")
+        if corp.fleets >= self.config.fleet_limit:
+            raise IllegalAction(f"{corp.id} already owns {corp.fleets} facilities, the limit")
+        self._require_treasury(corp, price)
+        planet = action.planet
+        if not self.network.has_exit_limit(planet):
+            raise IllegalAction(f"{planet} is not a planet that can hold a facility")
+        name = self.board.planet_at(planet).name
+        if self.free_facility_slots(planet) < 1:
+            raise IllegalAction(f"{name} has no free facility slot")
+        if planet not in self._facility_access(corp):
+            raise IllegalAction(
+                f"{corp.id} neither reaches {name}, points a lane at it, nor has a facility there"
+            )
+        side = action.exit_side
+        if side is not None and side not in self.network.dangling_sides(planet):
+            raise IllegalAction(f"No lane dangles at {name} on side {side.name}")
+        corp.treasury -= price
+        self.bank += price
+        self.fleets_sold += 1
+        self._add_facility(corp, planet, side)
+        where = "exit unclaimed" if side is None else f"exit toward {planet.neighbor(side)}"
+        self._log(corp.id, f"builds a facility at {name} for {price} ({where}); owns {corp.fleets}")
+        if self.fleet_price() != price:
+            self._log(EMPIRE, f"facility price rises to {self.fleet_price()}")
+
+    def _place_home_facility(self, corp: Corporation) -> None:
+        """The free facility a corporation floats with, on its homeworld and outside the
+        supply. Its homeworld kept a slot for it until now."""
+        home = self.homeworld(corp)
+        name = self.board.planet_at(home).name
+        if self.free_facility_slots(home) < 1:
+            raise ValueError(f"{name} has no slot left for {corp.id}'s home facility")
+        self._add_facility(corp, home, None)
+        self._log(corp.id, f"gets a free facility at {name}, its homeworld; owns {corp.fleets}")
+
+    def _add_facility(self, corp: Corporation, planet: Hex, side: Direction | None) -> None:
+        """Record a new facility of ``corp`` and give its planet the new exit, claimed for the
+        lane on ``side`` or, with ``None``, left unclaimed."""
+        self.facilities.append(Facility(planet, corp.id, self.facilities_built))
+        self.facilities_built += 1
+        self.network.add_planet_exit(planet)
+        if side is not None:
+            self.network.claim_exit(planet, side)
+        corp.fleets += 1
 
     # --- the Death Star track (experimental Death Star rules) --------------------
 
@@ -595,8 +776,8 @@ class Game:
             result = self.config.death_star_stage_results[index]
             self._log(
                 EMPIRE,
-                f"Death Star {stage_name(index)} is built: {describe_result(result)} at the end "
-                "of this round",
+                f"Death Star {stage_name(index)} is built: "
+                f"{describe_result(result, self.config)} at the end of this round",
             )
 
     def resolve_death_star(self) -> None:
@@ -619,12 +800,40 @@ class Game:
                 raise ValueError(f"Unknown Death Star stage result {result!r}")
 
     def _seize_fleets(self) -> None:
+        if self.config.facility_rules:
+            self._seize_facilities()
+            return
         seized = [c for c in self.corporations.values() if c.floated and c.fleets > 0]
         for corp in seized:
             corp.fleets -= 1
             self._log(EMPIRE, f"seizes a fleet from {corp.id}; it owns {corp.fleets}")
         if not seized:
             self._log(EMPIRE, "finds no fleets to seize")
+
+    def _seize_facilities(self) -> None:
+        """Each floated corporation with a facility loses the one nearest the construction site
+        to the Empire, the most recently built on a tie. It stays on its planet, fills its slot
+        and keeps its exit."""
+        site = self.death_star.active_site
+        if site is None:
+            raise ValueError("A seizure needs a construction site on the board")
+        seized_any = False
+        for corp in self.corporations.values():
+            owned = self.facilities_of(corp) if corp.floated else []
+            if not owned:
+                continue
+            nearest = min(f.planet.distance(site) for f in owned)
+            closest = [f for f in owned if f.planet.distance(site) == nearest]
+            if len({f.planet for f in closest}) > 1:
+                self.facility_seizure_ties += 1
+            taken = max(closest, key=lambda f: f.build_number)
+            self.facilities[self.facilities.index(taken)] = replace(taken, owner=EMPIRE)
+            corp.fleets -= 1
+            seized_any = True
+            name = self.board.planet_at(taken.planet).name
+            self._log(EMPIRE, f"takes over {corp.id}'s facility at {name}; it owns {corp.fleets}")
+        if not seized_any:
+            self._log(EMPIRE, "finds no facilities to take over")
 
     def _move_site(self) -> None:
         track = self.death_star

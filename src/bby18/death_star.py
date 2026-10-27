@@ -1,5 +1,6 @@
 """Experimental Death Star rules: construction-site placement, the construction track and the
-shared fleet supply (see "Death Star and fleets" in docs/DECISIONS.md).
+shared fleet supply (see "Death Star and fleets" in docs/DECISIONS.md). Under the facility rules
+the same supply prices facilities.
 
 Only state and pure helpers live here. ``Game`` enforces the rules and applies their
 consequences; ``GameSession`` decides when each step happens.
@@ -76,10 +77,11 @@ def stage_name(index: int) -> str:
     return f"stage {index + 1}"
 
 
-def describe_result(result: str) -> str:
+def describe_result(result: str, config: GameConfig) -> str:
     """What a stage result does, in a few words for logs."""
+    seized = "takes over a facility" if config.facility_rules else "seizes a fleet"
     descriptions = {
-        SEIZURE: "the Empire seizes a fleet from every corporation that has one",
+        SEIZURE: f"the Empire {seized} from every corporation that has one",
         SITE_MOVE: "the construction site moves",
         COMPLETION: "the station launches",
     }

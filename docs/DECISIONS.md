@@ -328,6 +328,65 @@ because every partner it can pair with is three or more hexes away. Moving Kashy
 sites, halves the launch rate and lets one strategy dominate (always-pay alone, or admiral with
 the Chandrila move). Revisit together with a Death Star retune.
 
+## Facilities and planet exits (decided 2026-10-26, experimental)
+
+**Status:** experimental, behind `facility_rules` (requires the Death Star rules). Not adopted
+until this section says so.
+
+**Why:** lane placement was "connect two places" and the 3-exit upgrade was dead (0.04 per
+corporation per game). Under the fleet rules a corporation also stopped building early: with at
+most four fleets it never needs more than eight planets, so it passed its network actions on
+about 12 of its 15 operating turns and half the planets were never touched. Facilities replace
+fleets so that the thing a corporation must keep buying (pair capacity) has an address, and that
+address decides where the lanes can go. The private benefit (capacity) pays for a public good
+(an extra exit on a planet that everyone can use).
+
+### Planet exits ("doors")
+
+- A planet has **1 exit, plus 1 per facility on it** (corporate or Imperial). At most **2
+  facilities** per planet, so at most 3 exits. The Death Star construction site is unrestricted:
+  all six exits, as before. Reserved future sites are not planets.
+- An exit has no direction until a lane claims it. **First come, first served:** charting a tile
+  (or upgrading one) with an exit facing a planet that has an unclaimed exit claims it for that
+  side. A planet's claimed exits are the only sides it connects through.
+- A tile may still be charted with an exit facing a planet that has no unclaimed exit. That exit
+  **dangles**: it does not connect until the planet gets a new exit and it is given to that lane.
+  The tile must still connect to the charting corporation's network through another exit.
+- With one exit a planet is a dead end; a network passes through a planet only through two of
+  its claimed exits.
+- Two hubs still never connect directly.
+
+### Facilities
+
+- **Capacity is company-wide:** a corporation may run one pair per facility it owns (Imperial
+  facilities count for nobody). A facility is a fleet with an address.
+- **Free home facility:** a corporation floats with one facility on its homeworld, outside the
+  supply, so its homeworld starts with two unclaimed exits. *(Reading chosen while building:
+  one slot on each homeworld is kept for its corporation until it floats.)*
+- **Where:** a corporation may build a facility on a planet with a free slot that (a) its network
+  reaches, (b) one of its served, reachable tiles points at (a dangling exit), or (c) already
+  holds one of its own facilities. Not on the Death Star site.
+- **The new exit:** the builder gives it to one lane pointing at the planet on a side with no
+  exit yet (any corporation's lane), or leaves it unclaimed for the next tile charted toward the
+  planet. *(Reading chosen while building: the builder may always leave it unclaimed.)*
+- **Price and limit:** the fleet supply's tiers price facilities (6 at 60, 6 at 90, 6 at 120,
+  then 160; `fleet_tiers`), and a corporation may own at most 4 (`fleet_limit`). Facilities are
+  built in the old fleet step, after network actions, without using a network action; several
+  may be built in one step.
+- **Mandatory:** a corporation must end its facility step owning at least one facility.
+  **Bankruptcy:** a corporation that owns none at its facility step and cannot build one (no
+  money, or no legal planet) closes, as under the fleet rules.
+
+### Seizure
+
+- At a seizure (stages 1 and 3), the Empire takes over **one facility from every corporation
+  that owns one**: the one **nearest the active construction site** (hex distance), and on a tie
+  the **most recently built**. The facility becomes Imperial: it stays on the planet, fills its
+  slot for good, and keeps its exit. The home facility has no protection.
+- With company-wide capacity the owner loses one pair whichever facility is taken; the choice
+  decides where Imperial facilities fill slots (around the site) and where the owner loses the
+  right to build by holding a facility there.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,

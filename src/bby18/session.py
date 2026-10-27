@@ -49,7 +49,8 @@ class Decider(Protocol):
     def choose_fleet_action(
         self, game: Game, corp: Corporation, legal: list[FleetAction]
     ) -> FleetAction:
-        """Buy a fleet or finish the fleet step; called only under the Death Star rules."""
+        """Buy a fleet (build a facility, under the facility rules) or finish the fleet step;
+        called only under the Death Star rules."""
         ...
 
 
@@ -57,7 +58,8 @@ class Phase(Enum):
     STOCK = "stock"
     NETWORK = "network"
     FLEET = "fleet"
-    """Buying fleets, between network actions and revenue; only under the Death Star rules."""
+    """Buying fleets, between network actions and revenue; only under the Death Star rules.
+    Under the facility rules this is the facility step."""
     DIVIDEND = "dividend"
     GAME_OVER = "game_over"
 
@@ -367,7 +369,7 @@ class GameSession:
                 self.phase = Phase.DIVIDEND
 
     def _begin_fleet_step(self) -> None:
-        """Enter the fleet step, or close the corporation if it is bankrupt."""
+        """Enter the fleet (or facility) step, or close the corporation if it is bankrupt."""
         corp = self.current_corporation
         if self.game.must_close(corp):
             self.game.close_bankrupt(corp)
