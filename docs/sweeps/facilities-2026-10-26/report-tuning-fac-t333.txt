@@ -1,0 +1,44 @@
+variant fac-t333
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  admiral           37.5%   wins  57.9%
+  baron             35.0%   wins  41.4%
+  early-builder     33.6%   wins  34.5%
+  baron-prestige    33.2%   wins  19.8%
+  contractor        32.9%   wins  33.2%
+  targeted          32.9%   wins  30.8%
+  staller           32.7%   wins  31.7%
+  builder           28.8%   wins  17.3%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   34.3   36.3   43.9   35.5   38.5   39.4   39.8
+  baron           32.8   33.3   36.0   39.4   34.2   34.1   35.0   35.1
+  baron-prestige  30.9   29.2   33.3   38.0   34.0   32.8   32.4   33.6
+  builder         23.3   28.1   28.3   33.3   30.4   28.7   30.0   29.0
+  contractor      31.0   31.4   31.9   36.2   33.3   32.6   32.9   32.5
+  early-builder   27.5   31.5   33.7   39.0   33.4   33.3   34.3   34.4
+  staller         26.5   31.8   33.6   37.9   33.0   33.1   33.3   33.7
+  targeted        27.2   31.6   33.4   37.6   33.8   32.4   33.5   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-prestige 36.3±0.7, builder 43.9±0.8, contractor 35.5±1.1, early-builder 38.5±0.9, staller 39.4±0.7, targeted 39.8±0.8
+  baron          invades baron-prestige 36.0±0.7, builder 39.4±1.1, staller 35.0±0.7, targeted 35.1±0.7
+  baron-prestige invades builder 38.0±0.9
+  contractor     invades builder 36.2±1.2
+  early-builder  invades builder 39.0±0.9
+  staller        invades builder 37.9±0.9
+  targeted       invades builder 37.6±0.9
+
+Best response counts over 36 opponent sets:
+  admiral          35
+  baron            1
+
+Equilibria (replicator dynamics, share >= 5%):
+  1 viable: admiral 100%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 1.1, min 1, max 2
+  admiral          survives 100%  largest  98%
+  baron            survives  12%  largest   2%

@@ -10,7 +10,7 @@ from bby18.api.auth import AuthError
 from bby18.api.saves import new_session
 from bby18.api.serialize import fleet_tiers_to_json, rules_to_json, session_to_json
 from bby18.api.store import MemoryStore, Seat
-from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG
 from bby18.revenue import RevenueResult, ScoredPair
 from bby18.session import GameSession
 from bby18.state import CorpStatus
@@ -79,6 +79,12 @@ class HeaderUser:
 def classic_rules(monkeypatch):
     """Serve new games and replays under the rules before the Death Star was adopted."""
     monkeypatch.setattr("bby18.api.saves.DEFAULT_CONFIG", CLASSIC_CONFIG)
+
+
+@pytest.fixture
+def fleet_rules(monkeypatch):
+    """Serve new games and replays under the fleet rules of 2026-10-26."""
+    monkeypatch.setattr("bby18.api.saves.DEFAULT_CONFIG", FLEET_CONFIG)
 
 
 @pytest.fixture
@@ -186,7 +192,7 @@ def test_new_rules_on_game_shows_the_track_and_both_sites(client):
     assert all("fleetRevenue" in corp for corp in state["corporations"])
 
 
-def test_fleet_step_through_the_api(client):
+def test_fleet_step_through_the_api(client, fleet_rules):
     body = client.post("/api/games", json={"seats": SEATS, "seed": 4}).json()
     game_id = body["gameId"]
     state = _play(

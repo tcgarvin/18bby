@@ -1,0 +1,13 @@
+{
+ "variants": {
+  "fac-t90": {"facility_rules": true, "fleet_tiers": [[6, 90], [6, 120], ["unlimited", 160]]},
+  "fac-t333": {"facility_rules": true, "fleet_tiers": [[3, 60], [3, 90], [6, 120], ["unlimited", 160]]},
+  "fac-emp2": {"facility_rules": true, "empire_cubes_per_stock_round": 2},
+  "fac-slots1": {"facility_rules": true, "facilities_per_planet": 1},
+  "fac-base2": {"facility_rules": true, "planet_base_exits": 2},
+  "fac-combo": {"facility_rules": true, "fleet_tiers": [[6, 90], [6, 120], ["unlimited", 160]], "facilities_per_planet": 1, "empire_cubes_per_stock_round": 2}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

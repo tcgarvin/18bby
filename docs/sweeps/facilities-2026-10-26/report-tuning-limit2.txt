@@ -1,0 +1,43 @@
+variant limit2
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  baron             35.6%   wins  49.4%
+  staller           35.5%   wins  49.0%
+  targeted          35.3%   wins  46.4%
+  contractor        34.1%   wins  45.1%
+  admiral           33.6%   wins  25.1%
+  builder           32.0%   wins  28.8%
+  baron-prestige    30.6%   wins  14.8%
+  early-builder     29.9%   wins   8.0%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   31.5   35.5   35.2   32.0   37.1   31.5   31.5
+  baron           35.1   33.3   38.4   37.7   33.9   39.0   33.7   33.8
+  baron-prestige  28.8   26.5   33.3   33.1   31.3   34.3   27.1   28.3
+  builder         32.8   29.8   34.8   33.3   31.5   35.2   29.7   29.5
+  contractor      34.1   31.9   35.6   36.5   33.3   36.5   32.0   32.6
+  early-builder   29.3   26.6   32.0   32.1   29.7   33.3   26.3   27.3
+  staller         35.3   33.0   38.0   37.2   34.2   39.4   33.3   33.4
+  targeted        35.0   32.9   37.7   37.3   34.1   38.9   33.3   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-prestige 35.5±0.5, builder 35.2±0.7, early-builder 37.1±0.6
+  baron          invades admiral 35.1±0.6, baron-prestige 38.4±0.5, builder 37.7±0.8, early-builder 39.0±0.7
+  builder        invades baron-prestige 34.8±0.7, early-builder 35.2±0.9
+  contractor     invades baron-prestige 35.6±1.0, builder 36.5±1.2, early-builder 36.5±1.0
+  staller        invades admiral 35.3±0.6, baron-prestige 38.0±0.5, builder 37.2±0.7, early-builder 39.4±0.7
+  targeted       invades admiral 35.0±0.6, baron-prestige 37.7±0.5, builder 37.3±0.7, early-builder 38.9±0.7
+
+Best response counts over 36 opponent sets:
+  baron            21
+  staller          14
+  targeted         1
+
+Equilibria (replicator dynamics, share >= 5%):
+  1 viable: baron 100%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 1.0, min 1, max 1
+  baron            survives 100%  largest 100%

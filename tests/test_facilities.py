@@ -1,4 +1,4 @@
-"""Facilities and planet exits (``facility_rules``, experimental since 2026-10-26)."""
+"""Facilities and planet exits (``facility_rules``, adopted 2026-10-27)."""
 
 from dataclasses import replace
 
@@ -16,7 +16,7 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Planet, load_board
-from bby18.config import CLASSIC_CONFIG, SEIZURE, GameConfig
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG, SEIZURE
 from bby18.death_star import SITE_NAME
 from bby18.game import EMPIRE, Game
 from bby18.hexgrid import Direction as D
@@ -26,7 +26,7 @@ from bby18.playtest import play_one
 from bby18.session import GameSession, Phase
 from bby18.state import CorpStatus, Facility
 
-RULES = replace(GameConfig(), facility_rules=True)
+RULES = DEFAULT_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Tests that build specific tiles run on an empty sky."""
 
@@ -104,9 +104,9 @@ def test_bad_facility_numbers_are_rejected(overrides):
         replace(RULES, **overrides).validate_rule_variants()
 
 
-def test_facility_rules_are_off_by_default_and_planets_keep_every_exit():
-    assert not GameConfig().facility_rules
-    game = new_game(replace(OPEN_RULES, facility_rules=False))
+def test_facility_rules_are_the_default_and_without_them_planets_keep_every_exit():
+    assert DEFAULT_CONFIG.facility_rules and not FLEET_CONFIG.facility_rules
+    game = new_game(replace(FLEET_CONFIG, asteroid_fraction=0.0, nebula_fraction=0.0))
     for planet in game.board.planets:
         assert not game.network.has_exit_limit(planet.hex)
         assert all(game.network.has_exit(planet.hex, d) for d in D)
@@ -364,7 +364,7 @@ def test_facility_planets_are_reached_pointed_at_or_already_held():
 
 
 def test_a_planet_holds_at_most_two_facilities():
-    game = new_game()
+    game = new_game(replace(OPEN_RULES, fleet_limit=4))  # room for one more than the planet holds
     cec = float_corp(game, "CEC")
     chart(game, cec, BETWEEN, D.SW, D.NW)
     build(game, cec, ALDERAAN)
@@ -410,9 +410,8 @@ def test_the_fleet_limit_caps_facilities_and_fleets_cannot_be_bought():
     with pytest.raises(IllegalAction):
         game.apply_fleet_action(cec, BuyFleet(game.fleet_price()))
     build(game, cec, ALDERAAN)
-    build(game, cec, ALDERAAN)
     build(game, cec, KUAT)
-    assert cec.fleets == game.config.fleet_limit == 4
+    assert cec.fleets == game.config.fleet_limit == 3
     assert game.legal_fleet_actions(cec) == [FinishFleets()]
     with pytest.raises(IllegalAction, match="the limit"):
         build(game, cec, CORELLIA)
@@ -425,10 +424,12 @@ def test_pair_capacity_is_the_facilities_owned():
     planets = [Planet(f"p{i}", Hex(i, 0), "Mid Rim", frozenset(t)) for i, t in enumerate("AMRSIM")]
     game.reachable_planets = lambda corp: planets  # type: ignore[method-assign]
     totals = []
-    for _ in range(3):
+    while True:
         assert game.pair_cap(cec) == cec.fleets == len(game.facilities_of(cec))
         totals.append(game.revenue(cec).total)
-        build(game, cec, ALDERAAN if cec.fleets < 3 else CORELLIA)
+        if cec.fleets == game.config.fleet_limit:
+            break
+        build(game, cec, ALDERAAN)
     assert totals == [30, 60, 90]
 
 
@@ -473,22 +474,21 @@ def test_seizure_takes_the_facility_nearest_the_site_and_makes_it_imperial():
     far = max(others, key=site.distance)
     assert site.distance(near) < site.distance(CORELLIA) < site.distance(far)
     reach_also(game, cec, near, far)
-    build(game, cec, far)
     build(game, cec, near)
-    build(game, cec, far)
+    build(game, cec, far)  # the most recent, so nearness alone picks the one at ``near``
     exits = game.network.planet_exits(near)
     start = len(game.log)
     seize(game)
     name = game.board.planet_at(near).name
     assert log_texts(game, start)[-1] == (
-        f"[setup] Empire: takes over CEC's facility at {name}; it owns 3"
+        f"[setup] Empire: takes over CEC's facility at {name}; it owns 2"
     )
     assert [f.owner for f in game.facilities_on(near)] == [EMPIRE]
     assert game.network.planet_exits(near) == exits, "the exit stays"
     assert game.free_facility_slots(near) == 1, "the slot stays filled"
-    assert cec.fleets == len(game.facilities_of(cec)) == 3
+    assert cec.fleets == len(game.facilities_of(cec)) == 2
     assert game.facility_seizure_ties == 0
-    assert game.fleets_sold == 3, "a seized facility does not return to the supply"
+    assert game.fleets_sold == 2, "a seized facility does not return to the supply"
 
 
 def test_seizure_tie_takes_the_most_recently_built_and_is_counted():

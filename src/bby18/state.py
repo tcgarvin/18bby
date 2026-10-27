@@ -18,7 +18,7 @@ class CorpStatus(Enum):
     PARRED = "parred"
     FLOATED = "floated"
     CLOSED = "closed"
-    """Bankrupt under the experimental Death Star rules: its shares are gone and it never
+    """Bankrupt under the Death Star rules: its shares are gone and it never
     operates again."""
 
 
@@ -62,7 +62,7 @@ class Corporation:
 
 @dataclass(frozen=True)
 class Facility:
-    """One facility on a planet (experimental facility rules)."""
+    """One facility on a planet (facility rules)."""
 
     planet: Hex
     owner: str

@@ -1,0 +1,50 @@
+variant l3-rich
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  baron             34.8%   wins  42.1%
+  targeted          34.7%   wins  42.9%
+  staller           34.6%   wins  42.4%
+  admiral           34.6%   wins  38.1%
+  contractor        34.2%   wins  44.8%
+  early-builder     32.2%   wins  21.6%
+  baron-prestige    31.6%   wins  14.4%
+  builder           29.9%   wins  20.4%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   32.6   35.5   40.2   31.9   36.2   33.7   34.7
+  baron           34.7   33.3   37.2   38.2   33.9   34.5   33.6   33.7
+  baron-prestige  30.6   28.6   33.3   35.3   31.6   33.2   29.8   30.8
+  builder         27.8   29.3   31.4   33.3   29.4   30.7   28.7   27.8
+  contractor      34.0   32.2   34.7   37.6   33.3   34.2   32.6   32.8
+  early-builder   30.1   30.2   32.8   36.9   31.8   33.3   30.1   30.9
+  staller         34.3   33.7   36.4   38.3   33.3   35.3   33.3   33.3
+  targeted        33.8   33.7   36.9   38.2   34.1   35.2   33.0   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-prestige 35.5±0.5, builder 40.2±1.1, early-builder 36.2±0.7, targeted 34.7±0.5
+  baron          invades admiral 34.7±0.7, baron-prestige 37.2±0.7, builder 38.2±0.8
+  baron-prestige invades builder 35.3±0.8
+  contractor     invades builder 37.6±1.3
+  early-builder  invades builder 36.9±0.9
+  staller        invades baron-prestige 36.4±0.7, builder 38.3±0.8, early-builder 35.3±0.7
+  targeted       invades baron-prestige 36.9±0.7, builder 38.2±0.8, early-builder 35.2±0.7
+
+Best response counts over 36 opponent sets:
+  admiral          14
+  baron            10
+  contractor       5
+  targeted         5
+  staller          2
+
+Equilibria (replicator dynamics, share >= 5%):
+  2 viable: staller 61%, baron 39%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 2.2, min 1, max 4
+  baron            survives  80%  largest  50%
+  staller          survives  52%  largest  35%
+  targeted         survives  35%  largest  10%
+  admiral          survives  30%  largest   0%
+  contractor       survives  20%  largest   5%

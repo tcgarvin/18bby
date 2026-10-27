@@ -1,0 +1,9 @@
+{
+ "variants": {
+  "fleets": {},
+  "l3-emp2": {"facility_rules": true, "fleet_limit": 3, "empire_cubes_per_stock_round": 2}
+ },
+ "seeds": [21, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

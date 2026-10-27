@@ -1,0 +1,11 @@
+{
+ "variants": {
+  "fac-t3": {"facility_rules": true, "fleet_tiers": [[3, 60], [6, 90], [6, 120], ["unlimited", 160]]},
+  "fac-c4": {"facility_rules": true, "death_star_cubes_per_stage": 4},
+  "fac-t3-c4": {"facility_rules": true, "fleet_tiers": [[3, 60], [6, 90], [6, 120], ["unlimited", 160]], "death_star_cubes_per_stage": 4},
+  "fac-limit3": {"facility_rules": true, "fleet_limit": 3}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

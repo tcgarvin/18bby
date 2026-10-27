@@ -399,7 +399,10 @@ export interface FrameState {
   players: Pick<PlayerState, "id" | "cash" | "worth" | "shares" | "certificates">[];
   /** Full corporation views, as in GameState. */
   corporations: CorporationState[];
-  /** Only the tiles this move changed (empty for non-map moves). Merge by hex. */
+  /**
+   * Only the tiles this move changed (empty for non-map moves, except that a bankruptcy takes the
+   * closed corporation's service off its tiles). Merge by hex.
+   */
   tiles: TileState[];
   /** The whole track after the move, under the Death Star rules; absent otherwise. */
   deathStar?: DeathStarState;
@@ -512,8 +515,9 @@ export interface Rules {
   /** Their numbers, listed whether or not they are in force. */
   deathStar: DeathStarRules;
   /**
-   * Whether the experimental facility rules are in force (they need the Death Star rules). They
-   * replace fleets with facilities, priced by `deathStar.fleetTiers` and limited by `fleetLimit`.
+   * Whether the facility rules are in force (always, since 2026-10-27; they need the Death Star
+   * rules). They replace fleets with facilities, priced by `deathStar.fleetTiers` and limited by
+   * `fleetLimit`.
    */
   facilityRules: boolean;
   /** Their own numbers, listed whether or not they are in force. */

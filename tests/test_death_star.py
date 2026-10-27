@@ -11,7 +11,7 @@ from bby18.actions import BuyFleet, BuyShare, FinishFleets, NoNetworkAction, Pas
 from bby18.api.serialize import action_to_json, match_action, session_to_json
 from bby18.board import Planet, Terrain, load_board
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
-from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, UNLIMITED, FleetTier
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG, UNLIMITED, FleetTier
 from bby18.death_star import SITE_NAME, SitePlacementError, place_sites
 from bby18.game import Game
 from bby18.hexgrid import Hex
@@ -643,15 +643,17 @@ def test_bad_death_star_numbers_are_rejected(overrides):
 
 def test_default_death_star_numbers_match_the_decisions_doc():
     config = DEFAULT_CONFIG
-    assert config.death_star_rules
+    assert config.death_star_rules and config.facility_rules
     assert config.fleet_tiers == (
         FleetTier(6, 60),
         FleetTier(6, 90),
         FleetTier(6, 120),
         FleetTier(UNLIMITED, 160),
     )
-    assert config.fleet_limit == 4
-    assert config.death_star_stage_values == (40, 50, 60, 70)
+    assert config.fleet_limit == 3
+    assert config.planet_base_exits == 1
+    assert config.facilities_per_planet == 2
+    assert config.death_star_stage_values == (50, 60, 70, 80)
     assert config.death_star_stage_results == ("seizure", "move", "seizure", "completion")
     assert config.death_star_cubes_per_stage == 5
     assert config.death_star_max_homeworld_distance == 4
@@ -660,9 +662,19 @@ def test_default_death_star_numbers_match_the_decisions_doc():
     assert config.death_star_backstop_rounds == 8
 
 
-def test_classic_config_is_the_default_before_the_death_star_was_adopted():
-    assert CLASSIC_CONFIG == replace(
+def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
+    assert FLEET_CONFIG == replace(
         DEFAULT_CONFIG,
+        facility_rules=False,
+        fleet_limit=4,
+        death_star_stage_values=(40, 50, 60, 70),
+    )
+    FLEET_CONFIG.validate_rule_variants()
+
+
+def test_classic_config_is_the_fleet_config_before_the_death_star_was_adopted():
+    assert CLASSIC_CONFIG == replace(
+        FLEET_CONFIG,
         map_file="map-127.json",
         death_star_rules=False,
         death_star_cubes_per_stage=6,
@@ -742,6 +754,32 @@ def test_games_with_the_rules_off_play_exactly_as_before(key):
     for p in game.players:
         digest.update(f"{p.id}:{p.cash}:{game.player_worth(p)}\n".encode())
     assert digest.hexdigest()[:16] == BASELINE_DIGESTS[key]
+
+
+FLEET_DIGESTS = {
+    ("baron", 3, 1): "e20b33cd60fafa09",
+    ("admiral", 3, 2): "ba7afe0ae7c8ab47",
+    ("contractor", 4, 3): "8465908b0b06ecff",
+    ("early-builder~0.5", 2, 4): "2d4120317fb9931b",
+    ("random", 3, 5): "9eb4c26ff19ec0bb",
+    ("greedy-path", 4, 6): "435ae7d47bcb6726",
+    ("mix:staller,targeted,saver", 3, 7): "b9a344858f98111a",
+}
+"""Hashes of full game logs and final cash and worth under the fleet rules, captured on the
+engine before the facility rules were added (main at 6d434e8, where they were the default)."""
+
+
+@pytest.mark.parametrize("key", sorted(FLEET_DIGESTS))
+def test_fleet_games_play_exactly_as_before_facilities(key):
+    kind, players, seed = key
+    game, _ = play_one(seed, players, kind, FLEET_CONFIG)
+    digest = hashlib.sha256()
+    for entry in game.log:
+        digest.update(str(entry).encode())
+        digest.update(b"\n")
+    for p in game.players:
+        digest.update(f"{p.id}:{p.cash}:{game.player_worth(p)}\n".encode())
+    assert digest.hexdigest()[:16] == FLEET_DIGESTS[key]
 
 
 # --- serialization -------------------------------------------------------------------------

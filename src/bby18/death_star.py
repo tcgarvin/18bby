@@ -1,4 +1,4 @@
-"""Experimental Death Star rules: construction-site placement, the construction track and the
+"""The Death Star rules: construction-site placement, the construction track and the
 shared fleet supply (see "Death Star and fleets" in docs/DECISIONS.md). Under the facility rules
 the same supply prices facilities.
 

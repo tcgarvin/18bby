@@ -1,0 +1,9 @@
+{
+ "variants": {
+  "l3-rich": {"facility_rules": true, "fleet_limit": 3, "death_star_stage_values": [50, 60, 70, 80]},
+  "l3-rich-c4": {"facility_rules": true, "fleet_limit": 3, "death_star_stage_values": [50, 60, 70, 80], "death_star_cubes_per_stage": 4}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

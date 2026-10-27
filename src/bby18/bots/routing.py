@@ -1,7 +1,7 @@
 """Route costs for the greedy bot's build planning, aware of planet exits.
 
 A route is priced per hex entered (see ``route_costs``). With every planet an open hub, a route
-passes through a planet for free. Under the experimental facility rules a planet connects only
+passes through a planet for free. Under the facility rules a planet connects only
 through its claimed exits (see ``bby18.network``), so a route also pays for the exits it needs
 (``PlanetDoors``):
 

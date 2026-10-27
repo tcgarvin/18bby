@@ -1,4 +1,4 @@
-"""Per-game measurements of the experimental Death Star rules, for balance sweeps.
+"""Per-game measurements of the Death Star rules, for balance sweeps.
 
 ``DeathStarRecorder`` is a session move observer: it watches every move as the game is played
 and reads the structured state (the track, fleets, prices) before and after, so nothing is

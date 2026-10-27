@@ -1,4 +1,4 @@
-"""Per-game measurements of the experimental facility rules, for balance sweeps.
+"""Per-game measurements of the facility rules, for balance sweeps.
 
 ``FacilityMetrics.to_row`` gives the flat ``fac.*`` fields of a sweep row; games without the
 facility rules have none. Most fields read the finished game: its facilities, planet exits and

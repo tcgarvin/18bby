@@ -1,6 +1,6 @@
 """Planet-pair revenue: a maximum-weight matching over a corporation's reachable planets.
 
-Under the experimental Death Star rules the matching may use at most one pair per fleet the
+Under the Death Star rules the matching may use at most one pair per fleet the
 corporation owns, and a pair of the construction site with a partner planet is a contract pair
 worth the current stage's contract value.
 """

@@ -112,7 +112,7 @@ def _facility_lines(rows: Sequence[Row]) -> list[str]:
     built = _facility_sum(rows, "facilities_built")
     home = _facility_sum(rows, "home_facilities") / len(operated) if operated else 0.0
     return [
-        "  facilities (experimental facility rules):",
+        "  facilities (facility rules):",
         f"    per corporation that operated ({len(operated)}): built {per_corp('fleets_bought')} "
         f"plus {home:.2f} free at home, seized {per_corp('fleets_seized')}, owned at the end "
         f"{per_corp('final_fleets')}",

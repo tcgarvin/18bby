@@ -28,10 +28,13 @@ cd web
 npm run dev
 ```
 
-The API serves the Death Star and fleet rules, the default since 2026-10-26 (see
-`docs/DECISIONS.md`). It serves whatever `DEFAULT_CONFIG` in `src/bby18/config.py` says: with
-`facility_rules` on it serves the experimental facility rules instead, and the UI follows the
-state it is sent (a `facilities` block, and `deathStar.fleets.item` of `"facility"`).
+The API serves the Death Star rules with facilities and planet exits, the default since
+2026-10-27 (see `docs/DECISIONS.md`). It serves whatever `DEFAULT_CONFIG` in
+`src/bby18/config.py` says, and the UI follows the state it is sent: under the facility rules a
+`facilities` block and `deathStar.fleets.item` of `"facility"`; under the fleet rules of
+2026-10-26 (`FLEET_CONFIG`, with `facility_rules` off) no `facilities` block and an item of
+`"fleet"`. The rules page and the UI take every number (facility limit, contract values, prices)
+from `/api/rules` and the game state.
 
 Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`.
 The current game id goes in the URL as `?game=<id>`, so a reload returns you to the same game.

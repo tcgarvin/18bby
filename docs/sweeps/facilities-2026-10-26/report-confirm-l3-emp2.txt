@@ -1,0 +1,49 @@
+variant l3-emp2
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  admiral           35.0%   wins  41.6%
+  staller           34.2%   wins  43.4%
+  early-builder     34.1%   wins  35.8%
+  contractor        34.0%   wins  36.3%
+  baron             33.9%   wins  35.2%
+  targeted          33.8%   wins  40.7%
+  baron-prestige    31.1%   wins  11.8%
+  builder           30.5%   wins  21.9%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   33.1   36.5   40.3   33.1   33.4   35.0   35.2
+  baron           33.9   33.3   36.5   35.1   33.3   32.1   33.5   33.9
+  baron-prestige  28.9   29.4   33.3   36.6   29.5   30.3   30.7   32.0
+  builder         28.0   30.7   30.7   33.3   30.7   29.1   30.6   31.2
+  contractor      33.9   33.4   36.5   35.1   33.3   32.2   33.5   34.0
+  early-builder   31.7   33.4   35.6   38.3   33.2   33.3   33.5   33.7
+  staller         32.7   34.9   35.6   36.2   34.9   32.7   33.3   33.6
+  targeted        32.6   34.7   35.2   35.6   34.5   32.3   33.4   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-prestige 36.5±0.4, builder 40.3±1.1, staller 35.0±0.8, targeted 35.2±0.8
+  baron          invades baron-prestige 36.5±0.7
+  baron-prestige invades builder 36.6±1.1
+  contractor     invades baron-prestige 36.5±0.7
+  early-builder  invades baron-prestige 35.6±0.5, builder 38.3±1.0
+  staller        invades baron-prestige 35.6±0.9, builder 36.2±1.2
+  targeted       invades baron-prestige 35.2±0.9, builder 35.6±1.1
+
+Best response counts over 36 opponent sets:
+  admiral          28
+  staller          5
+  contractor       3
+
+Equilibria (replicator dynamics, share >= 5%):
+  3 viable: admiral 42%, contractor 38%, staller 20%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 2.6, min 1, max 3
+  admiral          survives  98%  largest  55%
+  staller          survives  82%  largest   0%
+  contractor       survives  52%  largest  32%
+  baron            survives  28%  largest  10%
+  early-builder    survives   2%  largest   2%
+  targeted         survives   2%  largest   0%

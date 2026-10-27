@@ -1,4 +1,4 @@
-"""How the greedy bots play the experimental Death Star rules (``death_star_rules``)."""
+"""How the greedy bots play the Death Star rules (``death_star_rules``), mostly with fleets."""
 
 import random
 from dataclasses import replace
@@ -24,7 +24,7 @@ from bby18.bots.forecast import (
     turns_to_round_limit,
 )
 from bby18.bots.stable import STABLE
-from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG
 from bby18.death_star import SITE_NAME
 from bby18.game import Game
 from bby18.hexgrid import Hex
@@ -578,12 +578,13 @@ def _withheld_and_settled(game):
     return withheld, settled
 
 
-def test_builder_targeted_and_hoarder_play_different_games_under_the_default_rules():
+@pytest.mark.parametrize("config", [FLEET_CONFIG, DEFAULT_CONFIG], ids=["fleets", "facilities"])
+def test_builder_targeted_and_hoarder_play_different_games_under_the_adopted_rules(config):
     totals = {}
     for name in ("targeted", "builder", "hoarder"):
         withheld = settled = 0
         for seed in (1, 2, 3, 4):
-            game, _ = play_one(seed, 3, name, DEFAULT_CONFIG)
+            game, _ = play_one(seed, 3, name, config)
             w, s = _withheld_and_settled(game)
             withheld, settled = withheld + w, settled + s
             totals.setdefault(seed, set()).add(tuple(str(e) for e in game.log))

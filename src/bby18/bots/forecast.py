@@ -1,5 +1,5 @@
 """What a bot expects of the Death Star track: how long the game will last, when the next
-seizure comes and what a fleet will cost. Only meaningful under the experimental Death Star
+seizure comes and what a fleet will cost. Only meaningful under the Death Star
 rules (``GameConfig.death_star_rules``); bots consult it only then.
 
 Every forecast reads the current state only. The cube rate is the rate of the track right now:

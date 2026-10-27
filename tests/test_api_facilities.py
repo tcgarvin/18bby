@@ -1,8 +1,6 @@
-"""The API under the experimental facility rules (``facility_rules``), served when the app's
-config turns them on."""
+"""The API under the facility rules (``facility_rules``), the rules it serves since 2026-10-27."""
 
 import random
-from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,14 +11,15 @@ from bby18.api.auth import AuthError
 from bby18.api.saves import new_session
 from bby18.api.serialize import action_to_json, match_action, rules_to_json, session_to_json
 from bby18.api.store import MemoryStore, Seat
-from bby18.config import DEFAULT_CONFIG, GameConfig
+from bby18.config import DEFAULT_CONFIG, FLEET_CONFIG
 from bby18.death_star import SITE_NAME
 from bby18.game import EMPIRE, Game
 from bby18.hexgrid import Direction, Hex
 from bby18.session import GameSession
 from bby18.state import Corporation
 
-FACILITY_CONFIG = replace(DEFAULT_CONFIG, facility_rules=True)
+FACILITY_CONFIG = DEFAULT_CONFIG
+"""The rules the API serves."""
 SEATS = [{"name": "Me"}, {"name": "Bot", "bot": True, "difficulty": "easy"}]
 
 
@@ -34,10 +33,10 @@ class HeaderUser:
 
 
 @pytest.fixture
-def facility_rules(monkeypatch):
-    """Serve new games, replays and the rules page under the facility rules."""
-    monkeypatch.setattr("bby18.api.saves.DEFAULT_CONFIG", FACILITY_CONFIG)
-    monkeypatch.setattr("bby18.api.app.DEFAULT_CONFIG", FACILITY_CONFIG)
+def fleet_rules(monkeypatch):
+    """Serve new games, replays and the rules page under the fleet rules of 2026-10-26."""
+    monkeypatch.setattr("bby18.api.saves.DEFAULT_CONFIG", FLEET_CONFIG)
+    monkeypatch.setattr("bby18.api.app.DEFAULT_CONFIG", FLEET_CONFIG)
 
 
 @pytest.fixture
@@ -46,7 +45,7 @@ def store():
 
 
 @pytest.fixture
-def client(store, facility_rules):
+def client(store):
     return TestClient(create_app(store, store, HeaderUser()), headers={"Authorization": "alice"})
 
 
@@ -147,12 +146,12 @@ def test_rules_say_whether_the_facility_rules_apply(client):
         "baseExits": FACILITY_CONFIG.planet_base_exits,
     }
     assert rules["deathStar"]["fleetLimit"] == FACILITY_CONFIG.fleet_limit
-    off = rules_to_json(GameConfig())
+    off = rules_to_json(FLEET_CONFIG)
     assert off["facilityRules"] is False
     assert set(off["facilities"]) == set(rules["facilities"])
 
 
-def test_fleet_rules_state_has_no_facilities():
+def test_fleet_rules_state_has_no_facilities(fleet_rules):
     seats = (Seat("Me", False), Seat("You", False))
     state = session_to_json(new_session(2, seats))
     assert "facilities" not in state

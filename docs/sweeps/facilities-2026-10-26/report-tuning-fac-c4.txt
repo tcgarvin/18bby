@@ -1,0 +1,45 @@
+variant fac-c4
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  admiral           36.5%   wins  51.1%
+  baron             34.5%   wins  36.9%
+  staller           34.3%   wins  40.3%
+  early-builder     34.2%   wins  35.7%
+  targeted          33.7%   wins  34.2%
+  contractor        33.3%   wins  37.6%
+  baron-prestige    32.1%   wins  18.5%
+  builder           28.1%   wins  12.3%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   34.7   37.4   43.5   34.6   37.2   35.9   37.4
+  baron           32.5   33.3   36.9   40.9   34.7   32.9   32.6   33.9
+  baron-prestige  29.0   29.1   33.3   39.1   33.0   32.0   29.7   33.0
+  builder         26.1   28.1   29.4   33.3   26.2   25.8   27.8   27.1
+  contractor      30.9   31.7   33.1   39.1   33.3   31.5   31.2   32.7
+  early-builder   29.0   33.3   35.1   42.4   33.2   33.3   33.9   34.5
+  staller         31.3   35.3   36.3   39.8   33.8   33.3   33.3   33.9
+  targeted        32.0   33.9   34.9   39.7   33.0   32.9   33.1   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron 34.7±0.5, baron-prestige 37.4±0.5, builder 43.5±0.6, early-builder 37.2±0.7, staller 35.9±0.7, targeted 37.4±0.7
+  baron          invades baron-prestige 36.9±0.6, builder 40.9±1.0
+  baron-prestige invades builder 39.1±1.1
+  contractor     invades builder 39.1±1.5
+  early-builder  invades baron-prestige 35.1±0.5, builder 42.4±0.8
+  staller        invades baron 35.3±0.6, baron-prestige 36.3±0.7, builder 39.8±1.0
+  targeted       invades baron-prestige 34.9±0.7, builder 39.7±0.9
+
+Best response counts over 36 opponent sets:
+  admiral          33
+  baron            2
+  staller          1
+
+Equilibria (replicator dynamics, share >= 5%):
+  1 viable: admiral 100%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 1.1, min 1, max 2
+  admiral          survives 100%  largest 100%
+  baron            survives   5%  largest   0%

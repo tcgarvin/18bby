@@ -96,7 +96,7 @@ class FinishFleets:
 @dataclass(frozen=True)
 class BuildFacility:
     """Build one facility on ``planet`` at ``cost``, the current price from the shared supply
-    (experimental facility rules). The planet gains an exit: ``exit_side`` is the side, facing a
+    (facility rules). The planet gains an exit: ``exit_side`` is the side, facing a
     dangling lane, that the builder gives it to, or ``None`` to leave it unclaimed for the next
     tile charted toward the planet."""
 

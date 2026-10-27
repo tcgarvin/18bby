@@ -121,7 +121,7 @@ class GreedyPolicy:
     ``CARELESS_DIVIDEND_FRACTION`` of this rate. Starting a corporation and buying toward
     floating one's own never slip. 0 plays exactly as without the knob."""
 
-    # The knobs below matter only under the experimental Death Star rules. Under the facility
+    # The knobs below matter only under the Death Star rules. Under the facility
     # rules the fleet knobs apply to facilities (see ``GreedyBot._choose_facility``).
     fleet_payback_turns: float = 4.0
     """Buy a fleet when the revenue it adds, over at most this many operating turns (and no more

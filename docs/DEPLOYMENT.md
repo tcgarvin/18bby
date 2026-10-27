@@ -40,15 +40,23 @@ browser ──▶ Vercel ──┬─ public/ (the built web/ frontend, served f
 Local play needs neither: `uv run bby18 serve` sets `BBY18_MODE=local` (games in memory, one
 local user; account tokens are issued but not needed).
 
-**Rules.** The API serves one rule set, `DEFAULT_CONFIG` (the Death Star and fleets rules since
-2026-10-26; see `docs/DECISIONS.md`). The `BBY18_DEATH_STAR_RULES` switch that served them
-experimentally before then has been removed; setting it does nothing.
+**Rules.** The API serves one rule set, `DEFAULT_CONFIG`: since 2026-10-27 the Death Star rules
+with facilities and planet exits (on 2026-10-26 the Death Star and fleets rules, now
+`FLEET_CONFIG`; see `docs/DECISIONS.md`). The `BBY18_DEATH_STAR_RULES` switch that served the
+Death Star rules experimentally before 2026-10-26 has been removed; setting it does nothing.
 
 **Saves from before 2026-10-26.** A save records its seed, seats and actions, not its rules, so
 after the deploy that adopts the Death Star rules every older save replays from its seed under
 them: the board gains the construction sites and every operating turn a fleet step. Most such
 games' recorded moves stop being legal (an operating turn now ends with a fleet step), so they
 answer 409 and cannot be resumed, as after the terrain change. Players start a new game.
+
+**Saves from 2026-10-26 (fleet rules).** The same applies to games saved under the fleet rules
+once the facility rules are deployed: they replay from their seed under the facility rules
+(planets with one exit, a free home facility, a facility step in place of the fleet step, at
+most 3 facilities, contracts at 50-80). A recorded `buy_fleet` is no longer legal and the bots
+play differently, so most such games fail to replay (`SaveOutdated`), answer 409 and cannot be
+resumed. Players start a new game.
 
 Build: `vercel.json` sets the FastAPI framework and builds the frontend into `public/`.
 `[tool.vercel]` in `pyproject.toml` names the entrypoint as a path from the repository root

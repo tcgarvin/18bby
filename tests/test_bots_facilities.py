@@ -1,4 +1,4 @@
-"""How the greedy bots plan routes and build facilities under the experimental facility rules
+"""How the greedy bots plan routes and build facilities under the facility rules
 (``facility_rules``): planet exits in route costs (``bby18.bots.routing``) and the facility
 step (``GreedyBot._choose_facility``)."""
 
@@ -11,12 +11,12 @@ from bby18.bots.forecast import TrackForecast
 from bby18.bots.greedy import NO_ROUTE_COST, _FacilityOption
 from bby18.bots.routing import PlanetDoors, route_costs
 from bby18.bots.stable import STABLE
-from bby18.config import GameConfig, SEIZURE
+from bby18.config import DEFAULT_CONFIG, SEIZURE
 from bby18.game import Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
 
-RULES = replace(GameConfig(), facility_rules=True)
+RULES = DEFAULT_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Tests that build specific tiles run on an empty sky."""
 
@@ -207,16 +207,19 @@ def test_the_new_exit_goes_to_the_builders_lane_then_unclaimed_then_a_rivals():
 
 
 def test_a_fleet_target_policy_builds_facilities_up_to_its_target_and_stops():
-    game = new_game()
-    cec = float_corp(game, "CEC")
-    chart(game, cec, BETWEEN, D.SW, D.NW)
-    admiral = bot("admiral")
-    assert STABLE["admiral"].fleet_target == 4
-    while (choice := admiral.choose_fleet_action(game, cec, game.legal_fleet_actions(cec))) != (
-        FinishFleets()
-    ):
-        game.apply_fleet_action(cec, choice)
-    assert cec.fleets == len(game.facilities_of(cec)) == 4
+    target = STABLE["admiral"].fleet_target
+    assert target == 4
+    # Under the adopted limit of 3 the limit stops it; with room to spare, its target does.
+    for limit, owned in ((RULES.fleet_limit, 3), (target + 1, target)):
+        game = new_game(replace(OPEN_RULES, fleet_limit=limit))
+        cec = float_corp(game, "CEC")
+        chart(game, cec, BETWEEN, D.SW, D.NW)
+        admiral = bot("admiral")
+        while (choice := admiral.choose_fleet_action(game, cec, game.legal_fleet_actions(cec))) != (
+            FinishFleets()
+        ):
+            game.apply_fleet_action(cec, choice)
+        assert cec.fleets == len(game.facilities_of(cec)) == owned
 
 
 def test_a_corporation_left_without_a_facility_always_builds_one():

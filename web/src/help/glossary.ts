@@ -17,7 +17,7 @@ export interface GlossaryEntry {
 
 /**
  * Optional rule sets a term or section may belong to: the Death Star rules, and within them
- * either fleets or (the experimental facility rules) facilities.
+ * either fleets or (the facility rules, the default since 2026-10-27) facilities.
  */
 export type RuleSet = "deathStar" | "fleets" | "facilities";
 

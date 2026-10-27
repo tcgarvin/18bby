@@ -1,0 +1,58 @@
+variant facilities: 10240 games, Death Star rules on, facility rules on
+  rounds played: mean 7.62, median 8, range 4-8
+  withheld operating turns (forced ones included): 19.3% (n=468102)
+  shares sold per stock round after the first: 0.00 (n=67827)
+  network actions per corporation that operated (30727): 8.50 (from round 5 on 1.13), upgrades 0.73
+  planets reached per corporation open at the end: 7.04; planets touched by a tile per game: 11.4 of 24.0
+  ended by the station launching: 25% (backstop 75%)
+  stage fills (clock: OR r.i = k(r-1)+i, SR r = k(r-1)+0.5; k = 2 by default):
+    stage 1 (Frame)            filled in 100% of games, at mean 6.0, median 5, range 2.5-8.5
+    stage 2 (Superstructure)   filled in  62% of games, at mean 7.1, median 6.5, range 4-16
+    stage 3 (Superlaser)       filled in  44% of games, at mean 11.3, median 12, range 6-16
+    stage 4 (Completion)       filled in  25% of games, at mean 12.3, median 12, range 7-16
+  cubes per game: contracts 5.8, Empire 7.6
+  facilities per corporation that operated (30727): bought 2.69, spent 182, seized 1.44, left at the end 2.25
+  facilities sold per game 8.1; next facility's tier at the end: tier 1 3%, tier 2 94%, tier 3 3%
+  facilities owned at the end of each round (games that reached it): R1 7.0 R2 7.7 R3 8.0 R4 8.2 R5 7.2 R6 7.2 R7 7.2 R8 6.9
+  bankruptcies per game 0.01 (games with one: 0%); by round R3 2, R4 13, R5 13, R6 6, R7 9, R8 14; by corporation CEC 11, CSC 40, KDY 6
+  bankruptcies by the president's strategy (count, per 100 seats played):
+    contractor         47    1.2
+    baron               3    0.1
+    builder             2    0.1
+    targeted            2    0.1
+    admiral             1    0.0
+    early-builder       1    0.0
+    staller             1    0.0
+    baron-prestige      0    0.0
+  withheld dividend choices (positive revenue only): near a seizure 19.9% (n=88150), elsewhere 18.9% (n=378307)
+  shares sold per stock round (after the first): before a seizure or site move 0.00 (n=20998), elsewhere 0.00 (n=46829)
+  price change per corporation between operating-round ends: across the site move +9.18 (n=18809), all rounds +8.62 (n=437375)
+  contract revenue: 8.1% of all revenue; contract pairs per corporation that operated 1.92
+  facilities (experimental facility rules):
+    per corporation that operated (30727): built 2.69 plus 1.00 free at home, seized 1.44, owned at the end 2.25
+    slots filled at the end per game: corporations 6.8, Empire 4.3
+    planet exits at the end: 1.46 (n=245760) per planet; per game, planets never built on (base exits only) 15.7 of 24.0, planets some lane connects to 11.4, unclaimed exits 15.5, dangling lanes 0.0
+    new exits of built facilities: to the builder's dangling lane 1.8% (n=82553), to a rival's 0.0% (n=82553), left unclaimed 98.2% (n=82553)
+    seizures decided by the tie-break between planets per game 0.38
+
+variant fleets: 10240 games, Death Star rules on
+  rounds played: mean 7.56, median 8, range 4-8
+  withheld operating turns (forced ones included): 23.5% (n=464436)
+  shares sold per stock round after the first: 0.00 (n=67166)
+  network actions per corporation that operated (30720): 7.66 (from round 5 on 1.03), upgrades 0.09
+  planets reached per corporation open at the end: 6.97; planets touched by a tile per game: 13.4 of 24.0
+  ended by the station launching: 37% (backstop 63%)
+  stage fills (clock: OR r.i = k(r-1)+i, SR r = k(r-1)+0.5; k = 2 by default):
+    stage 1 (Frame)            filled in 100% of games, at mean 4.5, median 4, range 2-8.5
+    stage 2 (Superstructure)   filled in  84% of games, at mean 7.0, median 6.5, range 4-16
+    stage 3 (Superlaser)       filled in  51% of games, at mean 11.0, median 11, range 6-16
+    stage 4 (Completion)       filled in  37% of games, at mean 12.9, median 13, range 8-16
+  cubes per game: contracts 7.9, Empire 7.6
+  fleets per corporation that operated (30720): bought 3.65, spent 271, seized 1.51, left at the end 2.14
+  fleets sold per game 11.0; next fleet's tier at the end: tier 2 59%, tier 3 41%
+  fleets owned at the end of each round (games that reached it): R1 6.7 R2 6.1 R3 6.6 R4 7.1 R5 6.9 R6 6.7 R7 6.8 R8 6.6
+  bankruptcies per game 0.00 (games with one: 0%)
+  withheld dividend choices (positive revenue only): near a seizure 27.7% (n=92594), elsewhere 22.4% (n=371291)
+  shares sold per stock round (after the first): before a seizure or site move 0.00 (n=23964), elsewhere 0.00 (n=43202)
+  price change per corporation between operating-round ends: across the site move +8.07 (n=25782), all rounds +7.49 (n=433716)
+  contract revenue: 11.6% of all revenue; contract pairs per corporation that operated 2.63

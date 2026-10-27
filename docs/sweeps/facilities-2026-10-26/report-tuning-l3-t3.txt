@@ -1,0 +1,44 @@
+variant l3-t3
+10240 games, 8 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  admiral           36.0%   wins  51.0%
+  baron             35.0%   wins  42.7%
+  targeted          33.9%   wins  37.7%
+  staller           33.9%   wins  37.7%
+  contractor        33.1%   wins  33.8%
+  early-builder     32.5%   wins  24.5%
+  baron-prestige    32.5%   wins  18.0%
+  builder           29.8%   wins  21.4%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                admira  baron baron- builde contra early- stalle target
+  admiral         33.3   33.3   35.8   40.5   34.7   37.5   35.5   36.3
+  baron           32.6   33.3   36.0   38.6   34.4   34.8   34.2   34.4
+  baron-prestige  29.6   29.3   33.3   37.2   33.9   33.2   31.1   32.0
+  builder         25.5   28.6   30.6   33.3   30.3   30.3   29.0   28.3
+  contractor      31.7   31.3   32.2   36.4   33.3   33.2   32.3   32.3
+  early-builder   28.3   30.4   33.1   36.5   33.3   33.3   31.3   31.7
+  staller         30.9   32.4   34.9   38.1   33.5   34.9   33.3   33.7
+  targeted        30.5   32.2   34.6   38.1   34.6   34.4   33.5   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral        invades baron-prestige 35.8±0.5, builder 40.5±0.8, early-builder 37.5±0.7, staller 35.5±0.6, targeted 36.3±0.7
+  baron          invades baron-prestige 36.0±0.7, builder 38.6±1.0, early-builder 34.8±0.6
+  baron-prestige invades builder 37.2±1.1
+  contractor     invades builder 36.4±1.3
+  early-builder  invades builder 36.5±0.9
+  staller        invades builder 38.1±0.9
+  targeted       invades builder 38.1±0.9
+
+Best response counts over 36 opponent sets:
+  admiral          31
+  baron            5
+
+Equilibria (replicator dynamics, share >= 5%):
+  1 viable: admiral 100%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 1.0, min 1, max 2
+  admiral          survives  88%  largest  88%
+  baron            survives  15%  largest  12%

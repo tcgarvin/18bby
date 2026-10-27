@@ -84,7 +84,7 @@ class Game:
     """Fleets (or facilities, under the facility rules) sold from the shared supply so far.
     Free home facilities do not come from the supply."""
     facilities: list[Facility] = field(default_factory=list)
-    """Every facility on the board, oldest first (experimental facility rules)."""
+    """Every facility on the board, oldest first (facility rules)."""
     facilities_built: int = 0
     """Facilities built so far, home facilities included: the next one's ``build_number``."""
     facility_seizure_ties: int = 0
@@ -205,7 +205,7 @@ class Game:
         return count
 
     def closed_corporations(self) -> list[Corporation]:
-        """Corporations that went bankrupt (experimental Death Star rules)."""
+        """Corporations that went bankrupt (Death Star rules)."""
         return [c for c in self.corporations.values() if c.status is CorpStatus.CLOSED]
 
     def operating_order(self) -> list[Corporation]:
@@ -518,7 +518,7 @@ class Game:
         if self.config.death_star_rules and self.config.empire_cubes_per_stock_round > 0:
             self._add_cubes(EMPIRE, self.config.empire_cubes_per_stock_round)
 
-    # --- fleets and bankruptcy (experimental Death Star rules) -------------------
+    # --- fleets and bankruptcy (Death Star rules) --------------------------------
 
     def fleet_price(self) -> int:
         """What the next fleet from the shared supply costs."""
@@ -627,7 +627,7 @@ class Game:
         if not self.config.death_star_rules:
             raise IllegalAction("Fleets exist only under the Death Star rules")
 
-    # --- facilities and planet exits (experimental facility rules) ---------------
+    # --- facilities and planet exits (facility rules) ----------------------------
 
     def facilities_on(self, planet: Hex) -> list[Facility]:
         """The facilities on ``planet``, corporate and Imperial, oldest first."""
@@ -744,7 +744,7 @@ class Game:
             self.network.claim_exit(planet, side)
         corp.fleets += 1
 
-    # --- the Death Star track (experimental Death Star rules) --------------------
+    # --- the Death Star track (Death Star rules) ---------------------------------
 
     def death_star_site(self) -> Hex | None:
         """The hex of the construction site, or ``None`` when there is none on the board."""

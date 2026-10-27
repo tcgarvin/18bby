@@ -336,7 +336,7 @@
   fill: #fff;
 }
 
-/* ---------- Facilities and planet exits (experimental facility rules) ---------- */
+/* ---------- Facilities and planet exits (facility rules) ---------- */
 
 /* A lane facing a planet with no exit for it ends in a bar: it does not connect. */
 .hexmap__dangle {

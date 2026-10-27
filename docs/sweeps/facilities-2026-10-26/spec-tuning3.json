@@ -1,0 +1,12 @@
+{
+ "variants": {
+  "l3-emp2": {"facility_rules": true, "fleet_limit": 3, "empire_cubes_per_stock_round": 2},
+  "l3-t3": {"facility_rules": true, "fleet_limit": 3, "fleet_tiers": [[3, 60], [6, 90], [6, 120], ["unlimited", 160]]},
+  "l3-c4": {"facility_rules": true, "fleet_limit": 3, "death_star_cubes_per_stage": 4},
+  "l3-slots1": {"facility_rules": true, "fleet_limit": 3, "facilities_per_planet": 1},
+  "limit2": {"facility_rules": true, "fleet_limit": 2}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

@@ -103,7 +103,8 @@ def test_frame_tiles_are_exactly_the_tiles_each_move_changed():
             if action["type"] in ("chart", "upgrade", "service"):
                 hex_actions += 1
                 assert [t["hex"] for t in frame["after"]["tiles"]] == [action["hex"]]
-            else:
+            elif not any("is bankrupt" in line["text"] for line in frame["log"]):
+                # A bankruptcy takes the closed corporation's service off its tiles.
                 assert frame["after"]["tiles"] == []
             merged.update((tuple(t["hex"]), t) for t in frame["after"]["tiles"])
     assert hex_actions > 0
@@ -118,8 +119,15 @@ def test_last_frame_shows_the_state_the_request_ended_in():
         apply_submitted(session, action_to_json(chooser.choice(session.legal_actions())), recorder)
         state = session_to_json(session)
         after = recorder.frames[-1]["after"]
-        for key in after.keys() - {"players", "tiles"}:
+        for key in after.keys() - {"players", "tiles", "facilities"}:
             assert after[key] == state[key], key
+        if "facilities" in state:
+            # A frame lists only the planets the move changed, and no build options.
+            facilities = {k: v for k, v in after["facilities"].items() if k != "planets"}
+            assert facilities == {
+                k: v for k, v in state["facilities"].items() if k not in ("planets", "options")
+            }
+            assert all(p in state["facilities"]["planets"] for p in after["facilities"]["planets"])
         assert after["players"] == [
             {k: p[k] for k in ("id", "cash", "worth", "shares", "certificates")}
             for p in state["players"]

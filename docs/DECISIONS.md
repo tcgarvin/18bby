@@ -63,6 +63,10 @@ Charting and upgrading require the tile to connect to the corporation's reachabl
 First charting grants service automatically. Upgrading requires the corporation already to
 have service on the tile.
 
+Under the Death Star rules a **facility step** comes between the network actions and revenue
+(see "Facilities and planet exits"); under the fleet rules of 2026-10-26 (`FLEET_CONFIG`) it is
+a fleet step (see "Death Star and fleets").
+
 ## Economy
 
 - **Typed pairs:** Agriculture↔Market, Resources↔Industry, Resources↔Shipyard,
@@ -191,6 +195,12 @@ playtesting, with contested construction sites and a shorter track:
 The rules before adoption (fixed six rounds, no fleets) are `CLASSIC_CONFIG` in `config.py`, kept
 for comparison sweeps and tests. Every other number below is still a placeholder in `config.py`.
 
+**Fleets replaced by facilities on 2026-10-27** (see "Facilities and planet exits"): pair
+capacity now comes from facilities on planets, at most 3 per corporation, and contracts pay
+50/60/70/80. The track, the sites, bankruptcy and the game end below are unchanged. The fleet
+rules as adopted on 2026-10-26 (fleets, limit 4, contracts 40/50/60/70) are kept as
+`FLEET_CONFIG` for comparison sweeps and tests.
+
 **Evidence** (`docs/sweeps/death-star-2026-10-25/README.md`, about 140,000 tournament games):
 
 - **As first designed** (sites anywhere in their region, 6 cubes per stage), the station launched
@@ -274,12 +284,12 @@ contract give that.
   the operating round (or stock round) in which it fills; if two stages fill together, they apply
   in order.
 
-| Stage | Contract value while building it | Result when it fills |
+| Stage | Contract value while building it (fleet rules; facility rules) | Result when it fills |
 |---|---|---|
-| 1. Frame | 40 | **Seizure:** every corporation with a fleet loses one |
-| 2. Superstructure | 50 | **The site moves** to the Mid Rim; the old hex becomes empty, uncharted space |
-| 3. Superlaser | 60 | **Seizure:** every corporation with a fleet loses one |
-| 4. Completion | 70 | **The station launches:** the site leaves the board and its hex becomes empty space. The current set of operating rounds finishes, then the game ends (the Battle of Yavin). |
+| 1. Frame | 40; 50 | **Seizure:** every corporation with a fleet loses one (under the facility rules, the Empire takes over one facility) |
+| 2. Superstructure | 50; 60 | **The site moves** to the Mid Rim; the old hex becomes empty, uncharted space |
+| 3. Superlaser | 60; 70 | **Seizure:** as stage 1 |
+| 4. Completion | 70; 80 | **The station launches:** the site leaves the board and its hex becomes empty space. The current set of operating rounds finishes, then the game ends (the Battle of Yavin). |
 
 - Seized fleets leave the game; they do not return to the supply.
 - When a site hex becomes empty space, tiles pointing into it stay on the board, and any network
@@ -328,10 +338,44 @@ because every partner it can pair with is three or more hexes away. Moving Kashy
 sites, halves the launch rate and lets one strategy dominate (always-pay alone, or admiral with
 the Chandrila move). Revisit together with a Death Star retune.
 
-## Facilities and planet exits (decided 2026-10-26, experimental)
+## Facilities and planet exits (decided 2026-10-26, adopted 2026-10-27)
 
-**Status:** experimental, behind `facility_rules` (requires the Death Star rules). Not adopted
-until this section says so.
+**Status:** **adopted 2026-10-27** as the default rules (`facility_rules=True`, which requires
+the Death Star rules), with two numbers changed from the experimental defaults:
+
+- **At most 3 facilities** per corporation (`fleet_limit`, was 4).
+- **Contracts at 50/60/70/80** (`death_star_stage_values`, was 40/50/60/70).
+
+Everything else is as built: the fleet tiers (6 at 60, 6 at 90, 6 at 120, then 160), the Empire's
+1 cube per stock round, 5 cubes per stage, 1 base exit and 2 facilities per planet. The fleet
+rules of 2026-10-26 are kept as `FLEET_CONFIG` for comparison. Easy opponents were recalibrated
+for these rules (`docs/sweeps/difficulty-2026-10-27`).
+
+**Evidence** (`docs/sweeps/facilities-2026-10-26/README.md`; the stable tournament, 8 strategies,
+3 players, every lineup in every seat order):
+
+- **As first built** (limit 4, contracts 40-70), admiral or baron dominated (equilibrium 100%
+  one or the other) and a seed resample kept 1.3 viable strategies on average. Capacity was
+  cheap and the decline weak: the free home facilities sit outside the supply, so the price
+  rarely left tier 2.
+- **With a limit of 3 and contracts at 50-80**, on maps 1-20 the equilibrium is staller 61%,
+  baron 39%, and a resample keeps 2.2 viable strategies. Best responses spread over five
+  strategies: no strategy is the best answer to more than 14 of the 36 opponent sets. On fresh
+  maps 21-40 it is baron 53%, staller 47%, with 2.0 viable. The fleet rules keep 2.1 and 2.3.
+- **Upgraded lanes become routine:** about 0.7 upgrades per corporation per game, against under
+  0.1 under the fleet rules.
+- **Contracts stay as large a part of revenue as under fleets** (about 7-11%); without the
+  richer contracts the one-exit planets make the site harder to reach and contracts fade.
+- **No bankruptcies** in the tournament games.
+- **Caveats:** the station launches less often (27% and 12% of games on the two map sets,
+  against 37% and 20% under fleets), so most games end at the round-8 backstop. Late-game
+  building is no higher than under fleets: slots are not scarce enough to force new lanes after
+  a seizure. Bots never chart toward a full planet for a later facility to connect, so the
+  "give the new exit to a dangling lane" rule is untested by them.
+- **Not adopted:** the Empire adding 2 cubes per stock round with a limit of 3 kept more
+  strategies alive (2.6), but admiral was the best response to 28 of 36 opponent sets and
+  contracts fell to under 5% of revenue: the station became a timer. One facility per planet
+  bankrupted a corporation in about a third of games.
 
 **Why:** lane placement was "connect two places" and the 3-exit upgrade was dead (0.04 per
 corporation per game). Under the fleet rules a corporation also stopped building early: with at
@@ -370,7 +414,8 @@ address decides where the lanes can go. The private benefit (capacity) pays for 
   exit yet (any corporation's lane), or leaves it unclaimed for the next tile charted toward the
   planet. *(Reading chosen while building: the builder may always leave it unclaimed.)*
 - **Price and limit:** the fleet supply's tiers price facilities (6 at 60, 6 at 90, 6 at 120,
-  then 160; `fleet_tiers`), and a corporation may own at most 4 (`fleet_limit`). Facilities are
+  then 160; `fleet_tiers`), and a corporation may own at most 3 (`fleet_limit`; 4 while
+  experimental). Facilities are
   built in the old fleet step, after network actions, without using a network action; several
   may be built in one step.
 - **Mandatory:** a corporation must end its facility step owning at least one facility.
@@ -403,6 +448,8 @@ address decides where the lanes can go. The private benefit (capacity) pays for 
 - A corporation can go bankrupt with money in its treasury if no planet it may build on has a
   free slot (for example, its homeworld filled with Imperial facilities and nothing else reached
   with room). The log says why.
+- Saved games do not record their rules, so a game saved under the fleet rules replays under the
+  facility rules and is usually reported as outdated.
 
 ## Explicitly deferred
 

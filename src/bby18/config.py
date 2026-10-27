@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 
@@ -149,13 +149,14 @@ class GameConfig:
     """EXPERIMENTAL. Each share is worth its price plus this fraction of its corporation's
     treasury divided by shares_per_corporation, in player worth and so in final score."""
     death_star_rules: bool = True
-    """Adopted 2026-10-26 (``CLASSIC_CONFIG`` turns it off). Fleets, bankruptcy and the Death
-    Star construction track (see "Death Star and fleets" in docs/DECISIONS.md and
-    ``bby18.death_star``). When True, revenue uses at most one pair per fleet owned, each
-    operating turn has a fleet step after the network actions, the construction site and its
-    contracts are on the board, and the game ends after the set of operating rounds in which
-    the station launches, or after ``death_star_backstop_rounds`` (``total_rounds`` is then
-    ignored). The ``fleet_*`` and ``death_star_*`` fields below apply only when this is True."""
+    """Adopted 2026-10-26 (``CLASSIC_CONFIG`` turns it off). Pair capacity (fleets, or
+    facilities under ``facility_rules``), bankruptcy and the Death Star construction track (see
+    "Death Star and fleets" in docs/DECISIONS.md and ``bby18.death_star``). When True, revenue
+    uses at most one pair per fleet or facility owned, each operating turn has a fleet step after
+    the network actions, the construction site and its contracts are on the board, and the game
+    ends after the set of operating rounds in which the station launches, or after
+    ``death_star_backstop_rounds`` (``total_rounds`` is then ignored). The ``fleet_*``,
+    ``facility*`` and ``death_star_*`` fields below apply only when this is True."""
     fleet_tiers: tuple[FleetTier, ...] = (
         FleetTier(6, 60),
         FleetTier(6, 90),
@@ -165,15 +166,17 @@ class GameConfig:
     """The shared fleet supply, cheapest tier first. The price rises when a tier sells out; the
     last tier must be ``UNLIMITED``. Under ``facility_rules`` the same tiers price facilities
     (a free home facility does not come from the supply)."""
-    fleet_limit: int = 4
-    """Most fleets one corporation may own; under ``facility_rules``, most facilities."""
-    facility_rules: bool = False
-    """EXPERIMENTAL; requires ``death_star_rules``. Facilities and planet exits (see "Facilities
-    and planet exits" in docs/DECISIONS.md): facilities replace fleets as pair capacity, one pair
-    per facility a corporation owns, and each sits on a planet. A planet (not the construction
-    site) has ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit
-    when charted (or upgraded) toward the planet, first come, first served, and the planet
-    connects only through claimed sides. A seizure turns the facility nearest the site Imperial."""
+    fleet_limit: int = 3
+    """Most facilities one corporation may own (3 since 2026-10-27); with ``facility_rules`` off,
+    most fleets (``FLEET_CONFIG``: 4)."""
+    facility_rules: bool = True
+    """Adopted 2026-10-27 (``FLEET_CONFIG`` and ``CLASSIC_CONFIG`` turn it off); requires
+    ``death_star_rules``. Facilities and planet exits (see "Facilities and planet exits" in
+    docs/DECISIONS.md): facilities replace fleets as pair capacity, one pair per facility a
+    corporation owns, and each sits on a planet. A planet (not the construction site) has
+    ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit when charted
+    (or upgraded) toward the planet, first come, first served, and the planet connects only
+    through claimed sides. A seizure turns the facility nearest the site Imperial."""
     planet_base_exits: int = 1
     """Exits a planet has before any facility is built on it (``facility_rules`` only)."""
     facilities_per_planet: int = 2
@@ -182,8 +185,9 @@ class GameConfig:
     """Tag of the construction site (Imperial Works)."""
     contract_partner_tags: frozenset[str] = frozenset({"R", "I", "S"})
     """A planet with one of these tags paired with the site is a contract pair."""
-    death_star_stage_values: tuple[int, ...] = (40, 50, 60, 70)
-    """Contract pair value while each stage is being built, first stage first."""
+    death_star_stage_values: tuple[int, ...] = (50, 60, 70, 80)
+    """Contract pair value while each stage is being built, first stage first. 50-80 since
+    2026-10-27, with the facility rules; ``FLEET_CONFIG`` keeps 40-70."""
     death_star_stage_results: tuple[str, ...] = (SEIZURE, SITE_MOVE, SEIZURE, COMPLETION)
     """What happens when each stage fills: one of ``STAGE_RESULTS``. Exactly one stage moves
     the site, and the last stage, only, completes the station."""
@@ -310,8 +314,20 @@ IPO_PRICE_RULES = ("par", "market_after_float")
 CAPITALIZATION_RULES = ("full", "incremental")
 
 DEFAULT_CONFIG = GameConfig()
+"""The adopted rules (2026-10-27): the Death Star track with facilities and planet exits, at
+most 3 facilities per corporation, contracts at 50/60/70/80. The web app serves these."""
 
-CLASSIC_CONFIG = GameConfig(
+FLEET_CONFIG = GameConfig(
+    facility_rules=False,
+    fleet_limit=4,
+    death_star_stage_values=(40, 50, 60, 70),
+)
+"""The rules adopted 2026-10-26, kept for comparison sweeps and tests: the Death Star track with
+fleets as pair capacity (at most 4 per corporation), planets as open hubs, and contracts at
+40/50/60/70."""
+
+CLASSIC_CONFIG = replace(
+    FLEET_CONFIG,
     map_file="map-127.json",
     death_star_rules=False,
     death_star_cubes_per_stage=6,
@@ -319,8 +335,8 @@ CLASSIC_CONFIG = GameConfig(
     death_star_near_homeworlds=1,
 )
 """The rules before 2026-10-26, kept for comparison sweeps and tests: the full 127-hex map, no
-fleets or Death Star, a fixed ``total_rounds``, and the Death Star numbers the experimental switch
-used to default to."""
+fleets, facilities or Death Star, a fixed ``total_rounds``, and the Death Star numbers the
+experimental switch used to default to."""
 
 # Harness settings (not game rules).
 REVENUE_CACHE_SIZE = 1 << 16
@@ -330,24 +346,24 @@ REVENUE_CACHE_SIZE = 1 << 16
 DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
 """Per difficulty, the worth share a reference player (the stable's ``builder``) should take
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
-Death Star rules the 1.0 noise maximum gives 0.45-0.55, depending on the strategy."""
+facility rules the 1.0 noise maximum gives 0.45-0.53, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-26 for DIFFICULTY_TARGET_SHARE under the Death Star rules on the
-    # 117-hex map (docs/sweeps/map-2026-10-26).
+    # Calibrated 2026-10-27 for DIFFICULTY_TARGET_SHARE under the facility rules
+    # (docs/sweeps/difficulty-2026-10-27).
     "easy": {
-        "baron": 0.75,
-        "baron-prestige": 0.89,
-        "baron-tycoon": 0.67,
-        "builder": 0.63,
-        "churner": 0.0,
-        "diversifier": 0.74,
-        "early-builder": 0.71,
-        "hoarder": 0.37,
-        "prestige": 0.82,
-        "spoiler": 0.37,
-        "straight": 0.21,
-        "targeted": 0.68,
-        "tycoon": 0.45,
+        "baron": 0.89,
+        "baron-prestige": 0.82,
+        "baron-tycoon": 0.73,
+        "builder": 0.78,
+        "churner": 0.34,
+        "diversifier": 0.93,
+        "early-builder": 0.87,
+        "hoarder": 0.2,
+        "prestige": 0.66,
+        "spoiler": 0.69,
+        "straight": 0.74,
+        "targeted": 0.86,
+        "tycoon": 0.52,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

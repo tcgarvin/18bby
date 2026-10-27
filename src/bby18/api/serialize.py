@@ -230,7 +230,7 @@ def fleet_tiers_to_json(tiers: tuple[FleetTier, ...], sold: int) -> list[Json]:
 
 
 def death_star_to_json(game: Game) -> Json:
-    """The Death Star track, its construction sites and the fleet supply (experimental Death
+    """The Death Star track, its construction sites and the fleet (or facility) supply (Death
     Star rules only)."""
     config = game.config
     track = game.death_star
@@ -565,7 +565,7 @@ def rules_to_json(config: GameConfig) -> Json:
 
 
 def facility_rules_to_json(config: GameConfig) -> Json:
-    """The experimental facility numbers. Always listed; ``facilityRules`` in ``rules_to_json``
+    """The facility numbers. Always listed; ``facilityRules`` in ``rules_to_json``
     says whether they are in force. Facilities are priced by the fleet tiers and limited by the
     fleet limit, listed under ``deathStar``."""
     return {
@@ -575,7 +575,7 @@ def facility_rules_to_json(config: GameConfig) -> Json:
 
 
 def death_star_rules_to_json(config: GameConfig) -> Json:
-    """The experimental Death Star and fleet numbers. Always listed; ``deathStarRules`` in
+    """The Death Star and fleet numbers. Always listed; ``deathStarRules`` in
     ``rules_to_json`` says whether they are in force."""
     return {
         "fleetTiers": fleet_tiers_to_json(config.fleet_tiers, 0),

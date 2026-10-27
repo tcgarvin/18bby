@@ -3,7 +3,7 @@
 Charted tiles are shared geometry. Service is per corporation. Planets are open hubs:
 they have every exit and never need charting or service.
 
-Under the experimental facility rules a planet's exits are limited instead (``limit_planet_exits``)
+Under the facility rules a planet's exits are limited instead (``limit_planet_exits``)
 and have no direction until a lane claims one: charting or upgrading a tile with an exit facing
 the planet claims an unclaimed exit for that side, and the planet connects only through claimed
 sides. A lane facing a planet with no unclaimed exit dangles until a new exit is given to it.

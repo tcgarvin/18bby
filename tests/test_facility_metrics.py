@@ -1,4 +1,4 @@
-"""Sweep measurements of the experimental facility rules (``bby18.facility_metrics``) and the
+"""Sweep measurements of the facility rules (``bby18.facility_metrics``) and the
 network counts every sweep row carries (``bby18.metrics``)."""
 
 from collections import Counter
@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from bby18.actions import BuildFacility, BuyShare, Chart, ShareSource
-from bby18.config import SEIZURE, GameConfig
+from bby18.config import DEFAULT_CONFIG, FLEET_CONFIG, SEIZURE
 from bby18.death_star_metrics import ROW_PREFIX as DS
 from bby18.death_star_report import death_star_report, variant_report
 from bby18.facility_metrics import (
@@ -26,9 +26,9 @@ from bby18.metrics import LATE_ROUND, count_log, planets_touched
 from bby18.playtest import play_one
 from bby18.sweep import parse_spec, run_sweep
 
-RULES = replace(GameConfig(), facility_rules=True)
+RULES = DEFAULT_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
-FLEETS = GameConfig()
+FLEETS = FLEET_CONFIG
 
 CORELLIA = Hex(-5, 3)
 ALDERAAN = Hex(-4, 1)
@@ -204,7 +204,7 @@ def test_report_shows_network_lines_everywhere_and_facility_lines_under_the_rule
         assert "planets touched by a tile per game" in block
     for phrase in [
         "facilities per corporation that operated",
-        "facilities (experimental facility rules):",
+        "facilities (facility rules):",
         "slots filled at the end per game: corporations",
         "planets never built on (base exits only)",
         "dangling lanes",
@@ -229,18 +229,25 @@ def test_report_rejects_a_variant_mixing_facility_rules_on_and_off():
         variant_report("v", rows)
 
 
-def test_a_sweep_spec_variant_turns_the_facility_rules_on():
+def test_a_sweep_spec_variant_plays_the_fleet_rules():
+    fleets = {
+        "facility_rules": False,
+        "fleet_limit": 4,
+        "death_star_stage_values": [40, 50, 60, 70],
+    }
     spec = parse_spec(
         {
-            "variants": {"facilities": {"facility_rules": True}, "fleets": {}},
+            "variants": {"facilities": {}, "fleets": fleets},
             "seeds": [1, 1],
             "bots": ["mix:baron,early-builder,targeted"],
         }
     )
     assert spec.variants["facilities"] == RULES
+    assert spec.variants["fleets"] == FLEETS
     rows = run_sweep(spec.variants, spec.seeds, spec.player_counts, spec.bot_kinds, workers=1)
     by_variant = {r["variant"]: r for r in rows}
-    assert by_variant["facilities"]["overrides"] == {"facility_rules": True}
+    assert by_variant["facilities"]["overrides"] == {}
+    assert by_variant["fleets"]["overrides"] == fleets
     assert f"{ROW_PREFIX}facilities_built" in by_variant["facilities"]
     assert f"{DS}launched" in by_variant["facilities"]
     assert not [k for k in by_variant["fleets"] if k.startswith(ROW_PREFIX)]
