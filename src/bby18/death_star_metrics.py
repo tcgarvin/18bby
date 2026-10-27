@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import math
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 
 from bby18.actions import BuildFacility, BuyFleet, SellShares
 from bby18.config import SEIZURE, SITE_MOVE, GameConfig
+from bby18.facility_metrics import FacilityMetrics, build_exit_kind, facility_metrics
 from bby18.game import Game
 from bby18.session import Dividend, GameSession, Phase, PlayedMove
 from bby18.state import CorpStatus
@@ -228,6 +229,9 @@ class DeathStarRecorder:
         """Shares sold in each stock round where selling was allowed, by clock."""
         self._or_prices: list[tuple[float, dict[str, int]]] = []
         self.fleets_end_round: dict[int, int] = {}
+        self.build_exits: Counter[str] = Counter()
+        """Under the facility rules, each built facility by where its new exit went
+        (``build_exit_kind``)."""
 
     def __call__(self, session: GameSession, move: PlayedMove) -> None:
         game = session.game
@@ -235,7 +239,7 @@ class DeathStarRecorder:
         if move.phase is Phase.STOCK:
             self._record_stock(point, move)
         elif move.phase is Phase.FLEET:
-            self._record_fleet(move)
+            self._record_fleet(game, move)
         elif move.phase is Phase.DIVIDEND:
             self._record_dividend(point, move)
         elif move.phase is Phase.NETWORK:
@@ -268,11 +272,13 @@ class DeathStarRecorder:
         sold = move.action.count if isinstance(move.action, SellShares) else 0
         self._sales[point.clock] = self._sales.get(point.clock, 0) + sold
 
-    def _record_fleet(self, move: PlayedMove) -> None:
+    def _record_fleet(self, game: Game, move: PlayedMove) -> None:
         if isinstance(move.action, (BuyFleet, BuildFacility)):
             corp = self.corps[move.corporation]
             corp.fleets_bought += 1
             corp.fleet_spend += move.action.cost
+        if isinstance(move.action, BuildFacility):
+            self.build_exits[build_exit_kind(game, move.corporation, move.action)] += 1
 
     def _record_dividend(self, point: RoundPoint, move: PlayedMove) -> None:
         self.corps[move.corporation].revenue_total += move.revenue
@@ -355,6 +361,11 @@ class DeathStarRecorder:
             fleets_end_round=dict(self.fleets_end_round),
             corps=self.corps,
         )
+
+    def facility_metrics(self, game: Game) -> FacilityMetrics:
+        """Summarize the finished game's facilities and planet exits; the game must be under
+        the facility rules."""
+        return facility_metrics(game, self.build_exits)
 
     def _site_move_prices(self, results: tuple[str, ...]) -> tuple[int, int]:
         moves = [

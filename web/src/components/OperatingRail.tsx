@@ -45,7 +45,9 @@ export function OperatingRail({ state, focusCorp, onFocus, children }: Operating
             : entry.stage === "done"
               ? "done"
               : current
-                ? CURRENT_CHIP[state.phase] ?? "operating"
+                ? state.phase === "fleet" && state.facilities
+                  ? "facilities"
+                  : (CURRENT_CHIP[state.phase] ?? "operating")
                 : entry.corpId === firstUpcoming
                   ? "up next"
                   : "waiting";
@@ -89,7 +91,12 @@ export function OperatingRail({ state, focusCorp, onFocus, children }: Operating
                     <span className="rentry__k">revenue</span> <span className="num">{corp.revenue.total}</span>
                   </span>
                   {state.deathStar && !closed && (
-                    <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit} />
+                    <FleetIcons
+                      corpId={corp.id}
+                      fleets={corp.fleets}
+                      limit={state.deathStar.fleets.limit}
+                      item={state.deathStar.fleets.item}
+                    />
                   )}
                 </span>
               </button>

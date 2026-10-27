@@ -1,5 +1,6 @@
-import type { DeathStarState } from "../api";
+import type { DeathStarState, SupplyItem } from "../api";
 import { gameEnd, pendingStages, resultLabel, resultText, stageCubes, stageProgress, supplyText } from "../deathstar";
+import { itemWord } from "../facilities";
 import { Help } from "./Help";
 
 /**
@@ -35,28 +36,40 @@ function FleetShip({ owned }: { owned: boolean }) {
   );
 }
 
+/** One facility (facility rules): a small station block, filled when owned, an outline for an empty slot. */
+function FacilityBlock({ owned }: { owned: boolean }) {
+  return (
+    <svg className={`fleet fleet--facility${owned ? " fleet--owned" : ""}`} width="11" height="10" viewBox="0 0 11 10" aria-hidden>
+      <rect x="1" y="1" width="9" height="8" rx="1.5" />
+    </svg>
+  );
+}
+
 interface FleetIconsProps {
   corpId: string;
   fleets: number;
   limit: number;
+  /** Fleets, or facilities under the facility rules. */
+  item?: SupplyItem;
   /** Mark this as the corporation's fleet anchor for replays; leave off for second copies. */
   anchor?: boolean;
 }
 
-/** A corporation's fleets as ship icons, with empty slots up to the limit. */
-export function FleetIcons({ corpId, fleets, limit, anchor = true }: FleetIconsProps) {
+/** A corporation's fleets (or facilities) as icons, with empty slots up to the limit. */
+export function FleetIcons({ corpId, fleets, limit, item = "fleet", anchor = true }: FleetIconsProps) {
   const slots = Math.max(limit, fleets);
+  const word = itemWord(item, limit);
   return (
     <span
       className="fleets"
       data-fleets-for={anchor ? corpId : undefined}
-      title={`${fleets} of ${limit} fleets: each runs one revenue pair`}
-      aria-label={`${fleets} of ${limit} fleets`}
+      title={`${fleets} of ${limit} ${word}: each runs one revenue pair`}
+      aria-label={`${fleets} of ${limit} ${word}`}
       role="img"
     >
-      {Array.from({ length: slots }, (_, i) => (
-        <FleetShip key={i} owned={i < fleets} />
-      ))}
+      {Array.from({ length: slots }, (_, i) =>
+        item === "facility" ? <FacilityBlock key={i} owned={i < fleets} /> : <FleetShip key={i} owned={i < fleets} />,
+      )}
     </span>
   );
 }
@@ -64,7 +77,7 @@ export function FleetIcons({ corpId, fleets, limit, anchor = true }: FleetIconsP
 /**
  * The Death Star track and the fleet supply, in a strip under the top bar for the whole game:
  * cubes per stage, the stage being built with its contract value and what happens when it fills,
- * when the game ends, and what the next fleet costs. Animation anchors: data-death-star-track,
+ * when the game ends, and what the next fleet (or facility, under the facility rules) costs. Animation anchors: data-death-star-track,
  * data-fleet-supply.
  */
 export function DeathStarBar({ deathStar, over = false }: { deathStar: DeathStarState; over?: boolean }) {
@@ -129,12 +142,12 @@ export function DeathStarBar({ deathStar, over = false }: { deathStar: DeathStar
       </span>
 
       <span className="dsbar__fleets">
-        Fleet
+        {deathStar.fleets.item === "facility" ? "Facility" : "Fleet"}
         <strong className="dsbar__price num" data-fleet-supply>
           {deathStar.fleets.price}
         </strong>
         <span className="muted">{supplyText(deathStar)}</span>
-        <Help topic="fleetSupply" />
+        <Help topic={deathStar.fleets.item === "facility" ? "facilitySupply" : "fleetSupply"} />
       </span>
     </section>
   );

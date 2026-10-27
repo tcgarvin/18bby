@@ -1,0 +1,9 @@
+{
+ "variants": {
+  "fleets": {},
+  "facilities": {"facility_rules": true}
+ },
+ "seeds": [1, 20],
+ "players": [3],
+ "tournament": ["admiral", "early-builder", "targeted", "baron", "contractor", "baron-prestige", "staller", "builder"]
+}

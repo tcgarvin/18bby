@@ -29,7 +29,9 @@ npm run dev
 ```
 
 The API serves the Death Star and fleet rules, the default since 2026-10-26 (see
-`docs/DECISIONS.md`).
+`docs/DECISIONS.md`). It serves whatever `DEFAULT_CONFIG` in `src/bby18/config.py` says: with
+`facility_rules` on it serves the experimental facility rules instead, and the UI follows the
+state it is sent (a `facilities` block, and `deathStar.fleets.item` of `"facility"`).
 
 Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`.
 The current game id goes in the URL as `?game=<id>`, so a reload returns you to the same game.
@@ -57,6 +59,11 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   `deathStar` block): the active and reserved sites, cubes per stage, what the next stage does,
   when the game ends, the fleet supply, a corporation's fleet-step options, the seizure it should
   plan for, and how many of its pairs its fleets run. Tested in `deathstar.test.ts`.
+- `src/facilities.ts`: derived views of the facility rules (the state's optional `facilities`
+  block): which lanes run into a planet (only through claimed exits), the legal builds grouped by
+  planet with the server's preview of each, the facility the next seizure takes, facilities that
+  turned Imperial, planets to outline after others' moves, and whether a new lane claims a
+  planet's exit or dangles. Tested in `facilities.test.ts`.
 - `src/tilediff.ts`: which hexes changed between two states, for outlining others' moves.
   Tested in `tilediff.test.ts`.
 - `src/hotkeys.ts`: the `useHotkeys` hook behind the keyboard shortcuts. Tested in
@@ -85,7 +92,9 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   - Under the Death Star rules, `frames.ts` also captions fleet buys and finishes, notes cubes a
     move put on the track, and adds an `empire` step after any move whose round end applied a
     stage (seizure, site move, launch) or that left a corporation bankrupt, even after your own
-    move. Tested in `deathstar.test.ts`.
+    move. Tested in `deathstar.test.ts`. Under the facility rules it captions facility builds
+    (where, and which lane got the new exit), merges each frame's changed planets, and names the
+    facilities a seizure turned Imperial. Tested in `playback/facilities.test.ts`.
   - `ReplayBar.tsx` (caption, counter, speed, Skip; the round banner), `Ticker.tsx` (numbers
     that tick to a new value), `useSettled.ts` (show a "before" value for one frame so a newly
     mounted view still animates the change).
@@ -98,7 +107,9 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
     in the URL.
   - `views/`: one presentational view per phase, all taking `ViewProps` (`views/types.ts`):
     `StockRoundView`, `NetworkView`, `FleetView` (Death Star rules: buy fleets, with
-    `FleetActions` in the operating rail), `DividendView`, `GameOverView`.
+    `FleetActions` in the operating rail), `FacilityView` (the same step under the facility rules:
+    pick a planet on the map or in `FacilityActions`, then where its new exit goes),
+    `DividendView`, `GameOverView`.
   - `TopBar` (round stepper, who is acting, overlay toggles, Undo), `RecentMoves` (the ribbon),
     `Overlay` and `MapOverlay` (the map, market and log over any view).
   - `PlayerStrip` (player cards, or a compact cash strip), `CorporationBoard` (corporation cards
@@ -112,7 +123,11 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
     trace per corporation on each lane it serves. Each corporation keeps its own offset, so
     traces stay continuous across tiles. It draws asteroid fields and nebulae, planet badges,
     homeworld tags and, for the focused corporation, the scored pairs. It can zoom to a set of
-    hexes (`fitHexes`). `MapLegend`, `MapThumbnail` and `TilePreview` go with it.
+    hexes (`fitHexes`). Under the facility rules a lane runs into a planet only through a claimed
+    exit, a lane facing a planet without one ends in a red bar (dangling), open exits are small
+    rings above the planet, and facilities are small squares in their owner's colour beside it
+    (a purple diamond once Imperial); a new or seized facility pops in. `MapLegend`,
+    `MapThumbnail` and `TilePreview` go with it.
   - `Help`: the "?" glossary popover. It renders in a portal on `document.body` with fixed
     coordinates from the trigger (`src/popover.ts`, tested in `popover.test.ts`): below the
     "?", flipped above when there is no room, clamped inside the window, and above overlays and
@@ -133,7 +148,8 @@ up (`src/playback/flight.ts`): `data-player-id` (player card), `data-cash-for` (
 certificate stack), `data-pool-for` (the pool stack, present only while the pool holds shares;
 effects fall back to the corporation card), `data-treasury-for`, `data-market-token` (a corporation's stock market token),
 `data-order-corp` (operating-order entry), `data-hex="q,r"` (a map hex), and under the Death
-Star rules `data-fleets-for` (a corporation's fleet icons), `data-fleet-supply` and
+Star rules `data-fleets-for` (a corporation's fleet icons, or its facility icons under the facility
+rules), `data-fleet-supply` and
 `data-death-star-track` (on the Death Star bar). Each appears at most
 once per view; second copies in overlays leave them off. The `caption-slot` at the bottom of
 the stage holds the replay caption.
@@ -144,8 +160,10 @@ floats); a sale flies the certificates to the pool and lights the market token; 
 from the treasury to the hex, where the new lane draws in and glows in the builder's colour; a
 dividend flies a coin to each paid player's cash, or pops the withheld sum at the treasury, and
 lights the market token; a fleet buy flies a coin to the fleet price on the Death Star bar and
-lights the corporation's fleets; a seizure pops "−1 fleet" on each corporation that lost one, a
-site move lights the old and new hexes, and a bankruptcy pops on the corporation. Cash, treasury and prices tick to their new values, and market tokens
+lights the corporation's fleets; a facility build flies a coin to the planet and lights it and the
+builder's facilities; a seizure pops "−1 fleet" (or "−1 facility", lighting each seized planet) on
+each corporation that lost one, a site move lights the old and new hexes, and a bankruptcy pops on
+the corporation. Cash, treasury and prices tick to their new values, and market tokens
 slide between cells.
 
 ## Playing
@@ -170,6 +188,13 @@ and who is acting.
   its only fleet. <kbd>B</kbd> buys, <kbd>P</kbd> finishes. The Death Star bar under the top bar
   shows the track, the contract value and when the game ends throughout; the map draws the site
   (W) and the dashed future site, and dotted arcs mark contract pairs.
+- **Operating, facilities (facility rules):** fleets are replaced by facilities on planets. The
+  map highlights the planets the corporation may build on; pick one there or in the rail's list
+  (<kbd>1</kbd>–<kbd>9</kbd>), then choose where its new exit goes: left open, or given to a lane
+  that dangles there (<kbd>1</kbd>–<kbd>9</kbd>). Each choice says what it adds to this turn's
+  revenue and whose lane it connects, and hovering one previews it on the map. <kbd>P</kbd>
+  finishes, <kbd>Esc</kbd> closes the planet. In the network step, a chart or upgrade option
+  facing a planet says whether it claims an exit there or dangles.
 - **Map, market and log** open over any view that does not already show them: <kbd>M</kbd>,
   <kbd>K</kbd>, <kbd>L</kbd> or the top-bar buttons; <kbd>Esc</kbd> closes.
 - **Undo** (top bar, <kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) takes back your last move,

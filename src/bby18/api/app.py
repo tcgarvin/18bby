@@ -39,6 +39,7 @@ from bby18.api.serialize import (
     Json,
     MoveRecorder,
     board_to_json,
+    planet_exits_map,
     rules_to_json,
     session_to_json,
     tile_map,
@@ -190,7 +191,7 @@ def create_app(store: GameStore, accounts: AccountStore, authenticator: Authenti
     @app.post("/api/games/{game_id}/actions")
     def act(game_id: str, request: ActionRequest, user: str = Depends(current_user)) -> Json:
         saved, session = load(user, game_id)
-        recorder = MoveRecorder(tile_map(session.game))
+        recorder = MoveRecorder(tile_map(session.game), planet_exits_map(session.game))
         try:
             apply_submitted(session, request.action, recorder)
         except (ValueError, IllegalAction) as exc:

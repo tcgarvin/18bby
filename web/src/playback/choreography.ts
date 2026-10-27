@@ -4,6 +4,7 @@
  */
 
 import type { FlightApi, FlyOptions, HighlightOptions, PopOptions } from "./FlightLayer";
+import { itemCount } from "../facilities";
 import { anchor } from "./flight";
 import type { MoveKind, PlaybackStep } from "./frames";
 
@@ -124,8 +125,24 @@ export function effectsFor(kind: MoveKind, durationMs: number, color: (corpId: s
           ? [{ effect: "highlight", target: anchor.fleetSupply(), color: LOSS, durationMs: settle, delayMs: later } as Effect]
           : []),
       ];
+    case "build_facility":
+      return [
+        {
+          effect: "fly",
+          from: [anchor.treasury(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)],
+          to: anchor.hex(kind.hex),
+          label: signed(-kind.cost),
+          variant: "coin",
+          durationMs: travel,
+        },
+        { effect: "highlight", target: anchor.hex(kind.hex), color: color(kind.corp), durationMs: settle, delayMs: later },
+        { effect: "highlight", target: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp)], color: color(kind.corp), durationMs: settle, delayMs: later },
+        ...(kind.price.after !== kind.price.before
+          ? [{ effect: "highlight", target: anchor.fleetSupply(), color: LOSS, durationMs: settle, delayMs: later } as Effect]
+          : []),
+      ];
     case "finish_fleets":
-      return [{ effect: "pop", at: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)], label: `${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`, durationMs: settle }];
+      return [{ effect: "pop", at: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)], label: itemCount(kind.item, kind.fleets), durationMs: settle }];
     case "empire":
       return empireEffects(kind.event, settle, later);
     case "phase":
@@ -144,11 +161,14 @@ function empireEffects(event: Extract<MoveKind, { kind: "empire" }>["event"], se
           (corp): Effect => ({
             effect: "pop",
             at: [anchor.fleets(corp), anchor.orderCorp(corp), anchor.corp(corp)],
-            label: "−1 fleet",
+            label: event.taken ? "−1 facility" : "−1 fleet",
             color: LOSS,
             durationMs: settle,
             delayMs: later,
           }),
+        ),
+        ...(event.taken ?? []).map(
+          (facility): Effect => ({ effect: "highlight", target: anchor.hex(facility.hex), color: EMPIRE, durationMs: settle, delayMs: later }),
         ),
       ];
     case "site_move":

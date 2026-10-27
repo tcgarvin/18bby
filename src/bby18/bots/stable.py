@@ -7,7 +7,8 @@ strategy is one entry here; it becomes a bot kind for playtests and sweeps.
 
 Under the experimental Death Star rules every archetype also plays the fleet game competently
 (see ``GreedyBot``): it keeps a replacement fleet's price against seizures, buys fleets by value
-and builds for the pairs its fleets can run. The last group of archetypes differ only in fleet
+and builds for the pairs its fleets can run. Under the experimental facility rules the same knobs
+drive facilities, and routes pay for the planet exits they need (``bby18.bots.routing``). The last group of archetypes differ only in fleet
 and contract plans, so with the rules off they play like the archetype they are built on. The
 Death Star tournament should use baron, saver, admiral, contractor, staller, raider, targeted,
 early-builder, investor, baron-tycoon, baron-prestige and builder.

@@ -10,6 +10,7 @@ import { StepEffects } from "../playback/StepEffects";
 import { playbackSteps } from "../playback/frames";
 import { usePlayback } from "../playback/usePlayback";
 import { corpColor } from "../selectors";
+import { changedFacilityHexes } from "../facilities";
 import { changedHexes } from "../tilediff";
 import { DeathStarBar } from "./DeathStar";
 import { LogPanel } from "./LogPanel";
@@ -19,6 +20,7 @@ import { RecentMoves } from "./RecentMoves";
 import { StockMarket } from "./StockMarket";
 import { TopBar } from "./TopBar";
 import { DividendView } from "./views/DividendView";
+import { FacilityView } from "./views/FacilityView";
 import { FleetView } from "./views/FleetView";
 import { GameOverView } from "./views/GameOverView";
 import { NetworkView } from "./views/NetworkView";
@@ -130,8 +132,18 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
         playback.enqueue(state, next);
         setLastBatch({ before: state, after: next });
         setRecent(automatic);
-        const hexes = changedHexes(state.tiles, next.tiles);
+        const hexes = new Map([
+          ...changedHexes(state.tiles, next.tiles),
+          ...changedFacilityHexes(state.facilities, next.facilities),
+        ]);
         if (isHexAction(action)) hexes.delete(hexKey(action.hex));
+        if (action.type === "build_facility") {
+          // Your own facility is no news; one a bot built on the same planet still is.
+          const key = hexKey(action.planet);
+          const others = (hexes.get(key) ?? []).filter((corp) => corp !== state.currentCorporation);
+          if (others.length > 0) hexes.set(key, others);
+          else hexes.delete(key);
+        }
         setChanged(hexes);
       },
     );
@@ -251,7 +263,11 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           ) : display.phase === "network" ? (
             <NetworkView {...viewProps} />
           ) : display.phase === "fleet" ? (
-            <FleetView {...viewProps} />
+            display.facilities ? (
+              <FacilityView {...viewProps} />
+            ) : (
+              <FleetView {...viewProps} />
+            )
           ) : display.phase === "dividend" ? (
             <DividendView {...viewProps} />
           ) : (

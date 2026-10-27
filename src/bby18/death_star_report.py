@@ -1,8 +1,10 @@
 """A plain-text summary of sweep rows for comparing the Death Star rules with the current ones.
 
 It reads only row fields: the ``ds.*`` fields written by ``bby18.death_star_metrics`` for games
-with the rules on, and a few fields every row has (``rounds_played``, ``shares_sold``, the
-per-corporation dividend counts). Clock values are explained in ``bby18.death_star_metrics``.
+with the rules on, the ``fac.*`` fields of ``bby18.facility_metrics`` for games under the
+facility rules, and a few fields every row has (``rounds_played``, ``shares_sold``,
+``planets_touched``, the per-corporation dividend and network counts). Clock values are
+explained in ``bby18.death_star_metrics``.
 """
 
 from __future__ import annotations
@@ -14,11 +16,14 @@ from typing import Any
 
 from bby18.death_star import stage_name
 from bby18.death_star_metrics import ROW_PREFIX
+from bby18.facility_metrics import ROW_PREFIX as FACILITY_PREFIX
+from bby18.metrics import LATE_ROUND
 from bby18.playtest import seat_kinds
 
 Row = dict[str, Any]
 
 _CORP_PREFIX = f"{ROW_PREFIX}corp."
+_SINGULAR = {"fleets": "fleet", "facilities": "facility"}
 
 
 def death_star_report(rows: Iterable[Row]) -> str:
@@ -42,7 +47,12 @@ def variant_report(name: str, rows: Sequence[Row]) -> str:
     rules_on = [r for r in rows if f"{ROW_PREFIX}launched" in r]
     if rules_on and len(rules_on) != len(rows):
         raise ValueError(f"Variant {name!r} mixes games with the Death Star rules on and off")
+    facility_rows = [r for r in rows if f"{FACILITY_PREFIX}facilities_built" in r]
+    if facility_rows and len(facility_rows) != len(rows):
+        raise ValueError(f"Variant {name!r} mixes games with the facility rules on and off")
     state = "on" if rules_on else "off"
+    if facility_rows:
+        state += ", facility rules on"
     rounds = [int(r["rounds_played"]) for r in rows]
     lines = [
         f"variant {name}: {len(rows)} games, Death Star rules {state}",
@@ -53,12 +63,98 @@ def variant_report(name: str, rows: Sequence[Row]) -> str:
         f"  shares sold per stock round after the first: "
         f"{_ratio(sum(int(r['shares_sold']) for r in rows), sum(n - 1 for n in rounds))}",
     ]
+    lines += _network_lines(rows)
     if rules_on:
-        lines += _death_star_lines(rows)
+        lines += _death_star_lines(rows, "facilities" if facility_rows else "fleets")
+    if facility_rows:
+        lines += _facility_lines(rows)
     return "\n".join(lines)
 
 
-def _death_star_lines(rows: Sequence[Row]) -> list[str]:
+def _network_lines(rows: Sequence[Row]) -> list[str]:
+    """Building activity and coverage, for any rules. Rows from sweeps older than these fields
+    show "n/a"."""
+    operated = [
+        (r, corp_id)
+        for r in rows
+        for corp_id in _plain_corp_ids(r)
+        if float(r.get(f"corp.{corp_id}.operating_turns", 0)) > 0
+    ]
+    open_at_end = [(r, c) for r in rows for c in _plain_corp_ids(r) if r.get(f"corp.{c}.floated")]
+    touched = [float(r["planets_touched"]) for r in rows if "planets_touched" in r]
+    totals = [_planets_besides_the_site(r) for r in rows if "planets_touched" in r]
+    return [
+        f"  network actions per corporation that operated ({len(operated)}): "
+        f"{_corp_mean(operated, 'network_actions')} (from round {LATE_ROUND} on "
+        f"{_corp_mean(operated, 'late_network_actions')}), upgrades "
+        f"{_corp_mean(operated, 'upgrades')}",
+        f"  planets reached per corporation open at the end: "
+        f"{_corp_mean(open_at_end, 'planets_reached')}; planets touched by a tile per game: "
+        + (f"{mean(touched):.1f} of {mean(totals):.1f}" if touched and totals else "n/a"),
+    ]
+
+
+def _facility_lines(rows: Sequence[Row]) -> list[str]:
+    """Facilities and planet exits under the facility rules. Per-corporation counts come from
+    the ``ds.corp.*`` fleet fields, which count facilities under these rules."""
+    n = len(rows)
+    operated = _operated_corps(rows)
+
+    def per_corp(name: str) -> str:
+        if not operated:
+            return "n/a"
+        return f"{_operated_sum(rows, operated, name) / len(operated):.2f}"
+
+    def per_game(name: str) -> float:
+        return _facility_sum(rows, name) / n
+
+    limited = _facility_sum(rows, "limited_planets")
+    built = _facility_sum(rows, "facilities_built")
+    home = _facility_sum(rows, "home_facilities") / len(operated) if operated else 0.0
+    return [
+        "  facilities (experimental facility rules):",
+        f"    per corporation that operated ({len(operated)}): built {per_corp('fleets_bought')} "
+        f"plus {home:.2f} free at home, seized {per_corp('fleets_seized')}, owned at the end "
+        f"{per_corp('final_fleets')}",
+        f"    slots filled at the end per game: corporations "
+        f"{per_game('corporate_facilities'):.1f}, Empire {per_game('imperial_facilities'):.1f}",
+        f"    planet exits at the end: {_ratio(_facility_sum(rows, 'planet_exits'), limited)} "
+        f"per planet; per game, planets never built on (base exits only) "
+        f"{per_game('planets_at_base_exits'):.1f} of {limited / n:.1f}, planets some lane "
+        f"connects to {per_game('connected_planets'):.1f}, unclaimed exits "
+        f"{per_game('unclaimed_exits'):.1f}, dangling lanes {per_game('dangling_lanes'):.1f}",
+        f"    new exits of built facilities: to the builder's dangling lane "
+        f"{_percent(_facility_sum(rows, 'exits_to_own_lanes'), built)}, to a rival's "
+        f"{_percent(_facility_sum(rows, 'exits_to_rival_lanes'), built)}, left unclaimed "
+        f"{_percent(_facility_sum(rows, 'exits_left_unclaimed'), built)}",
+        f"    seizures decided by the tie-break between planets per game "
+        f"{per_game('seizure_ties'):.2f}",
+    ]
+
+
+def _planets_besides_the_site(row: Row) -> float:
+    """The planets a tile could touch: ``planets_total`` counts the construction site while it
+    is on the board, which under the Death Star rules is until the station launches."""
+    site = 1 if row.get(f"{ROW_PREFIX}launched") is False else 0
+    return float(row["planets_total"]) - site
+
+
+def _plain_corp_ids(row: Row) -> list[str]:
+    """Corporations with ``corp.<id>.*`` fields in ``row``."""
+    return sorted({k.split(".", 2)[1] for k in row if k.startswith("corp.")})
+
+
+def _corp_mean(corps: Sequence[tuple[Row, str]], name: str) -> str:
+    """Mean of ``corp.<id>.<name>`` over ``corps`` that have the field; "n/a" if none do."""
+    values = [float(r[f"corp.{c}.{name}"]) for r, c in corps if f"corp.{c}.{name}" in r]
+    return f"{mean(values):.2f}" if values else "n/a"
+
+
+def _facility_sum(rows: Sequence[Row], name: str) -> float:
+    return sum(float(r[f"{FACILITY_PREFIX}{name}"]) for r in rows)
+
+
+def _death_star_lines(rows: Sequence[Row], noun: str) -> list[str]:
     n = len(rows)
     p = ROW_PREFIX
     launched = sum(1 for r in rows if r[f"{p}launched"])
@@ -84,7 +180,7 @@ def _death_star_lines(rows: Sequence[Row]) -> list[str]:
         f"  cubes per game: contracts {_mean_of(rows, 'contract_cubes'):.1f}, "
         f"Empire {_mean_of(rows, 'empire_cubes'):.1f}"
     )
-    lines += _fleet_lines(rows)
+    lines += _fleet_lines(rows, noun)
     lines += _bankruptcy_lines(rows)
     lines += [
         "  withheld dividend choices (positive revenue only): "
@@ -135,7 +231,9 @@ def _near_and_elsewhere(
     return f"{label} {show(near_part, near_whole)}, elsewhere {elsewhere}"
 
 
-def _fleet_lines(rows: Sequence[Row]) -> list[str]:
+def _fleet_lines(rows: Sequence[Row], noun: str) -> list[str]:
+    """Fleet purchases and the supply; ``noun`` is "facilities" under the facility rules, whose
+    facilities the fleet fields count."""
     operated = _operated_corps(rows)
 
     def per_corp(name: str) -> float:
@@ -151,12 +249,12 @@ def _fleet_lines(rows: Sequence[Row]) -> list[str]:
                 owned_by_round[int(key[len(prefix) :])].append(float(value))
     owned = " ".join(f"R{k} {mean(v):.1f}" for k, v in sorted(owned_by_round.items()))
     return [
-        f"  fleets per corporation that operated ({len(operated)}): bought "
+        f"  {noun} per corporation that operated ({len(operated)}): bought "
         f"{per_corp('fleets_bought'):.2f}, spent {per_corp('fleet_spend'):.0f}, seized "
         f"{per_corp('fleets_seized'):.2f}, left at the end {per_corp('final_fleets'):.2f}",
-        f"  fleets sold per game {_mean_of(rows, 'fleets_sold'):.1f}; next fleet's tier at the "
-        f"end: {tier_text}",
-        f"  fleets owned at the end of each round (games that reached it): {owned}",
+        f"  {noun} sold per game {_mean_of(rows, 'fleets_sold'):.1f}; next {_SINGULAR[noun]}'s "
+        f"tier at the end: {tier_text}",
+        f"  {noun} owned at the end of each round (games that reached it): {owned}",
     ]
 
 

@@ -13,6 +13,7 @@ from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.bots.stable import STABLE
 from bby18.config import GameConfig
 from bby18.death_star_metrics import DeathStarMetrics, DeathStarRecorder
+from bby18.facility_metrics import FacilityMetrics
 from bby18.game import Game
 from bby18.metrics import (
     CorpMetrics,
@@ -23,6 +24,7 @@ from bby18.metrics import (
     near_pair_links,
     planet_coverage,
     planet_metrics,
+    planets_touched,
     worth_spread,
 )
 from bby18.runner import run_game
@@ -53,6 +55,9 @@ class GameSummary:
     planets_total: int
     planets_reached: int
     """Planets reached by at least one floated corporation."""
+    planets_touched: int
+    """Planets, the construction site aside, that some charted tile has an exit facing
+    (``bby18.metrics.planets_touched``)."""
     region_reached: dict[str, int]
     region_total: dict[str, int]
     planets: dict[str, PlanetMetrics]
@@ -69,6 +74,9 @@ class GameSummary:
     death_star: DeathStarMetrics | None = None
     """Track, fleet and contract measurements; ``None`` when the Death Star rules are off, so
     those rows carry no ``ds.*`` fields."""
+    facilities: FacilityMetrics | None = None
+    """Facility and planet-exit measurements; ``None`` without the facility rules, so those
+    rows carry no ``fac.*`` fields."""
 
     @property
     def planets_reached_fraction(self) -> float:
@@ -90,6 +98,7 @@ class GameSummary:
             "planets_total": self.planets_total,
             "planets_reached": self.planets_reached,
             "planets_reached_fraction": self.planets_reached_fraction,
+            "planets_touched": self.planets_touched,
         }
         row.update(asdict(self.stock))
         for seat, value in self.worth.items():
@@ -112,6 +121,8 @@ class GameSummary:
         row["rounds_played"] = self.rounds_played
         if self.death_star is not None:
             row.update(self.death_star.to_row())
+        if self.facilities is not None:
+            row.update(self.facilities.to_row())
         return row
 
 
@@ -215,14 +226,19 @@ def play_one(
         return game, summarize_game(game, seed)
     recorder = DeathStarRecorder(game)
     run_game(game, deciders, observer=recorder)
-    return game, summarize_game(game, seed, recorder.metrics(game))
+    facilities = recorder.facility_metrics(game) if config.facility_rules else None
+    return game, summarize_game(game, seed, recorder.metrics(game), facilities)
 
 
 def summarize_game(
-    game: Game, seed: int, death_star: DeathStarMetrics | None = None
+    game: Game,
+    seed: int,
+    death_star: DeathStarMetrics | None = None,
+    facilities: FacilityMetrics | None = None,
 ) -> GameSummary:
     """Measure a finished game. ``death_star`` is what a ``DeathStarRecorder`` saw of it,
-    for a game played under the Death Star rules."""
+    for a game played under the Death Star rules, and ``facilities`` its facility measurements
+    under the facility rules."""
     worth = {p.id: game.player_worth(p) for p in game.players}
     winner = max(worth, key=lambda k: worth[k])
     margin, cv = worth_spread(worth)
@@ -253,6 +269,7 @@ def summarize_game(
         final_basic_revenue=basic,
         planets_total=coverage.planets_total,
         planets_reached=coverage.planets_reached,
+        planets_touched=planets_touched(game),
         region_reached=coverage.region_reached,
         region_total=coverage.region_total,
         planets=planet_metrics(game),
@@ -263,6 +280,7 @@ def summarize_game(
         nebula_hexes=sum(1 for t in terrain if t is Terrain.NEBULA),
         rounds_played=game.round_number,
         death_star=death_star,
+        facilities=facilities,
     )
 
 

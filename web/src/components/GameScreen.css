@@ -1305,6 +1305,17 @@
   color: var(--ink-3);
 }
 
+/* Facility rules: whether a new lane claims an exit at the planet it faces, or dangles. */
+.tile-option__arrival {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.tile-option__arrival--dangles {
+  color: var(--dangling);
+}
+
 .tile-option__nebula {
   margin-left: 4px;
   color: var(--nebula-ink);
@@ -1848,6 +1859,18 @@
   stroke: color-mix(in srgb, var(--corp, var(--ink-2)) 70%, #000);
 }
 
+/* A facility (facility rules): a small block instead of a ship. */
+.fleet rect {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+}
+
+.fleet--owned rect {
+  fill: var(--corp, var(--ink-2));
+  stroke: color-mix(in srgb, var(--corp, var(--ink-2)) 70%, #000);
+}
+
 /* The track and supply, a strip under the top bar. */
 .dsbar {
   display: flex;
@@ -2075,6 +2098,98 @@
   opacity: 0.85;
 }
 
+/* The facility step (facility rules): planets to build on, then where the new exit goes. */
+.facility-planets {
+  display: grid;
+  gap: 6px;
+}
+
+.facility-planets__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.facility-planet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.facility-planet:hover:not(:disabled),
+.facility-planet:focus-visible {
+  border-color: var(--turn);
+  background: var(--highlight);
+  outline: none;
+}
+
+.facility-planet__name {
+  font-weight: 500;
+}
+
+.facility-planet__gain {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.facility-options {
+  display: grid;
+  gap: 6px;
+}
+
+.facility-options__exits {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.facility-options__exits:last-child {
+  margin: 8px 0 0;
+}
+
+.facility-option {
+  display: grid;
+  gap: 1px;
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.facility-option:hover:not(:disabled),
+.facility-option:focus-visible {
+  border-color: var(--turn);
+  background: var(--highlight);
+  outline: none;
+}
+
+.facility-option__label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.facility-option__sub {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
 .rentry__chip--closed {
   background: var(--danger-bg);
   color: var(--danger);
@@ -2204,4 +2319,37 @@
   .choices {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Facility rules: the map's facility, open-exit and dangling-lane markers in the legend. */
+.legend__facility {
+  fill: var(--ink-2);
+  stroke: var(--exit-open-fill);
+  stroke-width: 1.2;
+}
+
+.legend__facility--imperial {
+  fill: var(--empire);
+}
+
+.legend__facility-dot {
+  fill: var(--exit-open-fill);
+}
+
+.legend__open-exit {
+  fill: var(--exit-open-fill);
+  stroke: var(--exit-open);
+  stroke-width: 1.2;
+}
+
+.legend__lane {
+  stroke: #9aa3ae;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.legend__dangle {
+  stroke: var(--dangling);
+  stroke-width: 2.2;
+  stroke-linecap: round;
 }

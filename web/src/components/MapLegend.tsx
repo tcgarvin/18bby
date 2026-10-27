@@ -47,6 +47,39 @@ export function MapLegend({ state, focusCorp }: { state: GameState; focusCorp: s
           <Help topic="contract" />
         </>
       )}
+      {state.facilities && (
+        <>
+          <span className="legend__sep" />
+          <span className="legend__item">
+            <svg width="11" height="11" viewBox="-5.5 -5.5 11 11" aria-hidden>
+              <rect x={-4.25} y={-4.25} width={8.5} height={8.5} rx={1.6} className="legend__facility" />
+            </svg>
+            facility
+          </span>
+          <span className="legend__item">
+            <svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden>
+              <path d="M0,-5.3L5.3,0L0,5.3L-5.3,0Z" className="legend__facility legend__facility--imperial" />
+              <circle r={1.5} className="legend__facility-dot" />
+            </svg>
+            Imperial
+          </span>
+          <Help topic="facility" />
+          <span className="legend__item">
+            <svg width="8" height="8" viewBox="-4 -4 8 8" aria-hidden>
+              <circle r={2.7} className="legend__open-exit" />
+            </svg>
+            open exit
+          </span>
+          <span className="legend__item">
+            <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden>
+              <path d="M0,6H9" className="legend__lane" />
+              <path d="M10.5,1.5V10.5" className="legend__dangle" />
+            </svg>
+            dangling lane
+          </span>
+          <Help topic="planetExits" />
+        </>
+      )}
       <span className="legend__sep" />
       {state.corporations.map((c) => (
         <span key={c.id} className="legend__item">

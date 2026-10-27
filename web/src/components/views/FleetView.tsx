@@ -45,6 +45,7 @@ export function FleetView({ state, board, interactive, busy, keyboard, changedHe
             changedHexes={changedHexes}
             onHexClick={() => undefined}
             deathStar={state.deathStar}
+            facilities={state.facilities}
           />
         </div>
         <MapLegend state={state} focusCorp={focusCorp} />

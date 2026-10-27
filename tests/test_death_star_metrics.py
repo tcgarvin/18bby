@@ -336,13 +336,20 @@ def test_report_rejects_rows_mixing_rules_or_missing_rounds():
         variant_report("v", off)
 
 
-def test_death_star_report_command_filters_one_variant(tmp_path, capsys):
-    rows = _rows(CLASSIC_CONFIG, "base", [1]) + _rows(RULES, "death_star", [1])
+def test_death_star_report_command_filters_one_variant_and_bot(tmp_path, capsys):
+    rows = (
+        _rows(CLASSIC_CONFIG, "base", [1])
+        + _rows(RULES, "death_star", [1])
+        + _rows(RULES, "death_star", [1], bot="random")
+    )
     path = tmp_path / "rows.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-    args = argparse.Namespace(rows=path, variant="death_star")
+    args = argparse.Namespace(rows=path, variant="death_star", bot=None)
     assert death_star_command(args) == 0
     out = capsys.readouterr().out
-    assert out.startswith("variant death_star") and "variant base" not in out
+    assert out.startswith("variant death_star: 2 games") and "variant base" not in out
+    args.bot = "random"
+    assert death_star_command(args) == 0
+    assert capsys.readouterr().out.startswith("variant death_star: 1 games")
     args.variant = "missing"
     assert death_star_command(args) == 2

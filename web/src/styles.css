@@ -32,6 +32,10 @@
   --empire-hull: #b9bec7;
   --empire-edge: #4b525e;
   --empire-dish: #8d939e;
+  /* Planet exits under the facility rules: open exits and lanes that dangle without one. */
+  --exit-open: #3a4350;
+  --exit-open-fill: #ffffff;
+  --dangling: #b3261e;
   color-scheme: light;
 }
 

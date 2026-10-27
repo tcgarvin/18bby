@@ -11,6 +11,7 @@ import type {
   GameState,
   LogEntry,
   MoveFrame,
+  PlanetFacilities,
   PlayerState,
   TileState,
 } from "../api";
@@ -98,8 +99,12 @@ export function logEntry(seq: number, actor: string, text: string, round = "SR1"
   return { seq, round, actor, text };
 }
 
-/** The frame view of `state`, as the server would send it for a move that changed `tiles`. */
-export function frameState(state: GameState, tiles: TileState[] = []): FrameState {
+/**
+ * The frame view of `state`, as the server would send it for a move that changed `tiles` (and,
+ * under the facility rules, `planets`).
+ */
+export function frameState(state: GameState, tiles: TileState[] = [], planets: PlanetFacilities[] = []): FrameState {
+  const facilities = state.facilities;
   return {
     phase: state.phase,
     roundLabel: state.roundLabel,
@@ -113,6 +118,9 @@ export function frameState(state: GameState, tiles: TileState[] = []): FrameStat
     corporations: state.corporations,
     tiles,
     ...(state.deathStar ? { deathStar: state.deathStar } : {}),
+    ...(facilities
+      ? { facilities: { perPlanet: facilities.perPlanet, planets, seizureTargets: facilities.seizureTargets } }
+      : {}),
   };
 }
 
@@ -125,6 +133,8 @@ export interface FrameOptions {
   log?: LogEntry[];
   revenue?: number;
   tiles?: TileState[];
+  /** Under the facility rules, the planets the move changed. */
+  planets?: PlanetFacilities[];
 }
 
 /** A frame for `action` that leaves the game as `after`. */
@@ -138,7 +148,7 @@ export function moveFrame(action: Action, after: GameState, options: FrameOption
     automatic: options.automatic ?? true,
     log: options.log ?? [],
     revenue: options.revenue ?? 0,
-    after: frameState(after, options.tiles ?? []),
+    after: frameState(after, options.tiles ?? [], options.planets ?? []),
   };
 }
 
@@ -178,6 +188,7 @@ export function deathStarState(overrides: Partial<DeathStarState> = {}): DeathSt
     backstopRound: 8,
     empireCubesPerStockRound: 1,
     fleets: {
+      item: "fleet",
       price: 60,
       tier: 0,
       remainingInTier: 6,
@@ -202,5 +213,31 @@ export function trackAt(deathStar: DeathStarState, cubes: number, stage: number)
     stage,
     stages: deathStar.stages.map((s, i) => ({ ...s, filled: cubes >= (i + 1) * deathStar.cubesPerStage, resolved: i < stage })),
     contractValue: deathStar.stages[stage]?.value ?? 0,
+  };
+}
+
+/** A planet under the facility rules: one open exit and no facilities, unless overridden. */
+export function planetFacilities(name: string, hex: [number, number], overrides: Partial<PlanetFacilities> = {}): PlanetFacilities {
+  return { hex, name, exits: 1, claimed: [], unclaimed: 1, dangling: [], facilities: [], freeSlots: 2, ...overrides };
+}
+
+/**
+ * `state` under the facility rules: the supply sells facilities and the planets are `planets`
+ * (Corellia, home of CEC with its free facility, and Kuat, by default).
+ */
+export function withFacilities(state: GameState, planets?: PlanetFacilities[]): GameState {
+  const deathStar = state.deathStar ?? deathStarState();
+  return {
+    ...state,
+    deathStar: { ...deathStar, fleets: { ...deathStar.fleets, item: "facility" } },
+    facilities: {
+      perPlanet: 2,
+      planets: planets ?? [
+        planetFacilities("Corellia", [-5, 3], { exits: 2, unclaimed: 2, facilities: [{ owner: "CEC", build: 0 }], freeSlots: 1 }),
+        planetFacilities("Kuat", [-3, 2]),
+      ],
+      seizureTargets: [],
+      options: [],
+    },
   };
 }

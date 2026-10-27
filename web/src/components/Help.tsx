@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GLOSSARY, rulesUrl } from "../help/glossary";
+import { GLOSSARY, rulesUrl, sectionOf } from "../help/glossary";
 import type { GlossaryId } from "../help/glossary";
 import { useRules } from "../help/rulesContext";
 import { placePopover } from "../popover";
@@ -127,7 +127,7 @@ export function Help({ topic }: { topic: GlossaryId }) {
           >
             <strong className="help__term">{entry.term}</strong>
             <span className="help__text">{entry.summary(rules)}</span>
-            <a className="help__more" href={rulesUrl(entry.section)} target="_blank" rel="noreferrer">
+            <a className="help__more" href={rulesUrl(sectionOf(entry, rules))} target="_blank" rel="noreferrer">
               Read the full rules ↗
             </a>
           </span>,

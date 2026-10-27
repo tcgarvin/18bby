@@ -3,6 +3,7 @@ import { corpColor, playerName, tradeOptionsFor } from "../selectors";
 import type { CorpTradeOptions } from "../selectors";
 import { Ticker } from "../playback/Ticker";
 import { CertStack } from "./CertStack";
+import { supplyItem } from "../facilities";
 import { FleetIcons } from "./DeathStar";
 import { Help } from "./Help";
 
@@ -54,6 +55,7 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
   const started = corp.status !== "unstarted";
   const closed = corp.status === "closed";
   const fleetLimit = state.deathStar?.fleets.limit;
+  const item = supplyItem(state.deathStar);
   const tradable = options !== null && (options.ipoBuys.length > 0 || options.poolBuy !== null || options.sells.length > 0);
   return (
     <article
@@ -104,11 +106,11 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
           {fleetLimit !== undefined && (
             <div className="ccard__fleets">
               <dt>
-                Fleets
-                {explain && <Help topic="fleet" />}
+                {item === "facility" ? "Facilities" : "Fleets"}
+                {explain && <Help topic={item === "facility" ? "facility" : "fleet"} />}
               </dt>
               <dd>
-                <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={fleetLimit} />
+                <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={fleetLimit} item={item} />
               </dd>
             </div>
           )}

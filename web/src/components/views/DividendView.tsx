@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Action, Axial, Board, CorporationState, DividendAction, GameState } from "../../api";
 import { pairUsage, pairUsageText, sitePlanet } from "../../deathstar";
+import { supplyItem } from "../../facilities";
 import { useHotkeys } from "../../hotkeys";
 import { useSettled } from "../../playback/useSettled";
 import { corpColor, dividendSplit, findCorporation, nearestCellWithPrice, playerName, terrainByKey } from "../../selectors";
@@ -78,6 +79,7 @@ export function DividendView({ state, board, interactive, busy, keyboard, change
               fitHexes={focus ? networkHexes(state, board, focus) : undefined}
               label={`${focusCorp ?? ""} network`}
               deathStar={state.deathStar}
+              facilities={state.facilities}
             />
           </div>
           {focus && <RevenueBreakdown state={state} corp={focus} />}
@@ -328,11 +330,12 @@ function Moves({ price, treasury }: { price: [number, number]; treasury: [number
 
 /**
  * The scored pairs behind the revenue, matching the arcs on the map: solid typed, dashed basic,
- * dotted contract. Under the Death Star rules it also says how many pairs the fleets run.
+ * dotted contract. Under the Death Star rules it also says how many pairs the fleets (or facilities) run.
  */
 function RevenueBreakdown({ state, corp }: { state: GameState; corp: CorporationState }) {
   const { total, pairs } = corp.revenue;
-  const usage = pairUsage(corp);
+  const item = supplyItem(state.deathStar);
+  const usage = pairUsage(corp, item);
   const contracts = pairs.filter((p) => p.contract).length;
   const typed = pairs.filter((p) => p.typed && !p.contract).length;
   const basic = pairs.length - typed - contracts;
@@ -348,8 +351,8 @@ function RevenueBreakdown({ state, corp }: { state: GameState; corp: Corporation
       {usage && (
         <p className="revenue__usage">
           <span>{pairUsageText(usage)}</span>
-          {usage.available > usage.run && <span className="muted">one pair per fleet</span>}
-          <Help topic="fleet" />
+          {usage.available > usage.run && <span className="muted">one pair per {item}</span>}
+          <Help topic={item === "facility" ? "facility" : "fleet"} />
         </p>
       )}
       {pairs.length === 0 ? (

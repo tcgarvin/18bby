@@ -95,6 +95,7 @@ def main() -> None:
     )
     p_death_star.add_argument("--rows", type=Path, required=True, help="sweep results JSONL")
     p_death_star.add_argument("--variant", help="only this variant (default: every variant)")
+    p_death_star.add_argument("--bot", help="only rows of this bot kind or mix: string")
 
     p_serve = sub.add_parser("serve", help="run the HTTP API for the web frontend")
     p_serve.add_argument("--port", type=int, default=8000)
@@ -202,10 +203,13 @@ def sweep_command(args: argparse.Namespace) -> int:
 
 def death_star_command(args: argparse.Namespace) -> int:
     rows = read_rows(args.rows)
-    if args.variant is not None:
-        rows = [r for r in rows if r["variant"] == args.variant]
+    for key in ("variant", "bot"):
+        wanted = getattr(args, key)
+        if wanted is None:
+            continue
+        rows = [r for r in rows if r[key] == wanted]
         if not rows:
-            print(f"No rows of variant {args.variant!r} in {args.rows}", file=sys.stderr)
+            print(f"No rows of {key} {wanted!r} left in {args.rows}", file=sys.stderr)
             return 2
     print(death_star_report(rows))
     return 0

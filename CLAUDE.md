@@ -21,7 +21,11 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   `"map_file": "map-127.json"` for the board before the east edge was cut (also 2026-10-26).
   Games with `death_star_rules` on get `ds.*` row fields from a move
   observer (`src/bby18/death_star_metrics.py`, no log parsing); `bby18 death-star-report --rows
-  rows.jsonl` compares variants on the clock, fleets, bankruptcies, withholds and contracts.
+  rows.jsonl` compares variants on the clock, fleets, bankruptcies, withholds and contracts
+  (`--bot` keeps one bot mix). Every row also counts network actions (total and late) and planets
+  touched; games with `"facility_rules": true` add `fac.*` fields
+  (`src/bby18/facility_metrics.py`), which the report prints as a facilities block. Bots price
+  planet exits in their routes in `src/bby18/bots/routing.py`.
 - Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy with a
   per-difficulty `noise` from `BOT_NOISE` in `config.py`. Recalibrate with
   `docs/sweeps/map-2026-10-26` specs (script in `docs/sweeps/difficulty-2026-10-25`) when the
@@ -33,6 +37,10 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   `src/bby18/death_star.py`; enforcement in `game.py`; the fleet phase in `session.py`. Tests of
   the old rules use `CLASSIC_CONFIG`; with the switch off, games must stay bit-identical
   (`tests/test_death_star.py` pins full-game log hashes).
+- Experimental facility rules (`facility_rules`, off by default): the API and web app support them
+  whenever `DEFAULT_CONFIG` turns them on (state block `facilities`, `src/bby18/api/serialize.py`;
+  `web/src/facilities.ts`). API tests serve them by monkeypatching the config in
+  `tests/test_api_facilities.py`.
 
 ## Conventions
 

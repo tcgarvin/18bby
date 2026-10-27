@@ -822,11 +822,9 @@ class Game:
             owned = self.facilities_of(corp) if corp.floated else []
             if not owned:
                 continue
-            nearest = min(f.planet.distance(site) for f in owned)
-            closest = [f for f in owned if f.planet.distance(site) == nearest]
-            if len({f.planet for f in closest}) > 1:
+            taken, tied = _seizure_choice(owned, site)
+            if tied:
                 self.facility_seizure_ties += 1
-            taken = max(closest, key=lambda f: f.build_number)
             self.facilities[self.facilities.index(taken)] = replace(taken, owner=EMPIRE)
             corp.fleets -= 1
             seized_any = True
@@ -834,6 +832,20 @@ class Game:
             self._log(EMPIRE, f"takes over {corp.id}'s facility at {name}; it owns {corp.fleets}")
         if not seized_any:
             self._log(EMPIRE, "finds no facilities to take over")
+
+    def facilities_to_seize(self) -> dict[str, Facility]:
+        """The facility a seizure would take now from each floated corporation that owns one,
+        by corporation id (see ``_seize_facilities``). Empty when no construction site is on
+        the board, so no seizure can come."""
+        site = self.death_star.active_site
+        if site is None:
+            return {}
+        targets: dict[str, Facility] = {}
+        for corp in self.corporations.values():
+            owned = self.facilities_of(corp) if corp.floated else []
+            if owned:
+                targets[corp.id] = _seizure_choice(owned, site)[0]
+        return targets
 
     def _move_site(self) -> None:
         track = self.death_star
@@ -901,3 +913,13 @@ class Game:
         rounds in which the station launched, or after ``death_star_backstop_rounds``.
         """
         return self.round_number >= self.round_limit()
+
+
+def _seizure_choice(owned: list[Facility], site: Hex) -> tuple[Facility, bool]:
+    """The facility of ``owned`` (not empty) that a seizure takes: the one nearest ``site``,
+    the most recently built on a tie. The flag says whether the nearest lay on more than one
+    planet, so the tie-break decided which planet."""
+    nearest = min(f.planet.distance(site) for f in owned)
+    closest = [f for f in owned if f.planet.distance(site) == nearest]
+    taken = max(closest, key=lambda f: f.build_number)
+    return taken, len({f.planet for f in closest}) > 1

@@ -113,11 +113,22 @@ function Acting({ state }: { state: GameState }) {
     );
   }
   const corp = state.currentCorporation;
+  const facilities = state.facilities !== undefined;
   return (
     <>
       <span className="acting__phase">
-        {state.phase === "network" ? "Build" : state.phase === "fleet" ? "Buy fleets" : "Pay or withhold"}
-        <Help topic={state.phase === "network" ? "networkAction" : state.phase === "fleet" ? "fleet" : "dividend"} />
+        {state.phase === "network"
+          ? "Build"
+          : state.phase === "fleet"
+            ? facilities
+              ? "Build facilities"
+              : "Buy fleets"
+            : "Pay or withhold"}
+        <Help
+          topic={
+            state.phase === "network" ? "networkAction" : state.phase === "fleet" ? (facilities ? "facility" : "fleet") : "dividend"
+          }
+        />
       </span>
       {corp && (
         <span className="acting__who">

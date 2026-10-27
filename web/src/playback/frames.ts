@@ -13,12 +13,15 @@ import type {
   DeathStarState,
   DirectionName,
   GameState,
+  SupplyItem,
   LogEntry,
   MoveFrame,
   Phase,
   Planet,
   TileState,
 } from "../api";
+import { mergeFacilities, seizedFacilities } from "../facilities";
+import type { SeizedFacility } from "../facilities";
 import { DIRECTIONS, hexKey, neighbor, sameHex } from "../hex";
 import { playerName } from "../selectors";
 
@@ -27,8 +30,11 @@ import { playerName } from "../selectors";
  * Death Star stage, or the corporation it moved on from went bankrupt. Each gets its own step.
  */
 export type EmpireEvent =
-  /** `corps` each lost one fleet; empty when nobody had one. */
-  | { type: "seizure"; corps: string[] }
+  /**
+   * `corps` each lost one fleet (or facility); empty when nobody had one. Under the facility rules
+   * `taken` names each facility that became Imperial.
+   */
+  | { type: "seizure"; corps: string[]; taken?: SeizedFacility[] }
   | { type: "site_move"; from: Axial; to: Axial }
   | { type: "launch"; at: Axial }
   | { type: "bankrupt"; corp: string };
@@ -77,7 +83,21 @@ export type MoveKind =
   | { kind: "no_action"; corp: string }
   /** `price` is the supply's fleet price before and after, which rises when a tier sells out. */
   | { kind: "buy_fleet"; corp: string; cost: number; fleets: number; price: PriceChange }
-  | { kind: "finish_fleets"; corp: string; fleets: number }
+  /**
+   * A facility built on `planet` (facility rules): `exit` is the side of the planet whose lane got
+   * the new exit, absent when it was left open. `facilities` is how many the builder owns after.
+   */
+  | {
+      kind: "build_facility";
+      corp: string;
+      planet: string;
+      hex: Axial;
+      exit?: DirectionName;
+      cost: number;
+      facilities: number;
+      price: PriceChange;
+    }
+  | { kind: "finish_fleets"; corp: string; fleets: number; item: SupplyItem }
   | {
       kind: "dividend";
       corp: string;
@@ -142,6 +162,7 @@ export function applyFrame(base: GameState, frame: MoveFrame): GameState {
     corporations: after.corporations,
     tiles: mergeTiles(base.tiles, after.tiles),
     deathStar: after.deathStar ?? base.deathStar,
+    facilities: mergeFacilities(base.facilities, after.facilities),
     log: appendLog(base.log, frame.log),
     legalActions: [],
     waitingOnHuman: false,
@@ -279,7 +300,23 @@ export function moveKind(frame: MoveFrame, prev: GameState): MoveKind {
       price: { corp: corpId, before: supply(prev.deathStar), after: supply(after.deathStar) },
     };
   }
-  if (action.type === "finish_fleets") return { kind: "finish_fleets", corp: corpId, fleets: corpAfter.fleets };
+  if (action.type === "build_facility") {
+    const supply = (ds: DeathStarState | undefined) => ds?.fleets.price ?? action.cost;
+    const planet = prev.facilities?.planets.find((p) => sameHex(p.hex, action.planet))?.name ?? formatHex(action.planet);
+    return {
+      kind: "build_facility",
+      corp: corpId,
+      planet,
+      hex: action.planet,
+      ...(action.exit ? { exit: action.exit } : {}),
+      cost: corpBefore.treasury - corpAfter.treasury,
+      facilities: corpAfter.fleets,
+      price: { corp: corpId, before: supply(prev.deathStar), after: supply(after.deathStar) },
+    };
+  }
+  if (action.type === "finish_fleets") {
+    return { kind: "finish_fleets", corp: corpId, fleets: corpAfter.fleets, item: prev.deathStar?.fleets.item ?? "fleet" };
+  }
   const price: PriceChange = { corp: corpId, before: corpBefore.price, after: corpAfter.price };
   const player = frame.actor;
   switch (action.type) {
@@ -375,7 +412,11 @@ export function empireEvents(prev: GameState, frame: MoveFrame): EmpireEvent[] {
           return before !== undefined && c.fleets < before.fleets;
         })
         .map((c) => c.id);
-      events.push({ type: "seizure", corps });
+      if (after.facilities) {
+        events.push({ type: "seizure", corps, taken: seizedFacilities(prev.facilities, after.facilities) });
+      } else {
+        events.push({ type: "seizure", corps });
+      }
     } else if (result === "move") {
       const old = from.sites.find((site) => site.status === "active");
       const next = to.sites.find((site) => site.status === "active") ?? to.sites.find((site) => site.status === "launched");
@@ -401,6 +442,12 @@ export function trackNote(before: DeathStarState | undefined, after: DeathStarSt
 function describeEmpire(event: EmpireEvent, prev: GameState, planets: Planet[]): string {
   switch (event.type) {
     case "seizure":
+      if (event.taken) {
+        const taken = event.taken.map((f, i) => `${f.corp}'s ${i === 0 ? "facility " : ""}at ${f.planet}`);
+        return taken.length > 0
+          ? `The Empire takes over ${listText(taken)}; ${taken.length === 1 ? "it is" : "they are"} Imperial now`
+          : "The Empire finds no facilities to take over";
+      }
       return event.corps.length > 0
         ? `The Empire seizes a fleet from ${event.corps.join(", ")}`
         : "The Empire finds no fleets to seize";
@@ -411,9 +458,15 @@ function describeEmpire(event: EmpireEvent, prev: GameState, planets: Planet[]):
     case "bankrupt": {
       const president = corpIn(prev.corporations, event.corp)?.president ?? "";
       const owner = president ? ` (${playerName(prev, president)})` : "";
-      return `${event.corp}${owner} is bankrupt: no fleet, and no money for one. It closes and its shares are worthless`;
+      const reason = prev.facilities ? "no facility, and none it can build" : "no fleet, and no money for one";
+      return `${event.corp}${owner} is bankrupt: ${reason}. It closes and its shares are worthless`;
     }
   }
+}
+
+/** "A", "A and B", "A, B and C". */
+function listText(items: string[]): string {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 /** "(−3,1)", with a typographic minus. */
@@ -478,8 +531,15 @@ function describeKind(kind: MoveKind, frame: MoveFrame | null, prev: GameState, 
       const rise = kind.price.after !== kind.price.before ? `; fleets now cost ${kind.price.after}` : "";
       return `${kind.corp} buys a fleet for ${kind.cost}, owning ${kind.fleets}${rise}`;
     }
+    case "build_facility": {
+      const lane = kind.exit ? `, giving its new exit to the ${kind.exit} lane` : ", leaving its new exit open";
+      const rise = kind.price.after !== kind.price.before ? `; facilities now cost ${kind.price.after}` : "";
+      return `${kind.corp} builds a facility at ${kind.planet} for ${kind.cost}${lane}, owning ${kind.facilities}${rise}`;
+    }
     case "finish_fleets":
-      return `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`;
+      return kind.item === "facility"
+        ? `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "facility" : "facilities"}`
+        : `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`;
     case "empire":
       return describeEmpire(kind.event, prev, planets);
     case "dividend":

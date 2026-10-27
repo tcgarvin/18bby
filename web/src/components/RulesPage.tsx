@@ -1,12 +1,11 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import type { Rules } from "../api";
-import { GLOSSARY, roundCount } from "../help/glossary";
-import type { GlossaryEntry } from "../help/glossary";
-import type { SectionId } from "../help/glossary";
+import { GLOSSARY, inForce, roundCount, sectionOf } from "../help/glossary";
+import type { GlossaryEntry, RuleSet, SectionId } from "../help/glossary";
 import { useRules } from "../help/rulesContext";
 
-const SECTIONS: { id: SectionId; title: string; deathStar?: boolean }[] = [
+const SECTIONS: { id: SectionId; title: string; only?: RuleSet }[] = [
   { id: "goal", title: "The goal" },
   { id: "round-structure", title: "How a game runs" },
   { id: "map", title: "The map and networks" },
@@ -15,8 +14,9 @@ const SECTIONS: { id: SectionId; title: string; deathStar?: boolean }[] = [
   { id: "stock-round", title: "The stock round" },
   { id: "operating-turn", title: "An operating turn" },
   { id: "revenue", title: "How revenue is earned" },
-  { id: "fleets", title: "Fleets and bankruptcy", deathStar: true },
-  { id: "death-star", title: "The Death Star", deathStar: true },
+  { id: "fleets", title: "Fleets and bankruptcy", only: "fleets" },
+  { id: "facilities", title: "Facilities, exits and bankruptcy", only: "facilities" },
+  { id: "death-star", title: "The Death Star", only: "deathStar" },
   { id: "stock-market", title: "The stock market" },
   { id: "scoring", title: "Scoring and the end" },
   { id: "verify", title: "Checking the software" },
@@ -46,9 +46,11 @@ export function RulesPage({ section }: { section: SectionId | null }) {
     .join(", ");
   const perShare = 100 / rules.sharesPerCorporation;
   const deathStar = rules.deathStarRules;
+  const facilities = inForce("facilities", rules);
+  const fleets = inForce("fleets", rules);
   const rounds = roundCount(rules);
-  const sections = SECTIONS.filter((s) => deathStar || !s.deathStar);
-  const glossary: GlossaryEntry[] = Object.values(GLOSSARY).filter((entry: GlossaryEntry) => deathStar || !entry.deathStar);
+  const sections = SECTIONS.filter((s) => inForce(s.only, rules));
+  const glossary: GlossaryEntry[] = Object.values(GLOSSARY).filter((entry: GlossaryEntry) => inForce(entry.only, rules));
 
   return (
     <div className="rules">
@@ -142,8 +144,19 @@ export function RulesPage({ section }: { section: SectionId | null }) {
           <p>
             An empty hex has no lanes until a corporation <strong>charts</strong> it. A charted hex has lanes
             leaving through some of its six sides (its <strong>exits</strong>). Two neighbouring hexes are
-            connected only when <em>each</em> has an exit facing the other. A planet is an open hub: it has every
-            exit, never needs charting, and anything that touches it connects to it.
+            connected only when <em>each</em> has an exit facing the other.{" "}
+            {facilities ? (
+              <>
+                A planet never needs charting, but it has only a few exits, and a lane connects to it only through
+                an exit it has claimed (see Facilities, exits and bankruptcy). Two planets never connect directly:
+                traffic between them needs a charted lane.
+              </>
+            ) : (
+              <>
+                A planet is an open hub: it has every exit, never needs charting, and anything that touches it
+                connects to it.
+              </>
+            )}
           </p>
           <h3>Service and reachability</h3>
           <p>
@@ -330,7 +343,7 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             All three need the hex to connect to the network you can already reach. A corporation that cannot
             afford an action is not offered it.
           </p>
-          {deathStar && (
+          {fleets && (
             <>
               <h3>2. Buy fleets</h3>
               <p>
@@ -340,10 +353,21 @@ export function RulesPage({ section }: { section: SectionId | null }) {
               </p>
             </>
           )}
+          {facilities && (
+            <>
+              <h3>2. Build facilities</h3>
+              <p>
+                Build facilities, one at a time, at the price shown, up to {rules.deathStar.fleetLimit} owned. Each
+                one goes on a planet and gives it a new exit. A corporation must end this step owning at least one
+                facility. Building does not use a network action. See Facilities, exits and bankruptcy.
+              </p>
+            </>
+          )}
           <h3>{deathStar ? "3" : "2"}. Revenue</h3>
           <p>
             The game computes the corporation's revenue for you and picks the best pairing of planets (see the next
-            section). You do not choose routes.{deathStar && " It uses at most one pair per fleet the corporation owns."}
+            section). You do not choose routes.
+            {deathStar && ` It uses at most one pair per ${facilities ? "facility" : "fleet"} the corporation owns.`}
           </p>
           <h3>{deathStar ? "4" : "3"}. Pay or withhold</h3>
           <ul>
@@ -409,7 +433,9 @@ export function RulesPage({ section }: { section: SectionId | null }) {
           </p>
         </Section>
 
-        {deathStar && (
+        {facilities && <FacilitiesSection rules={rules} />}
+
+        {fleets && (
           <Section id="fleets" title="Fleets and bankruptcy">
             <p>
               <strong>One fleet runs one pair.</strong> A corporation's revenue is the best set of pairs that uses no
@@ -458,8 +484,10 @@ export function RulesPage({ section }: { section: SectionId | null }) {
           <Section id="death-star" title="The Death Star">
             <p>
               The Empire is building a battle station, and the corporations are its contractors. The construction
-              site is a planet-like hub tagged <strong>{rules.deathStar.siteTag}</strong> (Imperial Works). Like any
-              planet it has every exit, needs no charting, and networks may pass through it.
+              site is a planet-like hub tagged <strong>{rules.deathStar.siteTag}</strong> (Imperial Works).{" "}
+              {facilities
+                ? "Unlike a planet it has every exit and holds no facilities. It needs no charting, and networks may pass through it."
+                : "Like any planet it has every exit, needs no charting, and networks may pass through it."}
             </p>
             <h3>Contracts</h3>
             <p>
@@ -681,7 +709,8 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             {rules.payoutStepFractions[1]} × price or more. After a withhold: one column left. The button shows the
             price it will lead to.
           </Check>
-          {deathStar && (
+          {facilities && <FacilityChecks rules={rules} />}
+          {fleets && (
             <>
               <h3>Fleets and the Death Star</h3>
               <Check>
@@ -727,7 +756,9 @@ export function RulesPage({ section }: { section: SectionId | null }) {
                   <dt>{entry.term}</dt>
                   <dd>
                     {entry.summary(rules)}{" "}
-                    <a href={`#${entry.section}`}>See: {SECTIONS.find((s) => s.id === entry.section)?.title}</a>
+                    <a href={`#${sectionOf(entry, rules)}`}>
+                      See: {SECTIONS.find((s) => s.id === sectionOf(entry, rules))?.title}
+                    </a>
                   </dd>
                 </div>
               ))}
@@ -739,11 +770,18 @@ export function RulesPage({ section }: { section: SectionId | null }) {
 }
 
 const STAGE_RESULT_RULES: Record<Rules["deathStar"]["stages"][number]["result"], (rules: Rules) => ReactNode> = {
-  seizure: () => (
-    <>
-      <strong>Seizure:</strong> every corporation with a fleet loses one. Seized fleets leave the game.
-    </>
-  ),
+  seizure: (rules) =>
+    rules.facilityRules ? (
+      <>
+        <strong>Seizure:</strong> the Empire takes over one facility from every corporation that has one: the one
+        nearest the construction site (the most recently built on a tie). It becomes Imperial: it stays on its
+        planet, fills its slot and keeps its exit, but runs pairs for nobody.
+      </>
+    ) : (
+      <>
+        <strong>Seizure:</strong> every corporation with a fleet loses one. Seized fleets leave the game.
+      </>
+    ),
   move: (rules) => (
     <>
       <strong>The site moves</strong> to its reserved hex in the {rules.deathStar.siteRegions[1]}; the old hex
@@ -806,5 +844,128 @@ function MarketTable({ rules }: { rules: Rules }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** The facility rules in full: planet exits, building facilities, their price and bankruptcy. */
+function FacilitiesSection({ rules }: { rules: Rules }) {
+  const { baseExits, perPlanet } = rules.facilities;
+  return (
+    <Section id="facilities" title="Facilities, exits and bankruptcy">
+      <p>
+        <strong>One facility runs one pair.</strong> A corporation's revenue is the best set of pairs that uses no more
+        pairs than it owns facilities, wherever they are; contract pairs need one too. Facilities also open planets up:
+        each one gives its planet another exit, which any corporation's lanes can use.
+      </p>
+      <h3>Planet exits</h3>
+      <ul>
+        <li>
+          A planet has {baseExits} {baseExits === 1 ? "exit" : "exits"}, plus one per facility on it. It holds at most{" "}
+          {perPlanet} facilities, corporate or Imperial, so it has at most {baseExits + perPlanet} exits. The Death Star
+          site has all six.
+        </li>
+        <li>
+          An exit has no direction until a lane <strong>claims</strong> it. The first tile charted (or upgraded) with an
+          exit facing the planet takes one of its open exits: first come, first served. A planet connects only through
+          its claimed exits. On the map, each open exit is a small ring above the planet.
+        </li>
+        <li>
+          You may still chart a tile with an exit facing a planet that has no open exit. That lane{" "}
+          <strong>dangles</strong> (a red bar on the map): it does not connect there until a facility gives it an exit.
+          The tile must still join your network through another of its exits.
+        </li>
+        <li>
+          With one exit a planet is a dead end. A network passes through a planet only in through one claimed exit and
+          out through another.
+        </li>
+      </ul>
+      <h3>Building facilities</h3>
+      <p>
+        After its network actions a corporation may build facilities, one at a time, without using a network action. It
+        may build on a planet with a free slot that its network reaches, that one of its own lanes points at, or that
+        already holds one of its facilities. Never on the Death Star site.
+      </p>
+      <p>
+        The builder decides where the new exit goes: to a lane that dangles at that planet (anybody's), connecting it,
+        or left open for the next tile charted toward the planet. Connecting a dangling lane can extend your network,
+        or a rival's.
+      </p>
+      <h3>Price and limits</h3>
+      <p>Every facility comes from one supply shared by all corporations, and the price rises when a tier sells out.</p>
+      <table className="rules__table">
+        <thead>
+          <tr>
+            <th>Facilities</th>
+            <th>Price each</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.deathStar.fleetTiers.map((tier, i) => (
+            <tr key={i}>
+              <th>{tier.count === "unlimited" ? "then any number" : `next ${tier.count}`}</th>
+              <td className="num">{tier.price}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ul>
+        <li>At most {rules.deathStar.fleetLimit} facilities per corporation.</li>
+        <li>
+          A corporation floats with one free facility on its homeworld, outside the supply, so its homeworld starts with
+          two open exits. Until it floats, one slot there is kept for it.
+        </li>
+        <li>Each facility costs the price at the moment it is built, so building two can cross into a dearer tier.</li>
+        <li>A corporation must own at least one facility when it finishes its facility step.</li>
+        <li>Facilities cannot be sold or moved.</li>
+      </ul>
+      <h3>Bankruptcy</h3>
+      <p>
+        A corporation that reaches its facility step owning <strong>no facility</strong>, and cannot build one (too little
+        money, or no planet it may build on), is <strong>bankrupt</strong>. It closes for good: its shares leave the game
+        and are worth nothing to anyone (nobody pays from their own cash), its treasury goes to the bank, and it never
+        operates again. Its tiles stay on the board for everyone else. The danger comes after a seizure takes its last
+        facility.
+      </p>
+    </Section>
+  );
+}
+
+/** Things to check by hand under the facility rules. */
+function FacilityChecks({ rules }: { rules: Rules }) {
+  return (
+    <>
+      <h3>Facilities and the Death Star</h3>
+      <Check>
+        A corporation that floats gets a facility on its homeworld for free: its marker appears beside the planet and
+        the planet shows two open rings.
+      </Check>
+      <Check>
+        The facility price on the Death Star bar starts at {rules.deathStar.fleetTiers[0].price} and rises to the next
+        tier's price once that tier is sold. Building a facility takes exactly that price from the treasury.
+      </Check>
+      <Check>
+        Charting a tile with an exit toward a planet that shows an open ring claims it: the ring goes and the lane runs
+        into the planet. With no ring left, the new lane ends in a red bar and does not connect.
+      </Check>
+      <Check>
+        A facility adds one exit to its planet: a new ring, or a lane into the planet if you gave it to a dangling lane.
+        No planet holds more than {rules.facilities.perPlanet}, no corporation owns more than{" "}
+        {rules.deathStar.fleetLimit}, and Finish is not offered while it owns none.
+      </Check>
+      <Check>A corporation never runs more pairs than it owns facilities: the dividend view says how many pairs run.</Check>
+      <Check>
+        Each contract pair scored adds one cube to the track, whether paid or withheld, and the Empire adds{" "}
+        {rules.deathStar.empireCubesPerStockRound} at the end of each stock round.
+      </Check>
+      <Check>
+        When a seizure stage fills, at the end of that round each corporation with a facility loses the one nearest the
+        site: its marker becomes the purple Imperial diamond, and the planet keeps the exit. When the site-move stage
+        fills, the site jumps to the dashed future site and the old hex is empty space.
+      </Check>
+      <Check>
+        A corporation with no facility at its facility step that cannot build one is shown as closed, its shares
+        disappear from every player, and its tiles stay on the map.
+      </Check>
+    </>
   );
 }

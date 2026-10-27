@@ -11,10 +11,12 @@ after the move so clients can animate what opponents did.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from types import MappingProxyType
 from typing import Any
 
 from bby18.actions import (
+    BuildFacility,
     BuyFleet,
     BuyShare,
     Chart,
@@ -32,7 +34,7 @@ from bby18.game import Game, LogEntry
 from bby18.hexgrid import Direction, Hex
 from bby18.network import Tile
 from bby18.session import OPERATING_PHASES, Action, Dividend, GameSession, Phase, PlayedMove
-from bby18.state import Corporation, Player
+from bby18.state import Corporation, Facility, Player
 
 Json = dict[str, Any]
 
@@ -89,6 +91,12 @@ def action_to_json(action: Action) -> Json:
         return {"type": "buy_fleet", "cost": action.cost}
     if isinstance(action, FinishFleets):
         return {"type": "finish_fleets"}
+    if isinstance(action, BuildFacility):
+        data = {"type": "build_facility", "planet": hex_to_json(action.planet), "cost": action.cost}
+        # Like a buy's par, the exit is listed only when given: absent, it is left unclaimed.
+        if action.exit_side is not None:
+            data["exit"] = action.exit_side.name
+        return data
     if isinstance(action, Dividend):
         return {"type": "dividend", "choice": action.value}
     raise TypeError(f"Cannot serialize {action!r}")
@@ -265,6 +273,8 @@ def death_star_to_json(game: Game) -> Json:
         "backstopRound": config.death_star_backstop_rounds,
         "empireCubesPerStockRound": config.empire_cubes_per_stock_round,
         "fleets": {
+            # The facility rules sell facilities from the same supply, at the same tiers.
+            "item": "facility" if config.facility_rules else "fleet",
             "price": game.fleet_price(),
             "tier": tier,
             "remainingInTier": tiers[tier]["remaining"],
@@ -273,6 +283,89 @@ def death_star_to_json(game: Game) -> Json:
             "sold": game.fleets_sold,
         },
     }
+
+
+def facility_json(facility: Facility) -> Json:
+    """One facility: its owner (a corporation id, or ``"Empire"`` once seized) and when it was
+    built, from 0 for the game's first."""
+    return {"owner": facility.owner, "build": facility.build_number}
+
+
+def planet_exits_map(game: Game) -> dict[Hex, Json]:
+    """Every exit-limited planet's exits and facilities, keyed by hex (facility rules only;
+    the construction site keeps every exit and is not listed). ``claimed`` are the sides it
+    connects through, ``dangling`` the sides where a lane faces it without an exit, and
+    ``freeSlots`` the facilities a floated corporation may still build there."""
+    network = game.network
+    planets: dict[Hex, Json] = {}
+    for planet in game.board.planets:
+        hex = planet.hex
+        if not network.has_exit_limit(hex):
+            continue
+        planets[hex] = {
+            "hex": hex_to_json(hex),
+            "name": planet.name,
+            "exits": network.planet_exits(hex),
+            "claimed": [d.name for d in sorted(network.claimed_exits(hex))],
+            "unclaimed": network.unclaimed_exits(hex),
+            "dangling": [d.name for d in sorted(network.dangling_sides(hex))],
+            "facilities": [facility_json(f) for f in game.facilities_on(hex)],
+            "freeSlots": game.free_facility_slots(hex),
+        }
+    return dict(sorted(planets.items()))
+
+
+def facilities_to_json(game: Game, planets: Iterable[Json]) -> Json:
+    """The facility rules' state with ``planets`` (from ``planet_exits_map``: all of them, or a
+    move frame's changed ones), and the facility the next seizure would take from each
+    corporation that owns one."""
+    return {
+        "perPlanet": game.config.facilities_per_planet,
+        "planets": list(planets),
+        "seizureTargets": [
+            {"corp": corp_id, "hex": hex_to_json(f.planet)}
+            for corp_id, f in game.facilities_to_seize().items()
+        ],
+    }
+
+
+def _facility_options(session: GameSession) -> list[Json]:
+    """For each facility the operating corporation may build now, what its network would earn
+    with it (one more pair, and the lane the new exit is given to), the planets that lane would
+    newly reach, and whose lane it is. Empty outside a facility step."""
+    if session.phase is not Phase.FLEET:
+        return []
+    game = session.game
+    corp = session.current_corporation
+    home = game.homeworld(corp)
+    before = game.reachable(corp)
+    floor = game.config.homeworld_basic_income
+    options: list[Json] = []
+    for action in session.legal_actions():
+        if not isinstance(action, BuildFacility):
+            continue
+        network = game.network_after_facility(action)
+        reach = network.reachable(corp.id, home)
+        planets = [game.board.planet_at(h) for h in sorted(reach) if game.board.is_planet(h)]
+        revenue = game.planet_revenue(planets, game.pair_cap(corp) + 1)
+        lane = (
+            sorted(network.corporations_serving(action.planet.neighbor(action.exit_side)))
+            if action.exit_side is not None
+            else []
+        )
+        options.append(
+            {
+                "action": action_to_json(action),
+                "revenue": max(revenue.total, floor),
+                "reaches": [
+                    game.board.planet_at(h).name
+                    for h in sorted(reach - before)
+                    if game.board.is_planet(h)
+                ],
+                "lane": lane,
+            }
+        )
+    return options
 
 
 def tile_to_json(game: Game, hex: Hex, tile: Tile) -> Json:
@@ -365,7 +458,16 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
     }
     if game.config.death_star_rules:
         data["deathStar"] = death_star_to_json(game)
+    if game.config.facility_rules:
+        data["facilities"] = {
+            **facilities_to_json(game, planet_exits_map(game).values()),
+            "options": _facility_options(session),
+        }
     return data
+
+
+NOTHING_BEFORE: Mapping[Hex, Json] = MappingProxyType({})
+"""No map state known before the first observed move."""
 
 
 class MoveRecorder:
@@ -373,13 +475,20 @@ class MoveRecorder:
 
     Pass it to ``GameSession.apply`` or ``run_bots``; read ``frames`` afterwards. Each frame's
     ``after.tiles`` lists only the tiles the move changed, found by comparing with the tiles
-    as they stood after the previous move (or ``tiles_before`` for the first).
+    as they stood after the previous move (or ``tiles_before`` for the first). Under the
+    facility rules ``after.facilities.planets`` likewise lists only the planets whose exits or
+    facilities the move changed.
     """
 
-    def __init__(self, tiles_before: Mapping[Hex, Json]) -> None:
+    def __init__(
+        self, tiles_before: Mapping[Hex, Json], planets_before: Mapping[Hex, Json] = NOTHING_BEFORE
+    ) -> None:
         """``tiles_before``: the board's tiles before the first observed move, as
-        ``tile_map`` gives them; empty for a new game."""
+        ``tile_map`` gives them; empty for a new game. ``planets_before``: likewise the
+        exit-limited planets, as ``planet_exits_map`` gives them; when empty, the first frame
+        lists every one."""
         self._tiles: dict[Hex, Json] = dict(tiles_before)
+        self._planets: dict[Hex, Json] = dict(planets_before)
         self.frames: list[Json] = []
 
     def __call__(self, session: GameSession, move: PlayedMove) -> None:
@@ -395,6 +504,11 @@ class MoveRecorder:
         }
         if game.config.death_star_rules:
             after["deathStar"] = death_star_to_json(game)
+        if game.config.facility_rules:
+            planets = planet_exits_map(game)
+            moved = [p for h, p in planets.items() if self._planets.get(h) != p]
+            self._planets = planets
+            after["facilities"] = facilities_to_json(game, moved)
         self.frames.append(
             {
                 "phase": move.phase.value,
@@ -445,6 +559,18 @@ def rules_to_json(config: GameConfig) -> Json:
         "operatingRoundsPerStockRound": config.operating_rounds_per_stock_round,
         "deathStarRules": config.death_star_rules,
         "deathStar": death_star_rules_to_json(config),
+        "facilityRules": config.facility_rules,
+        "facilities": facility_rules_to_json(config),
+    }
+
+
+def facility_rules_to_json(config: GameConfig) -> Json:
+    """The experimental facility numbers. Always listed; ``facilityRules`` in ``rules_to_json``
+    says whether they are in force. Facilities are priced by the fleet tiers and limited by the
+    fleet limit, listed under ``deathStar``."""
+    return {
+        "perPlanet": config.facilities_per_planet,
+        "baseExits": config.planet_base_exits,
     }
 
 

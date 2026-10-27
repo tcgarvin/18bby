@@ -82,6 +82,7 @@ export function NetworkView({ state, board, interactive, busy, keyboard, changed
             changedHexes={changedHexes}
             onHexClick={clickHex}
             deathStar={state.deathStar}
+            facilities={state.facilities}
           />
         </div>
         <MapLegend state={state} focusCorp={focusCorp} />

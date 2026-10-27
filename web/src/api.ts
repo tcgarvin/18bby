@@ -75,9 +75,20 @@ export interface BuyFleetAction {
   type: "buy_fleet";
   cost: number;
 }
-/** End the fleet step; offered once the corporation owns a fleet. */
+/** End the fleet step (the facility step under the facility rules); offered once the corporation owns one. */
 export interface FinishFleetsAction {
   type: "finish_fleets";
+}
+/**
+ * Build one facility on `planet` at the supply's current price (facility rules). The planet gains
+ * an exit: given to the lane on side `exit` of the planet (one that dangles there), or, when
+ * `exit` is absent, left unclaimed for the next tile charted toward the planet.
+ */
+export interface BuildFacilityAction {
+  type: "build_facility";
+  planet: Axial;
+  exit?: DirectionName;
+  cost: number;
 }
 
 export type Action =
@@ -90,6 +101,7 @@ export type Action =
   | NoNetworkAction
   | BuyFleetAction
   | FinishFleetsAction
+  | BuildFacilityAction
   | DividendAction;
 
 export type HexAction = ChartAction | UpgradeAction | ServiceAction;
@@ -145,7 +157,10 @@ export interface CorporationState {
   /** Player id, or "" when the corporation has no president yet. */
   president: string;
   lastRevenue: number;
-  /** Fleets owned; each runs one revenue pair. Always 0 without the Death Star rules. */
+  /**
+   * Fleets owned; each runs one revenue pair. Always 0 without the Death Star rules. Under the
+   * facility rules, the facilities it owns (each runs one pair just the same).
+   */
   fleets: number;
   reachablePlanets: string[];
   revenue: { total: number; pairs: RevenuePair[] };
@@ -173,6 +188,9 @@ export interface DeathStarStage {
   /** Its result has applied (at the end of the round it filled in). */
   resolved: boolean;
 }
+
+/** What a corporation buys for pair capacity: fleets, or facilities under the facility rules. */
+export type SupplyItem = "fleet" | "facility";
 
 /** A fleet price tier; "unlimited" for the last, which never sells out. */
 export interface FleetTierState {
@@ -202,6 +220,8 @@ export interface DeathStarState {
   backstopRound: number;
   empireCubesPerStockRound: number;
   fleets: {
+    /** What the supply sells: fleets, or facilities under the facility rules (same tiers and limit). */
+    item: SupplyItem;
     price: number;
     /** Index in `tiers` of the tier the next fleet comes from. */
     tier: number;
@@ -210,6 +230,59 @@ export interface DeathStarState {
     limit: number;
     sold: number;
   };
+}
+
+/** Owner of a facility the Empire has taken over. */
+export const EMPIRE = "Empire";
+
+/** One facility on a planet (facility rules). */
+export interface FacilityState {
+  /** A corporation id, or `EMPIRE` once seized. */
+  owner: string;
+  /** Order of building over the game, from 0: a later facility has a higher number. */
+  build: number;
+}
+
+/** A planet's exits and facilities under the facility rules. The Death Star site is never listed: it keeps every exit. */
+export interface PlanetFacilities {
+  hex: Axial;
+  name: string;
+  /** Exits it has, claimed or not: one, plus one per facility. */
+  exits: number;
+  /** Sides that lanes have claimed; the planet connects only through these. */
+  claimed: DirectionName[];
+  /** Exits no lane has claimed yet; the next tile charted toward the planet takes one. */
+  unclaimed: number;
+  /** Sides where a charted lane faces the planet without an exit: it does not connect. */
+  dangling: DirectionName[];
+  /** Oldest first. */
+  facilities: FacilityState[];
+  /** Facilities a floated corporation may still build here (a slot is kept on an unfloated homeworld). */
+  freeSlots: number;
+}
+
+/** What one legal facility build would do for the corporation building it. */
+export interface FacilityOption {
+  /** One of `legalActions`, unchanged. */
+  action: BuildFacilityAction;
+  /** Its revenue with this facility: one more pair, over the network the new exit gives it. */
+  revenue: number;
+  /** Planets the new exit's lane would newly connect it to. */
+  reaches: string[];
+  /** Corporations with service on the lane the new exit is given to; empty when left unclaimed. */
+  lane: string[];
+}
+
+/** The facility rules' state. */
+export interface FacilitiesState {
+  /** Most facilities, corporate or Imperial, one planet may hold. */
+  perPlanet: number;
+  /** Every planet with limited exits. In a move frame, only those the move changed. */
+  planets: PlanetFacilities[];
+  /** The facility the next seizure would take from each corporation that owns one: the one nearest the site. */
+  seizureTargets: { corp: string; hex: Axial }[];
+  /** During the operating corporation's facility step, each legal build and what it would do; else empty. */
+  options: FacilityOption[];
 }
 
 export interface TileState {
@@ -281,6 +354,8 @@ export interface GameState {
   config: GameConfig;
   /** The Death Star track and fleet supply; absent when the game is played without those rules. */
   deathStar?: DeathStarState;
+  /** Planet exits and facilities; present only under the facility rules. */
+  facilities?: FacilitiesState;
   log: LogEntry[];
   /**
    * Every move played by the request that produced this state, in order: the submitted move
@@ -328,6 +403,11 @@ export interface FrameState {
   tiles: TileState[];
   /** The whole track after the move, under the Death Star rules; absent otherwise. */
   deathStar?: DeathStarState;
+  /**
+   * Under the facility rules: `planets` holds only the planets this move changed (merge by hex),
+   * and there are no `options`. Absent otherwise.
+   */
+  facilities?: Omit<FacilitiesState, "options">;
 }
 
 export interface Seat {
@@ -431,6 +511,20 @@ export interface Rules {
   deathStarRules: boolean;
   /** Their numbers, listed whether or not they are in force. */
   deathStar: DeathStarRules;
+  /**
+   * Whether the experimental facility rules are in force (they need the Death Star rules). They
+   * replace fleets with facilities, priced by `deathStar.fleetTiers` and limited by `fleetLimit`.
+   */
+  facilityRules: boolean;
+  /** Their own numbers, listed whether or not they are in force. */
+  facilities: FacilityRules;
+}
+
+export interface FacilityRules {
+  /** Most facilities one planet may hold. */
+  perPlanet: number;
+  /** Exits a planet has before any facility is built on it. */
+  baseExits: number;
 }
 
 export interface DeathStarRules {

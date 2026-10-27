@@ -2,15 +2,20 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   Axial,
   Board,
+  BuildFacilityAction,
   CorporationState,
   DeathStarState,
   DirectionName,
+  FacilitiesState,
+  FacilityState,
   HexAction,
   Planet,
+  PlanetFacilities,
   Region,
   TerrainKind,
   TileState,
 } from "../api";
+import { EMPIRE } from "../api";
 import { REGION_FILL, TAG_FILL, corporationColor } from "../colors";
 import {
   DIRECTIONS,
@@ -25,6 +30,7 @@ import {
   type Point,
 } from "../hex";
 import { siteHexes, sitePlanet } from "../deathstar";
+import { laneConnects, planetExitsText, planetsByKey as limitedPlanets } from "../facilities";
 import { scatterBlobs } from "../terrain";
 import { DeathStarShape } from "./DeathStar";
 import "./HexMap.css";
@@ -38,6 +44,15 @@ const BADGE_RADIUS = S * 0.36;
 const NEUTRAL_CHANGE = "#5b6573";
 const ASTEROID_ROCKS = { count: 9, area: S * 0.7, minRadius: 1.1, maxRadius: 3.1, salt: 1, overlap: false };
 const NEBULA_WISPS = { count: 3, area: S * 0.75, minRadius: S * 0.22, maxRadius: S * 0.34, salt: 2, overlap: true };
+/** Facility markers sit beside a planet's badge, at the corners between lanes (upper left, then lower left). */
+const FACILITY_ANGLES = [210, 150];
+const FACILITY_DISTANCE = BADGE_RADIUS + 8.5;
+const FACILITY_SIZE = 10;
+/** Open (unclaimed) exits show as small rings above the badge, where no lane can enter. */
+const OPEN_EXIT_RADIUS = 3.2;
+const OPEN_EXIT_SPACING = 8;
+/** A dangling lane's bar sits this far along the lane from the planet's edge, clear of its name. */
+const DANGLE_INSET = 0.24;
 
 interface HexMapProps {
   board: Board;
@@ -62,6 +77,14 @@ interface HexMapProps {
   label?: string;
   /** The Death Star track and sites, under those rules: the active site is drawn as a hub. */
   deathStar?: DeathStarState;
+  /**
+   * Planet exits and facilities, under the facility rules: lanes run into a planet only through a
+   * claimed exit, lanes facing it without one are marked as dangling, and its open exits and
+   * facilities are drawn beside it.
+   */
+  facilities?: Pick<FacilitiesState, "planets">;
+  /** A facility build to preview in the focused corporation's colour: the facility and its new exit's lane. */
+  facilityPreview?: BuildFacilityAction | null;
 }
 
 interface Segment {
@@ -89,11 +112,25 @@ function add(a: Point, b: Point, scale = 1): Point {
   return { x: a.x + b.x * scale, y: a.y + b.y * scale };
 }
 
+/** Whether a lane facing the planet at a hex key from one of its sides runs into it. */
+type Connects = (planetKey: string, side: DirectionName) => boolean;
+
+const OPEN_HUBS: Connects = () => true;
+
+/** The stub from a planet's edge on `side` into its badge. */
+function stubPoints(planetHex: Axial, side: DirectionName): { from: Point; to: Point } {
+  const planetCenter = hexToPixel(planetHex, S);
+  const outward = edgeMidpoint(side, S);
+  const length = Math.hypot(outward.x, outward.y);
+  return { from: add(planetCenter, outward), to: add(planetCenter, outward, BADGE_RADIUS / length) };
+}
+
 /**
  * Lane segments for charted tiles: one per exit from the tile center to the edge midpoint,
- * plus a stub into any planet the exit faces (planets are open hubs with every exit).
+ * plus a stub into any planet the exit faces that it `connects` into (every planet, while they
+ * are open hubs; under the facility rules only through a claimed exit).
  */
-function buildSegments(tiles: TileState[], planetsByKey: Map<string, Planet>): Segment[] {
+function buildSegments(tiles: TileState[], planetsByKey: Map<string, Planet>, connects: Connects = OPEN_HUBS): Segment[] {
   const segments: Segment[] = [];
   for (const tile of tiles) {
     const center = hexToPixel(tile.hex, S);
@@ -107,21 +144,48 @@ function buildSegments(tiles: TileState[], planetsByKey: Map<string, Planet>): S
         service: tile.service,
       });
       const facing = neighbor(tile.hex, exit);
-      if (planetsByKey.has(hexKey(facing))) {
-        const planetCenter = hexToPixel(facing, S);
-        const inward = edgeMidpoint(oppositeOf(exit), S);
-        const length = Math.hypot(inward.x, inward.y);
-        segments.push({
-          key: `${hexKey(tile.hex)}:${exit}:stub`,
-          from: add(planetCenter, inward),
-          to: add(planetCenter, inward, BADGE_RADIUS / length),
-          normal,
-          service: tile.service,
-        });
+      const side = oppositeOf(exit);
+      if (planetsByKey.has(hexKey(facing)) && connects(hexKey(facing), side)) {
+        segments.push({ key: `${hexKey(tile.hex)}:${exit}:stub`, ...stubPoints(facing, side), normal, service: tile.service });
       }
     }
   }
   return segments;
+}
+
+/** A lane that faces an exit-limited planet without an exit there (facility rules). */
+interface DanglingEnd {
+  key: string;
+  planet: PlanetFacilities;
+  side: DirectionName;
+  /** Where the lane meets the planet's hex. */
+  at: Point;
+  /** Unit vector across the lane at its end. */
+  across: Point;
+}
+
+function danglingEnds(planets: PlanetFacilities[]): DanglingEnd[] {
+  return planets.flatMap((planet) =>
+    planet.dangling.map((side) => {
+      const center = hexToPixel(planet.hex, S);
+      const mid = edgeMidpoint(side, S);
+      const length = Math.hypot(mid.x, mid.y);
+      return {
+        key: `${hexKey(planet.hex)}:${side}`,
+        planet,
+        side,
+        at: add(center, mid, 1 + DANGLE_INSET),
+        across: { x: -mid.y / length, y: mid.x / length },
+      };
+    }),
+  );
+}
+
+/** Offset of facility marker `index` from its planet's centre. */
+function facilitySpot(index: number): Point {
+  const radians = (FACILITY_ANGLES[index % FACILITY_ANGLES.length] * Math.PI) / 180;
+  const ring = FACILITY_DISTANCE + Math.floor(index / FACILITY_ANGLES.length) * FACILITY_SIZE;
+  return { x: ring * Math.cos(radians), y: ring * Math.sin(radians) };
 }
 
 function regionBoundaries(board: Board, regions: Map<string, Region>): string {
@@ -187,14 +251,24 @@ function line(from: Point, to: Point): string {
   return `M${from.x.toFixed(2)},${from.y.toFixed(2)}L${to.x.toFixed(2)},${to.y.toFixed(2)}`;
 }
 
-/** Segments that the preview action would add or give service on. */
-function previewSegments(preview: HexAction, tiles: TileState[], planetsByKey: Map<string, Planet>, corp: string): Segment[] {
+/**
+ * Segments that the preview action would add or give service on. A new exit facing an
+ * exit-limited planet claims an open exit there if it has one (`claims`); service claims nothing.
+ */
+function previewSegments(
+  preview: HexAction,
+  tiles: TileState[],
+  planetsByKey: Map<string, Planet>,
+  corp: string,
+  connects: Connects,
+  claims: Connects,
+): Segment[] {
   const existing = tiles.find((t) => hexKey(t.hex) === hexKey(preview.hex));
   let exits: DirectionName[];
   if (preview.type === "chart") exits = preview.exits;
   else if (preview.type === "upgrade") exits = [preview.exit];
   else exits = existing?.exits ?? [];
-  return buildSegments([{ hex: preview.hex, exits, service: [corp] }], planetsByKey);
+  return buildSegments([{ hex: preview.hex, exits, service: [corp] }], planetsByKey, preview.type === "service" ? connects : claims);
 }
 
 export function HexMap(props: HexMapProps) {
@@ -213,6 +287,8 @@ export function HexMap(props: HexMapProps) {
     fitHexes,
     label = "Galaxy map",
     deathStar,
+    facilities,
+    facilityPreview = null,
   } = props;
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
@@ -232,12 +308,26 @@ export function HexMap(props: HexMapProps) {
   const reserved = useMemo(() => siteHexes(deathStar, "reserved"), [reservedKey]);
   const planetsByKey = useMemo(() => new Map(hubs.map((p) => [hexKey(p.hex), p] as const)), [hubs]);
   const planetsByName = useMemo(() => new Map(hubs.map((p) => [p.name, p] as const)), [hubs]);
-  const segments = useMemo(() => buildSegments(tiles, planetsByKey), [tiles, planetsByKey]);
+  // Under the facility rules planets have limited exits; without them every planet is an open hub.
+  const limited = useMemo(() => limitedPlanets(facilities), [facilities]);
+  const connects = useMemo<Connects>(() => (key, side) => laneConnects(limited, key, side), [limited]);
+  const claims = useMemo<Connects>(
+    () => (key, side) => laneConnects(limited, key, side) || (limited.get(key)?.unclaimed ?? 0) > 0,
+    [limited],
+  );
+  const segments = useMemo(() => buildSegments(tiles, planetsByKey, connects), [tiles, planetsByKey, connects]);
+  const dangling = useMemo(() => danglingEnds(facilities?.planets ?? []), [facilities]);
   const builtKeys = useMemo(
     () => segments.flatMap((seg) => [seg.key, ...seg.service.map((corpId) => `${seg.key}:${corpId}`)]),
     [segments],
   );
   const fresh = useFreshKeys(builtKeys);
+  // A facility is new when its build number, or its owner (a seizure), was not on the map before.
+  const facilityKeys = useMemo(
+    () => (facilities?.planets ?? []).flatMap((p) => p.facilities.map((f) => facilityKey(p, f))),
+    [facilities],
+  );
+  const freshFacilities = useFreshKeys(facilityKeys);
   const terrainCells = useMemo(
     () =>
       board.hexes.flatMap((hex) => {
@@ -359,7 +449,15 @@ export function HexMap(props: HexMapProps) {
                 stroke={gained.length > 0 ? corporationColor(gained[0], corpIds) : NEUTRAL_CHANGE}
                 className="hexmap__change"
               >
-                <title>{gained.length > 0 ? `New service: ${gained.join(", ")}` : "New exit"}</title>
+                <title>
+                  {limited.has(hexKey(hex))
+                    ? gained.length > 0
+                      ? `New facility: ${gained.join(", ")}`
+                      : "Facility taken over by the Empire"
+                    : gained.length > 0
+                      ? `New service: ${gained.join(", ")}`
+                      : "New exit"}
+                </title>
               </path>
             );
           })}
@@ -367,7 +465,7 @@ export function HexMap(props: HexMapProps) {
 
       {preview && focus && (
         <g className="hexmap__preview">
-          {previewSegments(preview, tiles, planetsByKey, focus.id).map((seg) => (
+          {previewSegments(preview, tiles, planetsByKey, focus.id, connects, claims).map((seg) => (
             <path
               key={seg.key}
               d={line(seg.from, seg.to)}
@@ -460,13 +558,14 @@ export function HexMap(props: HexMapProps) {
           const dimmed = focus !== null && !reachable.has(planet.name);
           const reached = focus !== null && reachable.has(planet.name);
           const homes = homeworlds.get(planet.name) ?? [];
+          const exits = limited.get(hexKey(planet.hex));
           return (
             <g
               key={planet.name}
               transform={`translate(${center.x},${center.y})`}
               className={`hexmap__planet${dimmed ? " hexmap__planet--dimmed" : ""}`}
             >
-              <title>{`${planet.name} · ${planet.region} · ${badgeText(planet.tags)}`}</title>
+              <title>{`${planet.name} · ${planet.region} · ${badgeText(planet.tags)}${exits ? ` · ${planetExitsText(exits)}` : ""}`}</title>
               {reached && focus && (
                 <circle r={BADGE_RADIUS + 4} fill="none" stroke={corporationColor(focus.id, corpIds)} strokeWidth={2.5} />
               )}
@@ -482,10 +581,45 @@ export function HexMap(props: HexMapProps) {
                   </text>
                 </g>
               ))}
+              {exits && <OpenExits count={exits.unclaimed} />}
+              {exits?.facilities.map((facility, i) => (
+                <FacilityMarker
+                  key={facility.build}
+                  facility={facility}
+                  at={facilitySpot(i)}
+                  color={facility.owner === EMPIRE ? "" : corporationColor(facility.owner, corpIds)}
+                  fresh={freshFacilities.has(facilityKey(exits, facility))}
+                />
+              ))}
             </g>
           );
         })}
       </g>
+
+      {dangling.length > 0 && (
+        <g className="hexmap__dangling">
+          {dangling.map((end) => {
+            const half = LANE_WIDTH * 0.62;
+            return (
+              <path
+                key={end.key}
+                d={line(add(end.at, end.across, -half), add(end.at, end.across, half))}
+                className="hexmap__dangle"
+              >
+                <title>{`Dangling lane: ${end.planet.name} has no exit on this side, so the lane does not connect. A facility built there can give it the new exit.`}</title>
+              </path>
+            );
+          })}
+        </g>
+      )}
+
+      {facilityPreview && focus && (
+        <FacilityPreview
+          action={facilityPreview}
+          planet={limited.get(hexKey(facilityPreview.planet))}
+          color={corporationColor(focus.id, corpIds)}
+        />
+      )}
 
       <g className="hexmap__targets">
         {targetHexes.map((hex) => (
@@ -495,7 +629,11 @@ export function HexMap(props: HexMapProps) {
             className="hexmap__target"
             onClick={() => onHexClick(hex)}
           >
-            <title>{`Hex (${hex[0]}, ${hex[1]}): network options${terrain.get(hexKey(hex)) === "nebula" ? " · nebula" : ""}`}</title>
+            <title>
+              {limited.has(hexKey(hex))
+                ? `${limited.get(hexKey(hex))?.name}: facility options`
+                : `Hex (${hex[0]}, ${hex[1]}): network options${terrain.get(hexKey(hex)) === "nebula" ? " · nebula" : ""}`}
+            </title>
           </path>
         ))}
       </g>
@@ -546,6 +684,78 @@ function PlanetBadge({ tags }: { tags: string[] }) {
       <text className={`hexmap__badge-text${text.length > 1 ? " hexmap__badge-text--dual" : ""}`} dy="0.35em">
         {text}
       </text>
+    </g>
+  );
+}
+
+function facilityKey(planet: PlanetFacilities, facility: FacilityState): string {
+  return `${hexKey(planet.hex)}:${facility.build}:${facility.owner}`;
+}
+
+/** A planet's unclaimed exits, as small open rings above its badge (facility rules). */
+function OpenExits({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const y = -BADGE_RADIUS - OPEN_EXIT_RADIUS - 3;
+  return (
+    <g className="hexmap__open-exits">
+      {Array.from({ length: count }, (_, i) => (
+        <circle key={i} cx={(i - (count - 1) / 2) * OPEN_EXIT_SPACING} cy={y} r={OPEN_EXIT_RADIUS} className="hexmap__open-exit" />
+      ))}
+    </g>
+  );
+}
+
+/**
+ * One facility beside its planet: a square in its corporation's colour, or for an Imperial one
+ * (`color` empty) a diamond in the Empire's.
+ */
+function FacilityMarker({ facility, at, color, fresh }: { facility: FacilityState; at: Point; color: string; fresh: boolean }) {
+  const half = FACILITY_SIZE / 2;
+  const imperial = facility.owner === EMPIRE;
+  return (
+    <g transform={`translate(${at.x.toFixed(2)},${at.y.toFixed(2)})`}>
+      <g className={`hexmap__facility${imperial ? " hexmap__facility--imperial" : ""}${fresh ? " hexmap__facility--fresh" : ""}`}>
+        <title>
+          {imperial
+            ? "Imperial facility: it fills a slot and keeps its exit, but runs pairs for nobody"
+            : `${facility.owner} facility: one revenue pair for ${facility.owner}, and an exit for this planet`}
+        </title>
+        {imperial ? (
+          <>
+            <path d={`M0,${-half - 1}L${half + 1},0L0,${half + 1}L${-half - 1},0Z`} className="hexmap__facility-body" />
+            <circle r={1.5} className="hexmap__facility-dot" />
+          </>
+        ) : (
+          <rect x={-half} y={-half} width={FACILITY_SIZE} height={FACILITY_SIZE} rx={1.6} fill={color} className="hexmap__facility-body" />
+        )}
+      </g>
+    </g>
+  );
+}
+
+/** The facility a build would add, and the stub of the lane its new exit would connect, in the builder's colour. */
+function FacilityPreview({ action, planet, color }: { action: BuildFacilityAction; planet: PlanetFacilities | undefined; color: string }) {
+  const center = hexToPixel(action.planet, S);
+  const spot = facilitySpot(planet?.facilities.length ?? 0);
+  const half = FACILITY_SIZE / 2;
+  const stub = action.exit ? stubPoints(action.planet, action.exit) : null;
+  return (
+    <g className="hexmap__facility-preview">
+      {stub && (
+        <>
+          <path d={line(stub.from, stub.to)} stroke={color} strokeWidth={LANE_WIDTH * 0.7} />
+          <circle cx={stub.from.x} cy={stub.from.y} r={LANE_WIDTH * 0.75} stroke={color} className="hexmap__facility-preview-ring" />
+        </>
+      )}
+      <rect
+        x={center.x + spot.x - half}
+        y={center.y + spot.y - half}
+        width={FACILITY_SIZE}
+        height={FACILITY_SIZE}
+        rx={1.6}
+        fill={color}
+        stroke={color}
+      />
     </g>
   );
 }

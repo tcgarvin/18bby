@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from statistics import mean, pstdev
 
+from bby18.death_star import SITE_NAME
 from bby18.game import Game, LogEntry
 from bby18.hexgrid import Hex
 from bby18.state import CorpStatus
@@ -26,11 +27,15 @@ _NO_NETWORK = "takes no network action"
 _SOLD_OUT = re.compile(r"^is sold out; price \d+$")
 _CHART = re.compile(r"^chart \S+ exits \S+ for (\d+)(?:; .*)?$")
 """A chart and its cost; under the facility rules notes on planet exits may follow."""
+_OPERATING_ROUND = re.compile(r"^OR(\d+)\.\d+$")
 
 NEAR_PAIR_DISTANCE = 3
 """Planet pairs this many hexes apart or fewer count as near neighbors."""
 AFFORDABLE_FRONTIER = 150
 """Cost of three ordinary builds: unreached planets cheaper than this are within easy reach."""
+LATE_ROUND = 5
+"""Network actions in this round or later count as late (``CorpMetrics.late_network_actions``):
+a corporation still building by then has not settled into running what it has."""
 
 
 @dataclass
@@ -54,6 +59,10 @@ class CorpMetrics:
     chart_spend: int = 0
     upgrades: int = 0
     services: int = 0
+    network_actions: int = 0
+    """Charts, upgrades and service extensions: every network action but taking none."""
+    late_network_actions: int = 0
+    """Network actions in round ``LATE_ROUND`` or later."""
     top_price_turns: int = 0
     """Operating turns that ended with the price at the top of the stock market."""
     sold_out: int = 0
@@ -93,9 +102,23 @@ def count_log(
         corp = counts.corps.get(entry.actor)
         if corp is not None:
             _count_corp_entry(corp, text, top_price, chart_cost)
+            if _is_network_action(text):
+                corp.network_actions += 1
+                corp.late_network_actions += int(_is_late(entry.round_label))
             continue
         _count_player_entry(counts.stock, text)
     return counts
+
+
+def _is_network_action(text: str) -> bool:
+    """Whether a corporation's log line records a chart, an upgrade or a service extension."""
+    return text.startswith(("chart ", "upgrade ", "service "))
+
+
+def _is_late(round_label: str) -> bool:
+    """Whether ``round_label`` is an operating round of round ``LATE_ROUND`` or later."""
+    match = _OPERATING_ROUND.match(round_label)
+    return match is not None and int(match.group(1)) >= LATE_ROUND
 
 
 def _count_corp_entry(corp: CorpMetrics, text: str, top_price: int, chart_cost: int) -> None:
@@ -256,6 +279,23 @@ def final_revenue_split(game: Game) -> tuple[int, int]:
             else:
                 basic += pair.value
     return typed, basic
+
+
+def planets_touched(game: Game) -> int:
+    """Planets, the construction site aside, that at least one charted tile has an exit facing,
+    whether or not the lane connects there (under the facility rules it may dangle)."""
+    tiles = game.network.tiles()
+    touched = 0
+    for planet in game.board.planets:
+        if planet.name == SITE_NAME:
+            continue
+        touched += int(
+            any(
+                (tile := tiles.get(neighbor)) is not None and direction.opposite in tile.exits
+                for direction, neighbor in game.board.neighbors(planet.hex)
+            )
+        )
+    return touched
 
 
 @dataclass(frozen=True)

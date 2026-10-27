@@ -171,6 +171,19 @@ class HyperspaceNetwork:
                 sides.add(direction)
         return frozenset(sides)
 
+    def exits_needed(self, hex: Hex, sides: Iterable[Direction]) -> int:
+        """How many new exits (one per facility built there) planet ``hex`` needs before it can
+        connect through every one of ``sides``, for route planning. A claimed side needs none.
+        A side where a lane already dangles needs a new exit of its own, since an unclaimed exit
+        never goes to a lane already there (only a facility's builder can give it one). Any
+        other side needs an unclaimed exit, for the tile charted or upgraded toward it to claim,
+        and a new exit once those run out. 0 for an open hub, which connects on every side."""
+        if hex not in self._planet_exits:
+            return 0
+        wanted = frozenset(sides) - self._claimed[hex]
+        dangling = wanted & self.dangling_sides(hex)
+        return len(dangling) + max(0, len(wanted - dangling) - self.unclaimed_exits(hex))
+
     def connected(self, a: Hex, b: Hex) -> bool:
         """Adjacent hexes are connected when each has an exit facing the other. Two hubs
         (planets, or a planet and the Death Star site) never connect directly: traffic between

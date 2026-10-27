@@ -23,6 +23,7 @@ export function MapThumbnail({ state, board, onOpen }: { state: GameState; board
         onHexClick={() => undefined}
         label="Map overview"
         deathStar={state.deathStar}
+        facilities={state.facilities}
       />
       <span className="mapthumb__cta">
         Open map <kbd>M</kbd>

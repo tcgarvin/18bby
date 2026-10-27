@@ -7,10 +7,9 @@ finding comes from the game or from one bot habit. ``GreedyPolicy()`` is the ori
 from __future__ import annotations
 
 import copy
-import heapq
 import random
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 
 from bby18.actions import (
     BuildFacility,
@@ -30,6 +29,7 @@ from bby18.actions import (
 )
 from bby18.board import Planet
 from bby18.bots.forecast import TrackForecast, is_fragile, next_fleet_prices
+from bby18.bots.routing import PlanetDoors, RouteMap, route_costs
 from bby18.game import Game
 from bby18.hexgrid import Hex
 from bby18.revenue import compute_revenue
@@ -121,13 +121,16 @@ class GreedyPolicy:
     ``CARELESS_DIVIDEND_FRACTION`` of this rate. Starting a corporation and buying toward
     floating one's own never slip. 0 plays exactly as without the knob."""
 
-    # The knobs below matter only under the experimental Death Star rules.
+    # The knobs below matter only under the experimental Death Star rules. Under the facility
+    # rules the fleet knobs apply to facilities (see ``GreedyBot._choose_facility``).
     fleet_payback_turns: float = 4.0
     """Buy a fleet when the revenue it adds, over at most this many operating turns (and no more
-    than the turns the game is expected to last), covers its price."""
+    than the turns the game is expected to last), covers its price. A facility also counts
+    what its exit saves on the way to the next target."""
     fleet_target: int = 0
     """0: buy fleets by value (``fleet_payback_turns``). N > 0: own exactly N, buying whenever
-    affordable regardless of value, and no more."""
+    affordable regardless of value, and no more. Under the facility rules N counts the free
+    home facility."""
     contract_weight: float = 1.0
     """How much a build values the Death Star site: its contract value is scaled by this when
     planning builds and routes. 0 never builds toward or routes through the site (it still
@@ -459,11 +462,11 @@ class GreedyBot:
         to_go = (
             self._weighted_route_costs(game, corp, targets, blocked)
             if self.policy.routing == "path"
-            else {}
+            else None
         )
         scored: list[tuple[float, NetworkAction]] = []
         for action, gain in zip(candidates, gains):
-            if self.policy.routing == "path":
+            if to_go is not None:
                 remaining = self._remaining_route_cost(game, action, reach, to_go)
                 progress_penalty = remaining * self.policy.path_cost_weight
             else:
@@ -503,7 +506,7 @@ class GreedyBot:
     @staticmethod
     def _weighted_route_costs(
         game: Game, corp: Corporation, targets: dict[Hex, float], blocked: frozenset[Hex]
-    ) -> dict[Hex, float]:
+    ) -> RouteMap:
         """``_route_costs`` to the nearest target, where targets map to weights (1 for a
         planet) and a route to a target of weight w costs 1/w as much."""
         by_weight: dict[float, list[Hex]] = {}
@@ -515,58 +518,48 @@ class GreedyBot:
                 scaled = _weighted(cost, weight)
                 if hex not in combined or scaled < combined[hex]:
                     combined[hex] = scaled
-        return combined
+        return GreedyBot._route_map(game, corp, combined, targets, blocked)
+
+    @staticmethod
+    def _route_map(
+        game: Game,
+        corp: Corporation,
+        costs: dict[Hex, float],
+        targets: dict[Hex, float],
+        blocked: frozenset[Hex],
+    ) -> RouteMap:
+        """``costs`` from ``_route_costs`` to ``targets`` (hex -> weight), as a ``RouteMap``
+        that can also price steps into exit-limited planets."""
+        return RouteMap(
+            costs,
+            game.board,
+            targets,
+            blocked,
+            frozenset(game.death_star_reserved_sites()),
+            PlanetDoors.of(game, corp),
+        )
 
     @staticmethod
     def _route_costs(
         game: Game, corp: Corporation, targets: list[Hex], blocked: frozenset[Hex]
     ) -> dict[Hex, int]:
-        """Cheapest cost to build from each hex to some target, charged per hex entered.
-
-        Open space costs the chart cost, a nebula adds its surcharge, a tile someone already
-        charted costs the service cost, and the corporation's own service is free. Asteroid
-        fields are not on the board's adjacency, so routes go around them, as they go around
-        ``blocked`` hexes. Two hubs never connect directly, so a route never steps from a
-        planet (or a reserved construction site, a future hub) straight to an adjacent one.
+        """Cheapest cost to build from each hex to some target, charged per hex entered, with
+        the planet exits ``corp`` faces under the facility rules (see ``bby18.bots.routing``).
         """
-        board, net = game.board, game.network
-        served = net.service_of(corp.id)
-        future_hubs = frozenset(game.death_star_reserved_sites())
-
-        def is_hub(hex: Hex) -> bool:
-            return board.is_planet(hex) or hex in future_hubs
-
-        def entry_cost(hex: Hex) -> int:
-            if board.is_planet(hex) or hex in served:
-                return 0
-            if net.is_charted(hex):
-                return game.config.service_cost
-            return game.chart_cost(hex)
-
-        dist: dict[Hex, int] = {h: 0 for h in targets}
-        heap = [(0, h) for h in dist]
-        heapq.heapify(heap)
-        while heap:
-            d, hex = heapq.heappop(heap)
-            if d > dist.get(hex, d):
-                continue
-            for _, nxt in board.neighbors(hex):
-                if nxt in blocked or (is_hub(nxt) and is_hub(hex)):
-                    continue
-                nd = d + entry_cost(nxt)
-                if nd < dist.get(nxt, nd + 1):
-                    dist[nxt] = nd
-                    heapq.heappush(heap, (nd, nxt))
-        return dist
+        return route_costs(
+            game, game.network, corp.id, targets, blocked, PlanetDoors.of(game, corp)
+        )
 
     @staticmethod
     def _remaining_route_cost(
-        game: Game, action: NetworkAction, reach: frozenset[Hex], to_go: Mapping[Hex, float]
+        game: Game, action: NetworkAction, reach: frozenset[Hex], to_go: RouteMap
     ) -> float:
         """Route cost still to pay beyond ``action``, judged by the hexes its far exits lead to.
 
         Exits that lead back into the corporation's own network make no progress, so a build
-        with only such exits scores as if no route remained.
+        with only such exits scores as if no route remained. A far exit facing an exit-limited
+        planet pays for the planet's exits too (``RouteMap.beyond``): a lane toward a planet
+        with no exit left is worth building only as the first step of buying one there.
         """
         board = game.board
         if isinstance(action, Chart):
@@ -586,7 +579,8 @@ class GreedyBot:
             for d in exits
             if origin.neighbor(d) in board.hexes and origin.neighbor(d) not in reach
         ]
-        return min((to_go[h] for h in far if h in to_go), default=NO_ROUTE_COST)
+        costs = (to_go.beyond(origin, h) for h in far)
+        return min((c for c in costs if c is not None), default=NO_ROUTE_COST)
 
     @staticmethod
     def _planets_after(
@@ -615,11 +609,12 @@ class GreedyBot:
         self, game: Game, corp: Corporation, legal: list[FleetAction]
     ) -> FleetAction:
         """Buy the mandatory first fleet, then fleets by ``fleet_target`` or by value (see
-        ``_wants_fleet``). Under the facility rules the same decision builds a facility, placed
-        by ``_best_facility``."""
-        buys: Sequence[BuyFleet | BuildFacility] = [
-            a for a in legal if isinstance(a, (BuyFleet, BuildFacility))
-        ]
+        ``_wants_fleet``). Under the facility rules, build facilities instead (see
+        ``_choose_facility``)."""
+        if game.config.facility_rules:
+            builds = [a for a in legal if isinstance(a, BuildFacility)]
+            return self._choose_facility(game, corp, builds) if builds else FinishFleets()
+        buys = [a for a in legal if isinstance(a, BuyFleet)]
         if not buys:
             return FinishFleets()
         wanted = self._wants_fleet(
@@ -630,33 +625,175 @@ class GreedyBot:
             game.contract_value(),
             buys[0].cost,
         )
-        if not wanted:
-            return FinishFleets()
-        if game.config.facility_rules:
-            return self._best_facility(
-                game, corp, [a for a in buys if isinstance(a, BuildFacility)]
+        return buys[0] if wanted else FinishFleets()
+
+    def _choose_facility(
+        self, game: Game, corp: Corporation, builds: Sequence[BuildFacility]
+    ) -> FleetAction:
+        """The facility to build next, or finishing the step (facility rules).
+
+        A facility is a fleet with an address: it adds a pair, and it gives its planet an exit.
+        Each build is valued at what the pair (and any planets the new exit connects) adds over
+        the payback horizon, as ``_wants_fleet`` values a fleet, plus how much cheaper it makes
+        the cheapest route from the network to a build target (``_FacilityOption``), counted
+        in full only while there are turns left to build along it (``_route_share``). The first
+        facility is mandatory and a ``fleet_target`` policy builds up to its target whatever
+        the value; otherwise a build is made when its value covers the price, or when it is the
+        second facility, earns something and a seizure would otherwise call for a replacement.
+        The build made is the most valuable, then the one whose exit goes to the builder's own
+        dangling lane rather than left unclaimed, and unclaimed rather than given to a lane only
+        rivals serve; then the one whose exit opens the cheapest route out of the network that
+        the planet did not already offer (``_FacilityOption.opening``), so that a facility built
+        for its pair alone still puts its exit where the next lane can use it; then the one
+        farthest from the construction site (the Empire takes the nearest), then the first
+        listed.
+        """
+        choice = self._facility_choice(game, TrackForecast.of(game), corp, builds)
+        return FinishFleets() if choice is None else choice
+
+    def _facility_choice(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        corp: Corporation,
+        builds: Sequence[BuildFacility],
+    ) -> BuildFacility | None:
+        """The build ``_choose_facility`` makes from ``builds``, or ``None`` to finish."""
+        owned = corp.fleets
+        target = self.policy.fleet_target
+        if not builds or (owned > 0 and target > 0 and owned >= target):
+            return None
+        options = self._facility_options(game, forecast, corp, builds)
+        horizon = min(forecast.turns_left, self.policy.fleet_payback_turns)
+        route_share = self._route_share(forecast)
+
+        def value(option: _FacilityOption) -> float:
+            return option.marginal * horizon + option.route_saving * route_share
+
+        if owned == 0 or target > 0:
+            eligible = options
+        else:
+            price = builds[0].cost
+            insure = owned == 1 and forecast.fleet_reserve(1, options[0].revenue_now) > 0
+            eligible = [o for o in options if value(o) >= price or (insure and o.marginal > 0)]
+        if not eligible:
+            return None
+
+        def key(indexed: tuple[int, _FacilityOption]) -> tuple[float, int, float, int, int]:
+            index, option = indexed
+            return value(option), -option.gift, -option.opening, option.site_distance, -index
+
+        return max(enumerate(eligible), key=key)[1].action
+
+    def _route_share(self, forecast: TrackForecast) -> float:
+        """How much of a facility's route saving counts: all of it with ``fleet_payback_turns``
+        turns left after this one to build along the route and earn from where it leads, less
+        with fewer, none in the last turn."""
+        return max(0.0, min(1.0, (forecast.turns_left - 1) / self.policy.fleet_payback_turns))
+
+    def _facility_options(
+        self,
+        game: Game,
+        forecast: TrackForecast,
+        corp: Corporation,
+        builds: Sequence[BuildFacility],
+    ) -> list[_FacilityOption]:
+        """``builds`` as the facility step values them (see ``_FacilityOption``).
+
+        Revenue is the planning view (the site's contracts weighted by ``_site_weight``). Route
+        savings are measured toward the targets network actions aim at
+        (``_death_star_targets``), less any planet the build itself connects, whose revenue
+        already counts: the cheapest route from the network now, against the cheapest from the
+        network after the build, through the planet's new exit, priced beyond the network as
+        now (``RouteMap.with_doors``)."""
+        board = game.board
+        weight = self._site_weight(game, forecast)
+        planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
+        owned = corp.fleets
+        revenue_now = self._capped_revenue(game, planets, owned, contract_value)
+        reach = game.reachable(corp)
+        home = game.homeworld(corp)
+        site = game.death_star_site()
+        targets = self._death_star_targets(game, forecast, reach)
+        blocked = self._blocked_hexes(game)
+        doors = PlanetDoors.of(game, corp)
+        assert doors is not None
+        next_price = next_fleet_prices(game, 2)[1]
+        can_build_more = owned + 1 < game.config.fleet_limit
+        routes: dict[frozenset[Hex], tuple[RouteMap, float]] = {}
+        options = []
+        for action in builds:
+            net = game.network_after_facility(action)
+            after = net.reachable(corp.id, home)
+            connected = frozenset(h for h in after - reach if board.is_planet(h))
+            if connected not in routes:
+                aims = {h: w for h, w in targets.items() if h not in connected}
+                to_go = self._weighted_route_costs(game, corp, aims, blocked)
+                before = to_go.from_network(reach)
+                routes[connected] = (to_go, NO_ROUTE_COST if before is None else before)
+            to_go, route_before = routes[connected]
+            slots = dict(doors.slots)
+            slots[action.planet] -= 1
+            doors_after = replace(
+                doors,
+                network=net,
+                facility_price=next_price,
+                can_build=can_build_more,
+                slots=slots,
             )
-        return buys[0]
+            map_after = to_go.with_doors(doors_after)
+            route_after = map_after.from_network(after)
+            saving = route_before - (NO_ROUTE_COST if route_after is None else route_after)
+            opening = self._exit_opening(
+                action.planet, reach, after, to_go.from_hex, map_after.from_hex
+            )
+            after_planets, _ = self._planning_view(
+                game, weight, [board.planet_at(h) for h in sorted(after) if board.is_planet(h)]
+            )
+            revenue = self._capped_revenue(game, after_planets, owned + 1, contract_value)
+            options.append(
+                _FacilityOption(
+                    action=action,
+                    revenue_now=revenue_now,
+                    marginal=revenue - revenue_now,
+                    route_saving=max(0.0, saving),
+                    opening=opening,
+                    gift=self._exit_gift(game, corp, action),
+                    site_distance=action.planet.distance(site) if site is not None else 0,
+                )
+            )
+        return options
 
     @staticmethod
-    def _best_facility(
-        game: Game, corp: Corporation, builds: Sequence[BuildFacility]
-    ) -> BuildFacility:
-        """The build whose network would earn most with one more pair, then the one farthest
-        from the construction site (the Empire takes the nearest), then the first listed."""
-        site = game.death_star_site()
-        pairs = corp.fleets + 1
-        home = game.homeworld(corp)
+    def _exit_opening(
+        planet: Hex,
+        reach: frozenset[Hex],
+        after: frozenset[Hex],
+        route_before: Callable[[Hex, frozenset[Hex]], float | None],
+        route_after: Callable[[Hex, frozenset[Hex]], float | None],
+    ) -> float:
+        """The cheapest route out of the network from ``planet`` after the build, if the build
+        made it cheaper than it was (the new exit opens a way the planet did not offer); else
+        ``NO_ROUTE_COST``, as for a planet the network does not reach."""
+        if planet not in after:
+            return NO_ROUTE_COST
+        now = route_after(planet, after)
+        if now is None:
+            return NO_ROUTE_COST
+        was = route_before(planet, reach) if planet in reach else None
+        if was is not None and was <= now:
+            return NO_ROUTE_COST
+        return now
 
-        def key(indexed: tuple[int, BuildFacility]) -> tuple[int, int, int]:
-            index, action = indexed
-            reach = game.network_after_facility(action).reachable(corp.id, home)
-            planets = [game.board.planet_at(h) for h in sorted(reach) if game.board.is_planet(h)]
-            revenue = game.planet_revenue(planets, pairs).total
-            distance = action.planet.distance(site) if site is not None else 0
-            return revenue, distance, -index
-
-        return max(enumerate(builds), key=key)[1]
+    @staticmethod
+    def _exit_gift(game: Game, corp: Corporation, action: BuildFacility) -> int:
+        """Whom ``action``'s new exit serves: 0 a dangling lane on a tile ``corp`` serves, 1
+        nobody yet (left unclaimed, for the next tile charted toward the planet), 2 a lane
+        only rivals serve."""
+        if action.exit_side is None:
+            return 1
+        lane = action.planet.neighbor(action.exit_side)
+        return 0 if corp.id in game.network.corporations_serving(lane) else 2
 
     def choose_pay_dividends(self, game: Game, corp: Corporation, revenue: int) -> bool:
         intended = self._intended_dividend(game, corp, revenue)
@@ -864,19 +1001,26 @@ class GreedyBot:
         eagerness = self._site_weight(game, forecast) - 1
         if site is None or site in reach or eagerness <= 0:
             return [0.0] * len(candidates)
-        frontier = {
-            n
-            for h in reach
-            for _, n in game.board.neighbors(h)
-            if n not in reach and not game.board.is_planet(n)
-        }
         per_unit = eagerness * game.contract_value()
         if self.policy.routing == "path":
-            to_site = self._route_costs(game, corp, [site], blocked)
-            now = min((to_site[h] for h in frontier if h in to_site), default=NO_ROUTE_COST)
+            to_site = self._route_map(
+                game,
+                corp,
+                dict(self._route_costs(game, corp, [site], blocked)),
+                {site: 1.0},
+                blocked,
+            )
+            start = to_site.from_network(reach)
+            now = NO_ROUTE_COST if start is None else start
             unit = game.config.chart_cost
             after = [self._remaining_route_cost(game, a, reach, to_site) for a in candidates]
         else:
+            frontier = {
+                n
+                for h in reach
+                for _, n in game.board.neighbors(h)
+                if n not in reach and not game.board.is_planet(n)
+            }
             now = min((h.distance(site) for h in frontier), default=0)
             unit = 1
             after = [self._straight_distance(a, {site: 1.0}) for a in candidates]
@@ -935,10 +1079,17 @@ class GreedyBot:
     def _wants_unaffordable_fleet(
         self, game: Game, forecast: TrackForecast, corp: Corporation
     ) -> bool:
-        """Whether this policy wants another fleet that the treasury cannot pay for."""
+        """Whether this policy wants another fleet that the treasury cannot pay for. Under the
+        facility rules: whether the facility step would build one if it could pay
+        (``_facility_choice``)."""
         price = game.fleet_price()
         if corp.fleets >= game.config.fleet_limit or price <= corp.treasury:
             return False
+        if game.config.facility_rules:
+            rich = copy.copy(corp)
+            rich.treasury = 10**9
+            builds = game.legal_facility_builds(rich)
+            return self._facility_choice(game, forecast, corp, builds) is not None
         weight = self._site_weight(game, forecast)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
         return self._wants_fleet(game, forecast, corp.fleets, planets, contract_value, price)
@@ -974,12 +1125,6 @@ class GreedyBot:
                 fleet_alone
             ):
                 gaining_with_fleet.append(planet.hex)
-        frontier = {
-            n
-            for h in reach
-            for _, n in game.board.neighbors(h)
-            if n not in reach and not game.board.is_planet(n)
-        }
         blocked = self._blocked_hexes(game)
         for targets, route_budget in (
             (gaining, budget),
@@ -988,8 +1133,15 @@ class GreedyBot:
             if not targets or route_budget <= 0:
                 continue
             # A route's cost counts every hex it enters, the first beside the network included.
-            to_go = self._route_costs(game, corp, targets, blocked)
-            if any(to_go.get(h, route_budget + 1) <= route_budget for h in frontier):
+            to_go = self._route_map(
+                game,
+                corp,
+                dict(self._route_costs(game, corp, targets, blocked)),
+                dict.fromkeys(targets, 1.0),
+                blocked,
+            )
+            route = to_go.from_network(reach)
+            if route is not None and route <= route_budget:
                 return True
         return False
 
@@ -1015,6 +1167,28 @@ class GreedyBot:
             if self._capped_revenue(game, after, corp.fleets, contract_value) > current:
                 return True
         return False
+
+
+@dataclass(frozen=True)
+class _FacilityOption:
+    """One legal facility build, as ``GreedyBot._choose_facility`` values it."""
+
+    action: BuildFacility
+    revenue_now: int
+    """Planning revenue a turn now, with the facilities owned."""
+    marginal: int
+    """Planning revenue a turn after the build, with one more pair and whatever planets the new
+    exit connects, less ``revenue_now``."""
+    route_saving: float
+    """How much cheaper the build makes the cheapest route from the network to a target."""
+    opening: float
+    """The cheapest route out of the network from the planet, if the new exit made it cheaper;
+    ``NO_ROUTE_COST`` if it opened nothing (see ``GreedyBot._exit_opening``)."""
+    gift: int
+    """0: the new exit goes to the builder's own dangling lane; 1: left unclaimed; 2: given to
+    a lane only rivals serve."""
+    site_distance: int
+    """Hexes from the planet to the construction site (0 with no site)."""
 
 
 def _weighted(cost: int, weight: float) -> float:

@@ -17,6 +17,7 @@ export const BASE_DURATION_MS: Record<MoveKindName, number> = {
   service: 2400,
   no_action: 1200,
   buy_fleet: 1600,
+  build_facility: 2200,
   finish_fleets: 1000,
   dividend: 3200,
   phase: 2200,

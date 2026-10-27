@@ -1,4 +1,5 @@
 import type { Action, Axial, CorporationState, GameState, HexAction, TileState } from "../api";
+import { laneArrivals } from "../facilities";
 import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
 import { corpColor, hexActionsByKey, playerName, terrainByKey } from "../selectors";
@@ -125,6 +126,19 @@ export function NetworkActions(props: NetworkActionsProps) {
                   color={color}
                 />
                 <span className="tile-option__label">{describe(action)}</span>
+                {laneArrivals(action, state.facilities).map((arrival) => (
+                  <span
+                    key={arrival.planet}
+                    className={`tile-option__arrival${arrival.claims ? "" : " tile-option__arrival--dangles"}`}
+                    title={
+                      arrival.claims
+                        ? `This lane claims one of ${arrival.planet}'s open exits`
+                        : `${arrival.planet} has no open exit: this lane would dangle there until a facility gives it one`
+                    }
+                  >
+                    {arrival.claims ? `claims ${arrival.planet}` : `dangles at ${arrival.planet}`}
+                  </span>
+                ))}
                 <span className="tile-option__cost num">
                   {action.cost}
                   {action.type === "chart" && terrain.get(hexKey(action.hex)) === "nebula" && (

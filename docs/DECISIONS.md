@@ -387,6 +387,23 @@ address decides where the lanes can go. The private benefit (capacity) pays for 
   decides where Imperial facilities fill slots (around the site) and where the owner loses the
   right to build by holding a facility there.
 
+### Readings chosen while building (placeholders, not discussed)
+
+- An upgrade claims an exit only through its new exit; the tile's older dangling exits stay
+  dangling. Extending service never claims an exit.
+- A new unclaimed exit does not connect lanes already dangling there. Only the builder's choice
+  of side, or the next tile charted or upgraded toward the planet, uses it.
+- The builder may give the new exit to any corporation's dangling lane, including one not
+  connected to its own network.
+- Before its corporation floats, a homeworld has one exit, and a rival's lane may claim it. One
+  homeworld slot is kept while the corporation is unstarted or parred; a closed corporation keeps
+  nothing.
+- Home facilities take a build number like any other, so a later build loses a distance tie to
+  a home facility. The tie count measures only ties between different planets.
+- A corporation can go bankrupt with money in its treasury if no planet it may build on has a
+  free slot (for example, its homeworld filled with Imperial facilities and nothing else reached
+  with room). The log says why.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,

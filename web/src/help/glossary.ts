@@ -9,10 +9,35 @@ export interface GlossaryEntry {
   term: string;
   /** One to three sentences for a popover. */
   summary: (rules: Rules) => string;
-  /** Id of the rules-page section that explains it in full. */
-  section: SectionId;
-  /** Part of the Death Star rules: listed only when they are in force. */
-  deathStar?: boolean;
+  /** Id of the rules-page section that explains it in full, or which one, given the rules in force. */
+  section: SectionId | ((rules: Rules) => SectionId);
+  /** Part of an optional rule set: listed only when it is in force (see `inForce`). */
+  only?: RuleSet;
+}
+
+/**
+ * Optional rule sets a term or section may belong to: the Death Star rules, and within them
+ * either fleets or (the experimental facility rules) facilities.
+ */
+export type RuleSet = "deathStar" | "fleets" | "facilities";
+
+/** The rules-page section that explains `entry` under `rules`. */
+export function sectionOf(entry: GlossaryEntry, rules: Rules): SectionId {
+  return typeof entry.section === "function" ? entry.section(rules) : entry.section;
+}
+
+/** Whether rule set `only` is in force; always true for a term or section that names none. */
+export function inForce(only: RuleSet | undefined, rules: Rules): boolean {
+  switch (only) {
+    case undefined:
+      return true;
+    case "deathStar":
+      return rules.deathStarRules;
+    case "fleets":
+      return rules.deathStarRules && !rules.facilityRules;
+    case "facilities":
+      return rules.deathStarRules && rules.facilityRules;
+  }
 }
 
 export type SectionId =
@@ -25,6 +50,7 @@ export type SectionId =
   | "operating-turn"
   | "revenue"
   | "fleets"
+  | "facilities"
   | "death-star"
   | "stock-market"
   | "scoring"
@@ -41,6 +67,7 @@ export const SECTION_IDS: SectionId[] = [
   "operating-turn",
   "revenue",
   "fleets",
+  "facilities",
   "death-star",
   "stock-market",
   "scoring",
@@ -57,6 +84,9 @@ const tierPrices = (r: Rules): string =>
   r.deathStar.fleetTiers
     .map((t) => (t.count === "unlimited" ? `then any number at ${t.price}` : `${t.count} at ${t.price}`))
     .join(", ");
+
+/** The most exits a planet can have under the facility rules. */
+const maxExits = (r: Rules): number => r.facilities.baseExits + r.facilities.perPlanet;
 
 const stageOf = (r: Rules, result: string): string =>
   r.deathStar.stages
@@ -175,8 +205,12 @@ export const GLOSSARY = {
   },
   lanes: {
     term: "Exits (lanes)",
-    summary: () =>
-      "Each charted hex has hyperspace lanes leaving through some of its six sides. Two neighbouring hexes connect only if each has a lane facing the other. Planets have all six.",
+    summary: (r) =>
+      `Each charted hex has hyperspace lanes leaving through some of its six sides. Two neighbouring hexes connect only if each has a lane facing the other. ${
+        r.facilityRules
+          ? "A planet connects only through the exits its lanes have claimed."
+          : "Planets have all six."
+      }`,
     section: "map",
   },
   terrain: {
@@ -187,8 +221,10 @@ export const GLOSSARY = {
   },
   hub: {
     term: "Planet hub",
-    summary: () =>
-      "Planets are open hubs: they have every exit, never need charting, and any corporation can pass through them freely once it reaches them.",
+    summary: (r) =>
+      r.facilityRules
+        ? "Planets never need charting, and any corporation can pass through one it reaches, but only through two of its claimed exits. The Death Star site is an open hub with every exit."
+        : "Planets are open hubs: they have every exit, never need charting, and any corporation can pass through them freely once it reaches them.",
     section: "map",
   },
   reachable: {
@@ -276,61 +312,95 @@ export const GLOSSARY = {
         : `The game lasts ${r.totalRounds} rounds. Each is one stock round followed by ${r.operatingRoundsPerStockRound} operating rounds.`,
     section: "round-structure",
   },
+  facility: {
+    term: "Facility",
+    summary: (r) =>
+      `A facility on a planet runs one revenue pair for its owner, wherever its pairs are, and gives the planet one more exit for anyone's lanes. A corporation may own up to ${r.deathStar.fleetLimit}, a planet may hold ${r.facilities.perPlanet}, and a corporation must own at least one after its facility step. It floats with a free one on its homeworld.`,
+    section: "facilities",
+    only: "facilities",
+  },
+  facilitySupply: {
+    term: "Facility price",
+    summary: (r) =>
+      `All corporations pay into one shared supply: ${tierPrices(r)}. The price rises when a tier sells out, so every facility built makes the next one dearer for everybody. The free home facility does not count.`,
+    section: "facilities",
+    only: "facilities",
+  },
+  planetExits: {
+    term: "Planet exits",
+    summary: (r) =>
+      `A planet has ${r.facilities.baseExits} ${r.facilities.baseExits === 1 ? "exit" : "exits"}, plus one per facility on it (at most ${maxExits(r)}). An exit has no direction until a lane claims it: the first tile charted toward the planet takes it, first come, first served. Open exits show as small rings above the planet.`,
+    section: "facilities",
+    only: "facilities",
+  },
+  dangling: {
+    term: "Dangling lane",
+    summary: () =>
+      "A lane facing a planet that has no open exit left does not connect; the map ends it with a red bar. It connects once a facility built on that planet gives it the new exit.",
+    section: "facilities",
+    only: "facilities",
+  },
   fleet: {
     term: "Fleet",
     summary: (r) =>
       `One fleet runs one revenue pair: a corporation earns from at most as many pairs as it owns fleets. It may own up to ${r.deathStar.fleetLimit}, and must own at least one after its fleet step. Fleets cannot be sold.`,
     section: "fleets",
-    deathStar: true,
+    only: "fleets",
   },
   fleetSupply: {
     term: "Fleet supply",
     summary: (r) =>
       `All corporations buy fleets from one shared supply: ${tierPrices(r)}. The price rises when a tier sells out, so every fleet bought makes the next one dearer for everybody.`,
     section: "fleets",
-    deathStar: true,
+    only: "fleets",
   },
   bankruptcy: {
     term: "Bankruptcy",
-    summary: () =>
-      "A corporation that reaches its fleet step with no fleet and too little in its treasury to buy one closes for good. Its shares are worth nothing to anyone, its money goes to the bank, and its tiles stay for others.",
-    section: "fleets",
-    deathStar: true,
+    summary: (r) =>
+      `${
+        r.facilityRules
+          ? "A corporation that reaches its facility step owning no facility, and cannot build one (no money, or no planet it may build on), closes for good."
+          : "A corporation that reaches its fleet step with no fleet and too little in its treasury to buy one closes for good."
+      } Its shares are worth nothing to anyone, its money goes to the bank, and its tiles stay for others.`,
+    section: (r) => (r.facilityRules ? "facilities" : "fleets"),
+    only: "deathStar",
   },
   deathStar: {
     term: "Death Star track",
     summary: (r) =>
       `The Empire is building a battle station. Each contract pair a corporation runs adds a cube, and the Empire adds ${r.deathStar.empireCubesPerStockRound} after every stock round. Every ${r.deathStar.cubesPerStage} cubes fill a stage, and each stage does something when it fills.`,
     section: "death-star",
-    deathStar: true,
+    only: "deathStar",
   },
   contract: {
     term: "Contract pair",
     summary: (r) =>
       `The construction site (${r.deathStar.siteTag}) paired with a planet tagged ${r.deathStar.contractPartnerTags.join(", ")}. It scores the current stage's contract value (${r.deathStar.stages.map((s) => s.value).join(", ")}), never the regional bonus, and adds a cube to the track. The best matching may pick it whether you like it or not.`,
     section: "death-star",
-    deathStar: true,
+    only: "deathStar",
   },
   seizure: {
     term: "Seizure",
     summary: (r) =>
-      `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes one fleet from every corporation that has one. A corporation left with none must buy one at its next turn or go bankrupt.`,
+      r.facilityRules
+        ? `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes over one facility from every corporation that has one: the one nearest the construction site. It becomes Imperial, keeps its slot and exit, and runs pairs for nobody. A corporation left with none must build one at its next turn or go bankrupt.`
+        : `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes one fleet from every corporation that has one. A corporation left with none must buy one at its next turn or go bankrupt.`,
     section: "death-star",
-    deathStar: true,
+    only: "deathStar",
   },
   siteMove: {
     term: "Site move",
     summary: (r) =>
       `When the ${stageOf(r, "move")} stage fills, the construction site moves to its reserved second hex in the ${r.deathStar.siteRegions[1]}. The old hex becomes empty space and networks through it are cut there.`,
     section: "death-star",
-    deathStar: true,
+    only: "deathStar",
   },
   launch: {
     term: "Launch",
     summary: (r) =>
       `When the ${stageOf(r, "completion")} stage fills, the station launches: the site leaves the board, the current round's operating rounds finish, and the game ends (the Battle of Yavin). Otherwise it ends after round ${r.deathStar.backstopRounds}.`,
     section: "death-star",
-    deathStar: true,
+    only: "deathStar",
   },
   undo: {
     term: "Undo",

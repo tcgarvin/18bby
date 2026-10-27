@@ -16,7 +16,9 @@ import type {
   GameState,
   Planet,
   StageResult,
+  SupplyItem,
 } from "./api";
+import { itemCount } from "./facilities";
 
 /** The site under construction as a planet (a hub with every exit), or null once it has launched. */
 export function sitePlanet(deathStar: DeathStarState | undefined): Planet | null {
@@ -66,7 +68,9 @@ export function pendingStages(deathStar: DeathStarState): DeathStarStage[] {
 export function resultText(result: StageResult, deathStar?: DeathStarState): string {
   switch (result) {
     case "seizure":
-      return "Seizure: every corporation with a fleet loses one";
+      return deathStar?.fleets.item === "facility"
+        ? "Seizure: the Empire takes over each corporation's facility nearest the site"
+        : "Seizure: every corporation with a fleet loses one";
     case "move": {
       const next = deathStar ? nextSite(deathStar) : null;
       return next ? `The site moves to the ${next.region}` : "The site moves";
@@ -133,11 +137,17 @@ export interface SeizureRisk {
  * corporation keeps a fleet through it.
  */
 export function seizureRisk(deathStar: DeathStarState, fleets: number, treasury: number): SeizureRisk | null {
-  const stage = deathStar.stages[deathStar.stage];
-  if (!stage || stage.result !== "seizure" || fleets !== 1) return null;
-  const cubesToGo = Math.max(0, (deathStar.stage + 1) * deathStar.cubesPerStage - deathStar.cubes);
+  const seizure = nextSeizure(deathStar);
+  if (!seizure || fleets !== 1) return null;
   const price = deathStar.fleets.price;
-  return { stage, cubesToGo, covered: treasury >= price, price };
+  return { ...seizure, covered: treasury >= price, price };
+}
+
+/** The seizure the stage being built ends in, and the cubes until it fills (0: at the end of this round); null when it is no seizure. */
+export function nextSeizure(deathStar: DeathStarState): { stage: DeathStarStage; cubesToGo: number } | null {
+  const stage = deathStar.stages[deathStar.stage];
+  if (!stage || stage.result !== "seizure") return null;
+  return { stage, cubesToGo: Math.max(0, (deathStar.stage + 1) * deathStar.cubesPerStage - deathStar.cubes) };
 }
 
 export interface PairUsage {
@@ -146,17 +156,19 @@ export interface PairUsage {
   /** Pairs the network could run with no fleet limit. */
   available: number;
   fleets: number;
+  /** What runs the pairs: fleets, or facilities under the facility rules. */
+  item: SupplyItem;
 }
 
-/** How many of a network's pairs its fleets run; null without the Death Star rules. */
-export function pairUsage(corp: CorporationState): PairUsage | null {
+/** How many of a network's pairs its fleets (or facilities) run; null without the Death Star rules. */
+export function pairUsage(corp: CorporationState, item: SupplyItem = "fleet"): PairUsage | null {
   if (!corp.fleetRevenue) return null;
-  return { run: corp.revenue.pairs.length, available: corp.fleetRevenue.uncappedPairs, fleets: corp.fleets };
+  return { run: corp.revenue.pairs.length, available: corp.fleetRevenue.uncappedPairs, fleets: corp.fleets, item };
 }
 
 /** "3 of 5 pairs run · 3 fleets", or "2 pairs run · 3 fleets" when every pair is run. */
 export function pairUsageText(usage: PairUsage): string {
-  const fleets = `${usage.fleets} ${usage.fleets === 1 ? "fleet" : "fleets"}`;
+  const fleets = itemCount(usage.item, usage.fleets);
   const pairs = usage.available === 1 ? "pair" : "pairs";
   if (usage.available > usage.run) return `${usage.run} of ${usage.available} ${pairs} run · ${fleets}`;
   return `${usage.run} ${usage.run === 1 ? "pair" : "pairs"} run · ${fleets}`;

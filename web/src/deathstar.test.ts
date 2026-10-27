@@ -3,6 +3,7 @@ import type { CorporationState } from "./api";
 import {
   fleetChoice,
   gameEnd,
+  nextSeizure,
   pairUsage,
   pairUsageText,
   pendingStages,
@@ -68,6 +69,8 @@ describe("the track", () => {
     expect(resultText("seizure", track)).toMatch(/every corporation with a fleet loses one/);
     expect(resultText("move", track)).toBe("The site moves to the Mid Rim");
     expect(resultText("completion", track)).toMatch(/game ends after this round/);
+    const facilities = deathStarState({ fleets: { ...track.fleets, item: "facility" } });
+    expect(resultText("seizure", facilities)).toMatch(/takes over each corporation's facility nearest the site/);
   });
 
   it("ends at the backstop unless the station launched", () => {
@@ -123,14 +126,23 @@ describe("seizureRisk", () => {
   it("counts a filled seizure stage as due at the end of the round", () => {
     expect(seizureRisk(trackAt(deathStarState(), 6, 0), 1, 0)).toMatchObject({ cubesToGo: 0 });
   });
+
+  it("finds the next seizure whatever a corporation owns", () => {
+    expect(nextSeizure(trackAt(deathStarState(), 4, 0))).toMatchObject({ cubesToGo: 2, stage: { name: "Frame" } });
+    expect(nextSeizure(trackAt(deathStarState(), 7, 1))).toBeNull();
+  });
 });
 
 describe("pairUsage", () => {
   it("compares the pairs run with the pairs the network offers", () => {
     const usage = pairUsage(operator());
-    expect(usage).toEqual({ run: 1, available: 3, fleets: 1 });
+    expect(usage).toEqual({ run: 1, available: 3, fleets: 1, item: "fleet" });
     expect(pairUsageText(usage!)).toBe("1 of 3 pairs run · 1 fleet");
-    expect(pairUsageText({ run: 2, available: 2, fleets: 3 })).toBe("2 pairs run · 3 fleets");
+    expect(pairUsageText({ run: 2, available: 2, fleets: 3, item: "fleet" })).toBe("2 pairs run · 3 fleets");
+  });
+
+  it("counts facilities under the facility rules", () => {
+    expect(pairUsageText(pairUsage(operator({ fleets: 2 }), "facility")!)).toBe("1 of 3 pairs run · 2 facilities");
   });
 
   it("is absent without the Death Star rules", () => {

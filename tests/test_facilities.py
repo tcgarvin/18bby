@@ -297,6 +297,24 @@ def test_a_network_passes_through_a_planet_only_through_two_claimed_exits():
     assert ALDERAAN in net.reachable("B", CORUSCANT)
 
 
+def test_exits_needed_counts_claimed_open_and_dangling_sides():
+    game = new_game()
+    cec = float_corp(game, "CEC")
+    net = game.network
+    assert net.exits_needed(ALDERAAN, {D.SE}) == 0, "its one unclaimed exit"
+    assert net.exits_needed(ALDERAAN, {D.SE, D.SW}) == 1, "passing through needs a second"
+    chart(game, cec, BETWEEN, D.SW, D.NW)
+    assert net.exits_needed(ALDERAAN, {D.SE}) == 0, "claimed"
+    assert net.exits_needed(ALDERAAN, {D.SE, D.NW}) == 1
+    chart(game, cec, WEST_OF_BETWEEN, D.SE, D.NE)
+    build(game, cec, ALDERAAN)  # one unclaimed exit again
+    assert net.exits_needed(ALDERAAN, {D.NW}) == 0, "an open side takes the unclaimed exit"
+    assert net.exits_needed(ALDERAAN, {D.SW}) == 1, "a dangling lane needs a new exit of its own"
+    assert net.exits_needed(ALDERAAN, {D.SW, D.NW, D.SE}) == 1
+    assert net.exits_needed(ALDERAAN, {D.SW, D.NW, D.W}) == 2
+    assert net.exits_needed(game.death_star_site(), set(D)) == 0, "an open hub"
+
+
 def test_what_if_copies_carry_planet_exits_independently():
     game = new_game()
     cec = float_corp(game, "CEC")
@@ -495,6 +513,35 @@ def test_two_nearest_facilities_on_one_planet_are_no_tie():
     seize(game)
     assert [f.owner for f in game.facilities_on(CORELLIA)] == ["CEC", EMPIRE]
     assert game.facility_seizure_ties == 0
+
+
+def test_facilities_to_seize_names_what_the_next_seizure_takes():
+    game = new_game()
+    cec = float_corp(game, "CEC")
+    kdy = float_corp(game, "KDY")
+    site = game.death_star_site()
+    limited = [p.hex for p in game.board.planets if game.network.has_exit_limit(p.hex)]
+    twin = next(h for h in limited if h != CORELLIA and site.distance(h) == site.distance(CORELLIA))
+    reach_also(game, cec, twin)
+    build(game, cec, twin)
+    targets = game.facilities_to_seize()
+    assert {corp: f.planet for corp, f in targets.items()} == {
+        "CEC": twin,
+        "KDY": game.homeworld(kdy),
+    }
+    seize(game)
+    assert {f for f in game.facilities if f.owner == EMPIRE} == {
+        replace(f, owner=EMPIRE) for f in targets.values()
+    }
+    assert game.facilities_to_seize() == {"CEC": game.facilities_of(cec)[0]}
+
+
+def test_no_seizure_targets_once_the_station_has_launched():
+    game = new_game()
+    float_corp(game, "CEC")
+    fill_stages(game, len(game.config.death_star_stage_results))
+    assert game.death_star.launched
+    assert game.facilities_to_seize() == {}
 
 
 def test_seizure_spares_corporations_without_facilities():
