@@ -30,7 +30,7 @@ from bby18.actions import (
 from bby18.board import Board
 from bby18.config import FleetTier, GameConfig, Unlimited
 from bby18.death_star import SITE_NAME, STAGE_NAMES, DeathStarTrack
-from bby18.game import Game, LogEntry
+from bby18.game import BuyBlock, Game, LogEntry
 from bby18.hexgrid import Direction, Hex
 from bby18.network import Tile
 from bby18.session import OPERATING_PHASES, Action, Dividend, GameSession, Phase, PlayedMove
@@ -398,6 +398,19 @@ def log_entry_to_json(seq: int, entry: LogEntry) -> Json:
     return {"seq": seq, "round": entry.round_label, "actor": entry.actor, "text": entry.text}
 
 
+def buy_blocks_to_json(session: GameSession) -> Json:
+    """Why the current player cannot buy each corporation they cannot, for the stock round's
+    corporation cards; a blocked purchase they lack the cash for also gives its cost."""
+    game = session.game
+    data: Json = {}
+    for corp_id, block in session.buy_blocks().items():
+        entry: Json = {"reason": block.value}
+        if block is BuyBlock.CANNOT_AFFORD:
+            entry["cost"] = game.cheapest_buy_cost(game.corp(corp_id))
+        data[corp_id] = entry
+    return data
+
+
 def _turn_to_json(session: GameSession) -> Json:
     """Whose turn it is and where the game stands, shared by full states and move frames."""
     game = session.game
@@ -425,6 +438,7 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
         "totalRounds": game.round_limit(),
         "waitingOnHuman": session.waiting_on_human(),
         "legalActions": [action_to_json(a) for a in session.legal_actions()],
+        "buyBlocks": buy_blocks_to_json(session),
         "players": [
             {**player_to_json(game, p), "name": p.name, "isBot": p.id in session.bots}
             for p in game.players

@@ -32,6 +32,7 @@ STATE_KEYS = {
     "totalRounds",
     "waitingOnHuman",
     "legalActions",
+    "buyBlocks",
     "players",
     "corporations",
     "tiles",

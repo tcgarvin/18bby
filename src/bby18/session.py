@@ -29,7 +29,7 @@ from bby18.actions import (
     PassStock,
     StockAction,
 )
-from bby18.game import Game
+from bby18.game import BuyBlock, Game
 from bby18.state import Corporation, Player
 
 
@@ -167,6 +167,18 @@ class GameSession:
                 return [Dividend.WITHHOLD]
             return [Dividend.PAY, Dividend.WITHHOLD]
         return []
+
+    def buy_blocks(self) -> dict[str, BuyBlock]:
+        """Why the current player can buy no share of each corporation they cannot buy, keyed
+        by corporation id. Empty outside stock rounds."""
+        if self.phase is not Phase.STOCK:
+            return {}
+        player = self.current_player
+        sold = self._stock.sold[player.id]
+        blocks = {
+            c.id: self.game.buy_block(player, c, sold) for c in self.game.corporations.values()
+        }
+        return {corp_id: block for corp_id, block in blocks.items() if block is not None}
 
     @property
     def operating_queue(self) -> list[str]:

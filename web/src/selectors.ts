@@ -3,6 +3,7 @@
 import type {
   Action,
   BuyAction,
+  BuyBlock,
   CorporationState,
   GameState,
   HexAction,
@@ -171,6 +172,26 @@ export function tradeOptionsFor(state: GameState, corpId: string): CorpTradeOpti
   }
   sells.sort((a, b) => a.count - b.count);
   return { corpId, ipoBuys, poolBuy, sells };
+}
+
+/** A short line saying why the current player cannot buy `corp`, for its stock-round card. */
+export function buyBlockText(state: GameState, corp: CorporationState, block: BuyBlock): string {
+  switch (block.reason) {
+    case "closed":
+      return "Closed";
+    case "none_for_sale":
+      return "Sold out";
+    case "sold_this_round":
+      return `You sold ${corp.id} this round, so can't buy it back`;
+    case "certificate_limit":
+      return `At your certificate limit (${state.config.certificateLimit})`;
+    case "holding_limit": {
+      const percent = (state.config.maxHoldingShares * 100) / state.config.sharesPerCorporation;
+      return `At the ${percent}% holding limit`;
+    }
+    case "cannot_afford":
+      return corp.status === "unstarted" ? `Starting needs ${block.cost} cash` : `A share needs ${block.cost} cash`;
+  }
 }
 
 /** The label for whoever made a log entry: a corporation id, or a player's name. */

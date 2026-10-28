@@ -64,6 +64,7 @@ export function gameState(overrides: Partial<GameState> = {}): GameState {
     currentCorporation: null,
     waitingOnHuman: true,
     legalActions: [{ type: "pass" }],
+    buyBlocks: {},
     players: [player("P1", "Tim"), player("P2", "Selka Darrow"), player("P3", "Admiral Rax")],
     priorityPlayer: "P1",
     corporations: [corporation("CEC"), corporation("KDY")],

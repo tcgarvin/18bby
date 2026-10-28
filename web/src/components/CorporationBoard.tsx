@@ -1,5 +1,6 @@
-import type { Action, CorporationState, GameState, SellAction } from "../api";
-import { corpColor, playerName, tradeOptionsFor } from "../selectors";
+import type { Action, BuyBlock, CorporationState, GameState, SellAction } from "../api";
+import type { GlossaryId } from "../help/glossary";
+import { buyBlockText, corpColor, playerName, tradeOptionsFor } from "../selectors";
 import type { CorpTradeOptions } from "../selectors";
 import { Ticker } from "../playback/Ticker";
 import { CertStack } from "./CertStack";
@@ -15,9 +16,16 @@ interface CorporationBoardProps {
   onAct: (action: Action) => void;
 }
 
+/** The glossary entry that explains a buy block, for those that name a rule. */
+const BLOCK_HELP: Partial<Record<BuyBlock["reason"], GlossaryId>> = {
+  certificate_limit: "certificate",
+  holding_limit: "holdingLimit",
+};
+
 /**
  * One card per corporation: identity, price and par, treasury, president, and the certificates
- * left in the IPO and the pool, with the legal trades for it inline. Animation anchors:
+ * left in the IPO and the pool, with the legal trades for it inline, or why it cannot be bought.
+ * Animation anchors:
  * data-corp-id, data-ipo-for (the IPO stack), data-pool-for (the pool stack, present only when
  * the pool holds shares), data-treasury-for, data-fleets-for (under the Death Star rules).
  */
@@ -151,19 +159,30 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
             </div>
           )}
         </div>
-        {options && <TradeControls corp={corp} options={options} explain={explain} busy={busy} onAct={onAct} />}
+        {options && (
+          <TradeControls
+            state={state}
+            corp={corp}
+            options={options}
+            explain={explain}
+            busy={busy}
+            onAct={onAct}
+          />
+        )}
       </div>
     </article>
   );
 }
 
 function TradeControls({
+  state,
   corp,
   options,
   explain,
   busy,
   onAct,
 }: {
+  state: GameState;
   corp: CorporationState;
   options: CorpTradeOptions;
   explain: boolean;
@@ -172,11 +191,19 @@ function TradeControls({
 }) {
   const parBuys = options.ipoBuys.filter((a) => a.par);
   const ipoBuy = options.ipoBuys.find((a) => !a.par);
-  if (parBuys.length === 0 && !ipoBuy && !options.poolBuy && options.sells.length === 0) {
+  const block = state.buyBlocks[corp.id];
+  if (parBuys.length === 0 && !ipoBuy && !options.poolBuy && options.sells.length === 0 && !block) {
     return <div className="trade trade--none">No trade</div>;
   }
+  const blockHelp = block && BLOCK_HELP[block.reason];
   return (
     <div className="trade">
+      {block && (
+        <span className="trade__why">
+          {buyBlockText(state, corp, block)}
+          {blockHelp && <Help topic={blockHelp} />}
+        </span>
+      )}
       {parBuys.length > 0 && (
         <div className="trade__group">
           <span className="trade__label">

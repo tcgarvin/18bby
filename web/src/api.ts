@@ -322,6 +322,12 @@ export interface GameConfig {
   basicRouteValue: number;
 }
 
+/** Why the current player can buy no share of a corporation this stock turn. */
+export type BuyBlock =
+  | { reason: "closed" | "none_for_sale" | "sold_this_round" | "certificate_limit" | "holding_limit" }
+  /** `cost` is the cheapest buy on offer: the president's share at the lowest par if unstarted. */
+  | { reason: "cannot_afford"; cost: number };
+
 export interface GameState {
   phase: Phase;
   roundLabel: string;
@@ -331,6 +337,11 @@ export interface GameState {
   currentCorporation: string | null;
   waitingOnHuman: boolean;
   legalActions: Action[];
+  /**
+   * In a stock round, why the current player can buy no share of each corporation they cannot,
+   * keyed by corporation id; a corporation with a legal buy is absent. Empty in other phases.
+   */
+  buyBlocks: Record<string, BuyBlock>;
   players: PlayerState[];
   priorityPlayer: string;
   corporations: CorporationState[];

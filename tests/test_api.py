@@ -3,8 +3,11 @@ from fastapi.testclient import TestClient
 
 from bby18.api.app import create_app
 from bby18.api.auth import AuthError
+from bby18.api.serialize import session_to_json
 from bby18.api.store import MemoryStore
 from bby18.config import DEFAULT_CONFIG
+from bby18.game import Game
+from bby18.session import GameSession
 
 
 class HeaderUser:
@@ -73,6 +76,20 @@ def test_game_state_lists_terrain_for_its_seed(client):
     assert kinds == {"asteroid", "nebula"}
     assert first["terrain"] == again["terrain"] != other["terrain"]
     assert first["config"]["nebulaChartSurcharge"] == DEFAULT_CONFIG.nebula_chart_surcharge
+
+
+def test_state_says_why_the_current_player_cannot_buy_with_the_cost_when_short_of_cash():
+    session = GameSession(Game.new(["Ann", "Bo"]))
+    session.current_player.cash = 50
+    blocks = session_to_json(session)["buyBlocks"]
+    cheapest = min(DEFAULT_CONFIG.par_prices) * DEFAULT_CONFIG.president_share_size
+    assert set(blocks) == {c.id for c in DEFAULT_CONFIG.corporations}
+    assert blocks["CEC"] == {"reason": "cannot_afford", "cost": cheapest}
+
+
+def test_new_game_state_blocks_no_buys(client):
+    body = client.post("/api/games", json={"seats": [{"name": "A"}, {"name": "B"}]}).json()
+    assert body["state"]["buyBlocks"] == {}
 
 
 def test_illegal_action_returns_400(client):

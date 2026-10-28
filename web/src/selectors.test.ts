@@ -10,6 +10,7 @@ import type {
   TerrainHex,
 } from "./api";
 import {
+  buyBlockText,
   dividendSplit,
   hexActionsByKey,
   nearestCellWithPrice,
@@ -83,6 +84,7 @@ function gameState(overrides: Partial<GameState>): GameState {
     currentCorporation: null,
     waitingOnHuman: false,
     legalActions: [],
+    buyBlocks: {},
     players: [],
     priorityPlayer: "",
     corporations: [],
@@ -191,5 +193,32 @@ describe("nearestCellWithPrice", () => {
   it("finds a price that only exists in another row", () => {
     expect(nearestCellWithPrice(market, [1, 3], 110)).toEqual([0, 3]);
     expect(nearestCellWithPrice(market, [0, 0], 5)).toBeNull();
+  });
+});
+
+describe("buyBlockText", () => {
+  const state = gameState({
+    phase: "stock",
+    config: { sharesPerCorporation: 10, maxHoldingShares: 6, certificateLimit: 12 } as GameConfig,
+  });
+
+  it("names the holding limit as a percentage", () => {
+    expect(buyBlockText(state, corporation("CEC"), { reason: "holding_limit" })).toBe("At the 60% holding limit");
+  });
+
+  it("names the certificate limit", () => {
+    expect(buyBlockText(state, corporation("CEC"), { reason: "certificate_limit" })).toBe("At your certificate limit (12)");
+  });
+
+  it("gives the cost of the cheapest buy, calling it a start for an unstarted corporation", () => {
+    const block = { reason: "cannot_afford", cost: 120 } as const;
+    expect(buyBlockText(state, corporation("CEC"), block)).toBe("A share needs 120 cash");
+    expect(buyBlockText(state, corporation("KDY", { status: "unstarted" }), block)).toBe("Starting needs 120 cash");
+  });
+
+  it("names a sale this round", () => {
+    expect(buyBlockText(state, corporation("CEC"), { reason: "sold_this_round" })).toBe(
+      "You sold CEC this round, so can't buy it back",
+    );
   });
 });

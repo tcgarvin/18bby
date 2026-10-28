@@ -2,7 +2,8 @@
 
 import random
 
-from bby18.actions import BuyShare, NoNetworkAction, PassStock
+from bby18.actions import BuyShare, NoNetworkAction, PassStock, ShareSource
+from bby18.game import BuyBlock
 from bby18.bots import GreedyBot
 from bby18.config import CLASSIC_CONFIG
 from bby18.game import Game
@@ -148,3 +149,35 @@ def test_operating_queue_stays_fixed_when_prices_change_mid_round():
     first.market_cell = game.market.down(game.market.left(first.market_cell, 20), 20)
     assert [c.id for c in game.operating_order()] != queue
     assert session.operating_queue == queue
+
+
+def test_buy_blocks_name_exactly_the_corporations_with_no_legal_buy():
+    rng = random.Random(3)
+    session = GameSession(Game.new(["Ann", "Bo", "Cy"]))
+    stock_turns = 0
+    while session.phase is not Phase.GAME_OVER:
+        legal = session.legal_actions()
+        if session.phase is Phase.STOCK:
+            stock_turns += 1
+            buyable = {a.corp_id for a in legal if isinstance(a, BuyShare)}
+            blocked = set(session.buy_blocks())
+            assert buyable | blocked == set(session.game.corporations)
+            assert not buyable & blocked
+        session.apply(rng.choice(legal))
+    assert stock_turns > 50
+    assert session.buy_blocks() == {}
+
+
+def test_buy_blocks_name_the_current_players_holding_limit():
+    session = GameSession(Game.new(["Ann", "Bo"], CLASSIC_CONFIG))
+    ann = session.game.players[0]
+    start_lowest_par(session)
+    while ann.shares_in("CEC") < CLASSIC_CONFIG.max_holding_shares:
+        if session.current_player is ann:
+            session.apply(BuyShare("CEC", ShareSource.IPO))
+        else:
+            session.apply(PassStock())
+    session.apply(PassStock())  # Bo, so it is Ann's turn again
+    assert session.current_player is ann
+    assert session.game.corp("CEC").ipo_shares > 0
+    assert session.buy_blocks() == {"CEC": BuyBlock.HOLDING_LIMIT}

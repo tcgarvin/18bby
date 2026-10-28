@@ -8,6 +8,7 @@ legal and applies the consequences.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from enum import Enum
 from itertools import combinations
 
 from bby18.actions import (
@@ -51,6 +52,17 @@ facilities."""
 UNFLOATED = (CorpStatus.UNSTARTED, CorpStatus.PARRED)
 """Statuses of a corporation that may still float (and so keeps a slot on its homeworld under
 the facility rules)."""
+
+
+class BuyBlock(Enum):
+    """Why a player can buy no share of a corporation right now (see ``Game.buy_block``)."""
+
+    CLOSED = "closed"
+    NONE_FOR_SALE = "none_for_sale"
+    SOLD_THIS_ROUND = "sold_this_round"
+    CERTIFICATE_LIMIT = "certificate_limit"
+    HOLDING_LIMIT = "holding_limit"
+    CANNOT_AFFORD = "cannot_afford"
 
 
 @dataclass
@@ -219,19 +231,17 @@ class Game:
 
     def legal_stock_actions(self, player: Player, sold_this_round: set[str]) -> list[StockAction]:
         actions: list[StockAction] = [PassStock()]
-        can_buy = self.certificate_count(player) < self.config.certificate_limit
         for corp in self.corporations.values():
             if corp.status is CorpStatus.CLOSED:
                 continue
+            can_buy = self.buy_block(player, corp, sold_this_round) is None
             if corp.status is CorpStatus.UNSTARTED:
-                if can_buy and corp.id not in sold_this_round:
+                if can_buy:
                     for par in self.config.par_prices:
                         if player.cash >= par * self.config.president_share_size:
                             actions.append(BuyShare(corp.id, ShareSource.IPO, par))
                 continue
-            if not can_buy or corp.id in sold_this_round:
-                pass
-            elif player.shares_in(corp.id) < self.config.max_holding_shares:
+            if can_buy:
                 if corp.ipo_shares > 0 and player.cash >= self.ipo_price(corp):
                     actions.append(BuyShare(corp.id, ShareSource.IPO))
                 if corp.pool_shares > 0 and player.cash >= self.price(corp):
@@ -241,6 +251,42 @@ class Game:
                     if self._can_sell(player, corp, count):
                         actions.append(SellShares(corp.id, count))
         return actions
+
+    def buy_block(
+        self, player: Player, corp: Corporation, sold_this_round: set[str]
+    ) -> BuyBlock | None:
+        """Why ``player`` can buy no share of ``corp`` now, or None when some buy is legal.
+
+        When several reasons hold, the one reported is the first in ``BuyBlock`` order, so a
+        corporation with nothing for sale reads as that rather than as the player's limits.
+        """
+        if corp.status is CorpStatus.CLOSED:
+            return BuyBlock.CLOSED
+        if corp.status is not CorpStatus.UNSTARTED and corp.ipo_shares + corp.pool_shares == 0:
+            return BuyBlock.NONE_FOR_SALE
+        if corp.id in sold_this_round:
+            return BuyBlock.SOLD_THIS_ROUND
+        if self.certificate_count(player) >= self.config.certificate_limit:
+            return BuyBlock.CERTIFICATE_LIMIT
+        if player.shares_in(corp.id) >= self.config.max_holding_shares:
+            return BuyBlock.HOLDING_LIMIT
+        if player.cash < self.cheapest_buy_cost(corp):
+            return BuyBlock.CANNOT_AFFORD
+        return None
+
+    def cheapest_buy_cost(self, corp: Corporation) -> int:
+        """The least cash any buy of ``corp`` takes: the president's share at the lowest par
+        for an unstarted corporation, else the cheaper of an IPO and a pool share on offer."""
+        if corp.status is CorpStatus.UNSTARTED:
+            return min(self.config.par_prices) * self.config.president_share_size
+        costs = []
+        if corp.ipo_shares > 0:
+            costs.append(self.ipo_price(corp))
+        if corp.pool_shares > 0:
+            costs.append(self.price(corp))
+        if not costs:
+            raise ValueError(f"{corp.id} has no shares for sale")
+        return min(costs)
 
     def _can_sell(self, player: Player, corp: Corporation, count: int) -> bool:
         held = player.shares_in(corp.id)

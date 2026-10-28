@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from bby18.bots import GreedyBot, RandomBot
 from bby18.config import CLASSIC_CONFIG
-from bby18.game import Game
+from bby18.game import BuyBlock, Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
 from bby18.network import IllegalAction
@@ -73,6 +73,57 @@ def test_holding_and_certificate_limits(game):
     assert ann.shares_in("CEC") == 6
     with pytest.raises(IllegalAction):
         buy(game, ann, "CEC")
+
+
+def test_buy_block_names_the_holding_limit_while_ipo_shares_remain(game):
+    ann = game.players[0]
+    buy(game, ann, "CEC", par=60)
+    for _ in range(4):
+        buy(game, ann, "CEC")
+    ann.cash = 1000  # so only the holding limit stands in the way
+    cec = game.corp("CEC")
+    assert cec.ipo_shares == 4
+    assert game.buy_block(ann, cec, set()) is BuyBlock.HOLDING_LIMIT
+    assert game.buy_block(game.players[1], cec, set()) is None
+
+
+def test_buy_block_names_the_certificate_limit_on_every_corporation():
+    game = Game.new(["Ann", "Bo", "Cy"], replace(OPEN_SPACE, certificate_limit=1))
+    ann = game.players[0]
+    buy(game, ann, "CEC", par=60)
+    blocks = {c.id: game.buy_block(ann, c, set()) for c in game.corporations.values()}
+    assert set(blocks.values()) == {BuyBlock.CERTIFICATE_LIMIT}
+
+
+def test_buy_block_names_a_sale_this_round(game):
+    float_corp(game, "CEC")
+    assert game.buy_block(game.players[1], game.corp("CEC"), {"CEC"}) is BuyBlock.SOLD_THIS_ROUND
+
+
+def test_buy_block_names_short_cash_against_the_cheapest_share(game):
+    cec = float_corp(game, "CEC", par=70)
+    bo = game.players[1]
+    bo.cash = 69
+    assert game.cheapest_buy_cost(cec) == 70
+    assert game.buy_block(bo, cec, set()) is BuyBlock.CANNOT_AFFORD
+    bo.cash = 70
+    assert game.buy_block(bo, cec, set()) is None
+
+
+def test_buy_block_prices_an_unstarted_corporation_at_the_lowest_par(game):
+    ann = game.players[0]
+    cheapest = min(game.config.par_prices) * game.config.president_share_size
+    assert game.cheapest_buy_cost(game.corp("CEC")) == cheapest
+    ann.cash = cheapest - 1
+    assert game.buy_block(ann, game.corp("CEC"), set()) is BuyBlock.CANNOT_AFFORD
+
+
+def test_buy_block_reports_nothing_for_sale_before_the_buyer_limits(game):
+    cec = float_corp(game, "CEC")
+    cec.ipo_shares = 0
+    assert game.buy_block(game.players[0], cec, {"CEC"}) is BuyBlock.NONE_FOR_SALE
+    with pytest.raises(ValueError):
+        game.cheapest_buy_cost(cec)
 
 
 def test_no_sales_in_first_stock_round_then_sales_drop_price(game):
