@@ -151,9 +151,6 @@ def play(api: Api, game_id: str, state: dict[str, Any], target_round: int, min_t
         state = api.act(game_id, choose(state))
 
 
-INLINE_MAP_PHASES = ("network", "fleet")
-
-
 def open_game(page: Page, web_url: str, game_id: str, phase: str) -> None:
     page.goto(f"{web_url}/?game={game_id}")
     page.wait_for_selector(f".stage--{phase}")
@@ -175,14 +172,13 @@ def shoot_phase(browser: Browser, web_url: str, token: str, game_id: str, out: P
         if factor == 1:
             page.screenshot(path=str(out / f"{label}.png"))
         else:
-            # Only the network and facility views draw the map full size; the other views show a
-            # thumbnail, so open the map overlay (the M key) and crop that.
-            target = page.locator(".stage svg.hexmap")
-            if phase not in INLINE_MAP_PHASES:
+            # The stock round shows only a thumbnail: switch to the (read-only) Map view (the M
+            # key) and crop its map. The dividend view's map is zoomed to the paying network.
+            if phase == "stock":
                 page.keyboard.press("m")
-                page.wait_for_selector(".overlay-map svg.hexmap")
+                page.wait_for_selector(".stage svg.hexmap")
                 page.wait_for_timeout(1000)
-                target = page.locator(".overlay__panel")
+            target = page.locator(".stage svg.hexmap")
             target.first.screenshot(path=str(out / f"{label}{suffix}.png"))
         context.close()
         print(f"  {label}{suffix}.png")

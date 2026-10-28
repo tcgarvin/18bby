@@ -18,7 +18,7 @@ Output (default `OUT_DIR` is in the session scratchpad), named `<phase>-<round>`
 
 - `<phase>.png`: 1600x1000 view for `stock`, `network`, `fleet` (facilities) and `dividend`.
 - `<phase>-map.png`: the map alone at `--scale` device pixels. Network and fleet use the inline
-  map; the other views only have a thumbnail, so their crop is the whole map overlay panel (M key), legend included.
+  map; the stock round crop switches to the read-only Map view (M key), and the dividend crop is its zoomed map.
 
 Playwright 1.63 matches the cached Chromium build (revision 1243) in `~/.cache/ms-playwright`;
 `uvx` fetches the Python package once. The human only operates CEC from round 7 on (the bots
