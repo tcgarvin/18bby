@@ -1,0 +1,23 @@
+{
+ "variants": {
+  "adopted": {}
+ },
+ "seeds": [
+  1,
+  20
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "admiral@site",
+  "early-builder@site",
+  "targeted@site",
+  "baron@site",
+  "contractor@site",
+  "baron-prestige@site",
+  "staller@site",
+  "builder@site",
+  "baron-tycoon@site"
+ ]
+}

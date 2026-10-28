@@ -33,7 +33,7 @@ expedience, not conviction.
 
 ## Corporations
 
-- **Four corporations** (placeholder, chosen for fast playtests):
+- **Six corporations** since 2026-10-28 (four before; see "Six corporations" below):
 
   | Corp | Homeworld | Region |
   |---|---|---|
@@ -41,6 +41,8 @@ expedience, not conviction.
   | Kuat Drive Yards (KDY) | Kuat | Core |
   | Coruscant Shipping Consortium (CSC) | Coruscant | Core |
   | Kashyyyk Trade Guild (KTG) | Kashyyyk | Mid Rim |
+  | InterGalactic Banking Clan (IGB) | Mygeeto | Outer Rim |
+  | Ryloth Ryll Combine (RRC) | Ryloth | Outer Rim |
 
   Names are flavor placeholders. A corporation's homeworld is always reachable by it.
 
@@ -450,6 +452,47 @@ address decides where the lanes can go. The private benefit (capacity) pays for 
   with room). The log says why.
 - Saved games do not record their rules, so a game saved under the fleet rules replays under the
   facility rules and is usually reported as outdated.
+
+## Six corporations (decided 2026-10-28)
+
+**Status:** adopted 2026-10-28 as the default rules; `FLEET_CONFIG` and `CLASSIC_CONFIG` keep
+the four corporations (`FOUR_CORPORATIONS`) and no planet bonus.
+
+**Why:** the Death Star sites landed at the bottom of the board almost every game. Each site must
+be within 4 hexes of two homeworlds, and all four homeworlds lay at r >= 0; on map-117 only one
+Outer Rim hex, (-5,6), qualified, so the first site was there on 70% of seeds. More corporations
+than three players can run is also closer to traditional 18xx.
+
+- **IGB at Mygeeto and RRC at Ryloth** (`SIX_CORPORATIONS`). Sullust was ruled out: as a
+  homeworld it leaves no legal Outer Rim site.
+- **Sites count every homeworld, floated or not**, and are still placed at setup (user ruling):
+  where the Death Star is should be part of choosing what to float.
+- **Contest distance stays 4** (`death_star_max_homeworld_distance`). With six homeworlds the
+  first site's most common hex drops from 70% to 46% of seeds and the second site splits about
+  evenly north and south; the first site is still south on most seeds.
+- **Coruscant's pairs pay +10** (`planet_pair_bonus`): every typed or basic pair that includes
+  the planet Coruscant, whoever runs it; contract pairs do not. Coruscant lies far from every
+  site, and without the bonus site-aware players never floated CSC.
+- **Certificate limit stays 12.** Bots start about 3.2 corporations a game, and 12 versus 14
+  played identically.
+- **Death Star numbers unchanged** (cubes per stage, contracts 50/60/70/80).
+
+**Bots:** with more corporations than players, starting in config order leaves the new ones
+unplayed. `GreedyPolicy(start_order="site")` scores a corporation by its home planets plus the
+active site's contract value, full within 3 hexes of the homeworld and gone at 6, times
+`contract_weight`. Web opponents play it (`roster_policy`); the stable keeps its start orders
+so the pinned games stay identical, and tournaments of the default rules should seat
+`strategy@site` kinds.
+
+**Evidence** (`docs/sweeps/six-corporations-2026-10-27`, 3 players, 9 strategies, 14,580 games per
+variant): site-aware starting alone narrows the four-corporation game to one viable strategy
+(baron). Six corporations at distance 4 kept the station's pull (launch 19%, contracts 12.7% of
+revenue) but let admiral be the best response in 27 of 45 opponent sets; distance 5 restored two
+viable strategies only by weakening the station (launch 11%, contracts 8%). The user chose
+distance 4 with the Coruscant bonus. The adopted rules' tournament: baron the one equilibrium,
+admiral the best response in 27 of 45 opponent sets, launch 18%, contracts 12.5% of revenue; CSC
+floats in 7% of games (0% without the bonus), IGB in 1%. Easy opponents were recalibrated
+(`docs/sweeps/difficulty-2026-10-28`).
 
 ## Explicitly deferred
 

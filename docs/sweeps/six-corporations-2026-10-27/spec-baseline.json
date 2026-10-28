@@ -1,0 +1,31 @@
+{
+ "variants": {
+  "four-plain": {
+   "corporations": [
+    "CEC",
+    "KDY",
+    "CSC",
+    "KTG"
+   ],
+   "planet_pair_bonus": {}
+  }
+ },
+ "seeds": [
+  1,
+  20
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "admiral",
+  "early-builder",
+  "targeted",
+  "baron",
+  "contractor",
+  "baron-prestige",
+  "staller",
+  "builder",
+  "baron-tycoon"
+ ]
+}

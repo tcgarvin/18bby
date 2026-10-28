@@ -176,23 +176,37 @@ BOT_KINDS: dict[str, Callable[[random.Random], Decider]] = {
 MIX_PREFIX = "mix:"
 NOISE_SEPARATOR = "~"
 """``"baron~0.3"`` is the stable strategy ``baron`` with ``noise=0.3``."""
+START_SEPARATOR = "@"
+"""``"baron@site"`` is the stable strategy ``baron`` with ``start_order="site"``; it combines
+with a noise level as ``"baron@site~0.3"``."""
 
 
 def bot_factory(kind: str) -> Callable[[random.Random], Decider]:
     """The decider factory for a bot kind: a ``BOT_KINDS`` name, or a stable strategy with a
-    noise level (``"baron~0.3"``). Unknown kinds raise ``ValueError``."""
+    start order and/or a noise level (``"baron@site"``, ``"baron~0.3"``, ``"baron@site~0.3"``).
+    Unknown kinds raise ``ValueError``."""
     if kind in BOT_KINDS:
         return BOT_KINDS[kind]
-    base, separator, level = kind.partition(NOISE_SEPARATOR)
-    if separator and base in STABLE:
-        try:
-            noise = float(level)
-        except ValueError:
-            raise ValueError(f"Bad noise level in bot kind {kind!r}") from None
-        return _greedy(replace(STABLE[base], noise=noise))
+    rest, noise_separator, level = kind.partition(NOISE_SEPARATOR)
+    base, start_separator, start_order = rest.partition(START_SEPARATOR)
+    if (noise_separator or start_separator) and base in STABLE:
+        policy = STABLE[base]
+        if start_separator:
+            try:
+                policy = replace(policy, start_order=start_order)
+            except ValueError as exc:
+                raise ValueError(f"Bad start order in bot kind {kind!r}: {exc}") from None
+        if noise_separator:
+            try:
+                noise = float(level)
+            except ValueError:
+                raise ValueError(f"Bad noise level in bot kind {kind!r}") from None
+            policy = replace(policy, noise=noise)
+        return _greedy(policy)
     raise ValueError(
-        f"Unknown bot kind {kind!r}; choose from {', '.join(BOT_KINDS)}, "
-        f"or a stable strategy with a noise level such as baron{NOISE_SEPARATOR}0.3"
+        f"Unknown bot kind {kind!r}; choose from {', '.join(BOT_KINDS)}, or a stable strategy "
+        f"with a start order and/or noise level such as baron{START_SEPARATOR}site"
+        f"{NOISE_SEPARATOR}0.3"
     )
 
 

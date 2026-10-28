@@ -30,6 +30,19 @@ class FleetTier:
     price: int
 
 
+FOUR_CORPORATIONS = (
+    CorporationSpec("CEC", "Corellian Engineering Corporation", "Corellia"),
+    CorporationSpec("KDY", "Kuat Drive Yards", "Kuat"),
+    CorporationSpec("CSC", "Coruscant Shipping Consortium", "Coruscant"),
+    CorporationSpec("KTG", "Kashyyyk Trade Guild", "Kashyyyk"),
+)
+"""The corporations before 2026-10-28."""
+SIX_CORPORATIONS = FOUR_CORPORATIONS + (
+    CorporationSpec("IGB", "InterGalactic Banking Clan", "Mygeeto"),
+    CorporationSpec("RRC", "Ryloth Ryll Combine", "Ryloth"),
+)
+"""The corporations since 2026-10-28."""
+
 SEIZURE = "seizure"
 """Death Star stage result: every floated corporation with a fleet loses one."""
 SITE_MOVE = "move"
@@ -45,12 +58,10 @@ class GameConfig:
     map_file: str = "map-117.json"
     """The board: since 2026-10-26 the 127-hex map with the empty hexes east of Ryloth cut away.
     ``CLASSIC_CONFIG`` keeps the full ``map-127.json``."""
-    corporations: tuple[CorporationSpec, ...] = (
-        CorporationSpec("CEC", "Corellian Engineering Corporation", "Corellia"),
-        CorporationSpec("KDY", "Kuat Drive Yards", "Kuat"),
-        CorporationSpec("CSC", "Coruscant Shipping Consortium", "Coruscant"),
-        CorporationSpec("KTG", "Kashyyyk Trade Guild", "Kashyyyk"),
-    )
+    corporations: tuple[CorporationSpec, ...] = SIX_CORPORATIONS
+    """Since 2026-10-28 six, more than the players can run, so where the Death Star sites are
+    is part of choosing what to float. ``FLEET_CONFIG`` and ``CLASSIC_CONFIG`` keep the four of
+    ``FOUR_CORPORATIONS``."""
 
     # Network actions
     network_actions_per_turn: int = 2
@@ -82,6 +93,10 @@ class GameConfig:
     regional_bonus: int = 20
     regional_bonus_regions: frozenset[str] = frozenset({"Core", "Outer Rim"})
     basic_route_value: int = 5
+    planet_pair_bonus: dict[str, int] = field(default_factory=lambda: {"Coruscant": 10})
+    """Planet name -> extra value of every pair (typed or basic, not a Death Star contract) that
+    includes that planet. Since 2026-10-28 Coruscant's pairs pay 10 more: it lies far from
+    every construction site, and without the bonus no one floats its corporation."""
 
     # Stock market (two-dimensional; see market.py). Top row first. Moving up one row is worth
     # about one column to the right; lower rows end sooner.
@@ -318,6 +333,8 @@ DEFAULT_CONFIG = GameConfig()
 most 3 facilities per corporation, contracts at 50/60/70/80. The web app serves these."""
 
 FLEET_CONFIG = GameConfig(
+    corporations=FOUR_CORPORATIONS,
+    planet_pair_bonus={},
     facility_rules=False,
     fleet_limit=4,
     death_star_stage_values=(40, 50, 60, 70),
@@ -348,22 +365,22 @@ DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
 facility rules the 1.0 noise maximum gives 0.45-0.53, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-27 for DIFFICULTY_TARGET_SHARE under the facility rules
-    # (docs/sweeps/difficulty-2026-10-27).
+    # Calibrated 2026-10-28 for DIFFICULTY_TARGET_SHARE with six corporations and site-aware
+    # starting (docs/sweeps/difficulty-2026-10-28).
     "easy": {
-        "baron": 0.89,
-        "baron-prestige": 0.82,
-        "baron-tycoon": 0.73,
-        "builder": 0.78,
-        "churner": 0.34,
-        "diversifier": 0.93,
-        "early-builder": 0.87,
-        "hoarder": 0.2,
-        "prestige": 0.66,
-        "spoiler": 0.69,
+        "baron": 0.91,
+        "baron-prestige": 0.92,
+        "baron-tycoon": 0.9,
+        "builder": 0.86,
+        "churner": 0.28,
+        "diversifier": 0.88,
+        "early-builder": 0.89,
+        "hoarder": 0.6,
+        "prestige": 0.86,
+        "spoiler": 0.74,
         "straight": 0.74,
         "targeted": 0.86,
-        "tycoon": 0.52,
+        "tycoon": 0.85,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

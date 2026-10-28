@@ -6,6 +6,7 @@ from bby18.bots.roster import (
     ROSTER,
     character_named,
     character_policy,
+    roster_policy,
     draw_characters,
 )
 from bby18.bots.stable import STABLE
@@ -45,3 +46,11 @@ def test_draw_is_distinct_and_fixed_by_seed():
     drawn = draw_characters(7, 3)
     assert len({c.name for c in drawn}) == 3
     assert drawn == draw_characters(7, 3)
+
+
+def test_characters_start_corporations_by_the_site_unless_their_strategy_starts_at_random():
+    for strategy, policy in STABLE.items():
+        expected = "random" if policy.start_order == "random" else "site"
+        assert roster_policy(strategy).start_order == expected
+    character = next(c for c in ROSTER if c.strategy == "baron")
+    assert character_policy(character, DIFFICULTIES[0]).start_order == "site"

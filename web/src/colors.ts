@@ -7,10 +7,12 @@ const CORPORATION_COLORS: Record<string, string> = {
   KDY: "#b5561b",
   CSC: "#7b3fa3",
   KTG: "#2d8a4e",
+  IGB: "#8a6d1f",
+  RRC: "#c0392b",
 };
 
 // Used only if the engine adds corporations this table does not know about yet.
-const FALLBACK_COLORS = ["#c0392b", "#138d90", "#8a6d1f", "#5d6d7e"];
+const FALLBACK_COLORS = ["#138d90", "#5d6d7e", "#a03d6f", "#4a5d23"];
 
 export function corporationColor(corpId: string, allIds: string[]): string {
   const known = CORPORATION_COLORS[corpId];

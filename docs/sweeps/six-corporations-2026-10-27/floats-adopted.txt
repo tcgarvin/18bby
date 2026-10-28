@@ -1,0 +1,3 @@
+adopted: 14580 games, corps started/game 3.16
+  floated in % of games: {'CEC': '57%', 'CSC': '7%', 'IGB': '1%', 'KDY': '100%', 'KTG': '100%', 'RRC': '50%'}
+  a corp nearest the first site floats: 100%; corps within 4 of it float 100% of the time

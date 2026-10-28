@@ -1,0 +1,47 @@
+variant four
+14580 games, 9 strategies, 3 players, 20 seeds
+
+Mean share over all tables (fair = 33.3%) and win rate:
+  baron@site        35.1%   wins  44.1%
+  contractor@site   34.9%   wins  48.7%
+  targeted@site     34.8%   wins  43.9%
+  admiral@site      33.8%   wins  35.6%
+  staller@site      33.6%   wins  36.4%
+  early-builder@site  32.5%   wins  24.4%
+  baron-prestige@site  32.0%   wins  17.0%
+  baron-tycoon@site  32.0%   wins  25.1%
+  builder@site      31.2%   wins  24.6%
+
+Invasion: share of one row strategy against all-column opponents (%):
+                     admira baron- baron- baron@ builde contra early- stalle target
+  admiral@site         33.3   34.2   34.5   32.0   37.4   31.9   35.0   33.9   33.1
+  baron-prestige@site  31.8   33.3   32.8   29.0   35.0   30.5   33.7   30.2   30.6
+  baron-tycoon@site    32.0   32.7   33.3   30.3   34.1   31.9   31.4   31.8   31.2
+  baron@site           35.7   37.0   35.2   33.3   37.1   33.2   35.2   35.5   34.5
+  builder@site         30.8   31.7   33.1   30.0   33.3   28.0   31.0   30.7   29.9
+  contractor@site      35.8   35.5   33.9   33.0   38.3   33.3   34.2   36.3   33.5
+  early-builder@site   31.1   33.0   33.6   30.0   35.3   32.1   33.3   31.7   31.3
+  staller@site         34.2   34.3   34.5   32.1   35.9   31.3   34.5   33.3   32.3
+  targeted@site        35.1   36.0   35.3   32.9   36.7   33.3   35.5   34.4   33.3
+
+Invasions clearly above a fair share (mean - 2 standard errors > fair; the diagonal and
+strategies that invade nothing are omitted):
+  admiral@site        invades builder@site 37.4±1.0
+  baron@site          invades admiral@site 35.7±0.8, baron-prestige@site 37.0±0.8, baron-tycoon@site 35.2±0.6, builder@site 37.1±0.9, early-builder@site 35.2±0.6, staller@site 35.5±0.8
+  contractor@site     invades admiral@site 35.8±1.0, baron-prestige@site 35.5±1.1, builder@site 38.3±1.5, staller@site 36.3±0.9
+  early-builder@site  invades builder@site 35.3±1.0
+  staller@site        invades builder@site 35.9±1.0
+  targeted@site       invades admiral@site 35.1±0.9, baron-prestige@site 36.0±0.8, baron-tycoon@site 35.3±0.6, builder@site 36.7±0.9, early-builder@site 35.5±0.8
+
+Best response counts over 45 opponent sets:
+  contractor@site  19
+  baron@site       16
+  targeted@site    10
+
+Equilibria (replicator dynamics, share >= 5%):
+  1 viable: baron@site 100%
+
+Bootstrap over seeds (40 runs, uniform start): viable count mean 1.1, min 1, max 2
+  baron@site       survives  60%  largest  55%
+  contractor@site  survives  40%  largest  38%
+  targeted@site    survives  12%  largest   8%

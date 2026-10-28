@@ -558,6 +558,7 @@ def rules_to_json(config: GameConfig) -> Json:
         "regionalBonus": config.regional_bonus,
         "regionalBonusRegions": sorted(config.regional_bonus_regions),
         "basicRouteValue": config.basic_route_value,
+        "planetPairBonus": dict(config.planet_pair_bonus),
         "stockMarket": [list(row) for row in config.stock_market],
         "parColumn": config.par_column,
         "parPrices": list(config.par_prices),

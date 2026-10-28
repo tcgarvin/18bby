@@ -67,6 +67,8 @@ class EconomyKey:
     regional_bonus: int
     regional_bonus_regions: frozenset[str]
     basic_route_value: int
+    planet_pair_bonus: frozenset[tuple[str, int]] = frozenset()
+    """``GameConfig.planet_pair_bonus`` as hashable (planet name, bonus) items."""
     death_star_tag: str = ""
     contract_partner_tags: frozenset[str] = frozenset()
     contract_value: int = 0
@@ -81,6 +83,7 @@ class EconomyKey:
             regional_bonus=config.regional_bonus,
             regional_bonus_regions=config.regional_bonus_regions,
             basic_route_value=config.basic_route_value,
+            planet_pair_bonus=frozenset(config.planet_pair_bonus.items()),
             death_star_tag=config.death_star_tag,
             contract_partner_tags=config.contract_partner_tags,
             contract_value=contract_value,
@@ -89,12 +92,14 @@ class EconomyKey:
 
 def pair_value(a: Planet, b: Planet, config: GameConfig | EconomyKey) -> tuple[int, bool]:
     """Best value of pairing two planets and whether that pairing is a typed one."""
-    typed = any(frozenset({ta, tb}) in config.typed_pairs for ta in a.tags for tb in b.tags)
+    economy = config if isinstance(config, EconomyKey) else EconomyKey.of(config)
+    bonus = sum(extra for name, extra in economy.planet_pair_bonus if name in (a.name, b.name))
+    typed = any(frozenset({ta, tb}) in economy.typed_pairs for ta in a.tags for tb in b.tags)
     if not typed:
-        return config.basic_route_value, False
-    value = config.typed_pair_value
-    if {a.region, b.region} == set(config.regional_bonus_regions):
-        value += config.regional_bonus
+        return economy.basic_route_value + bonus, False
+    value = economy.typed_pair_value + bonus
+    if {a.region, b.region} == set(economy.regional_bonus_regions):
+        value += economy.regional_bonus
     return value, True
 
 

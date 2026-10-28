@@ -416,6 +416,12 @@ export function RulesPage({ section }: { section: SectionId | null }) {
             After the best trade pairs are chosen, any two remaining reachable planets can pair up for{" "}
             <strong>{rules.basicRouteValue}</strong>. Basic routes never get the regional bonus.
           </p>
+          {Object.entries(rules.planetPairBonus).map(([name, bonus]) => (
+            <p key={name}>
+              Every trade pair or basic route that includes <strong>{name}</strong> earns{" "}
+              <strong>+{bonus}</strong> more. Death Star contracts do not.
+            </p>
+          ))}
           <h3>Two-type planets</h3>
           <p>
             Some planets have two types (for example Industry and Shipyard). That gives flexibility, not extra

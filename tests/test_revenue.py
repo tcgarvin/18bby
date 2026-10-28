@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from bby18.board import Planet
 from bby18.config import DEFAULT_CONFIG as CFG
 from bby18.hexgrid import Hex
@@ -55,3 +57,14 @@ def test_leftover_planets_form_basic_routes():
 
 def test_single_planet_earns_nothing():
     assert compute_revenue([planet("solo", "M")], CFG).total == 0
+
+
+def test_planet_pair_bonus_adds_to_typed_and_basic_pairs_with_that_planet():
+    bonus = replace(CFG, planet_pair_bonus={"a": 10})
+    assert pair_value(planet("a", "A"), planet("m", "M"), bonus) == (40, True)
+    assert pair_value(planet("a", "A"), planet("r", "R"), bonus) == (15, False)
+    assert pair_value(planet("r", "R"), planet("s", "S"), bonus) == (30, True)
+
+
+def test_coruscant_pairs_pay_ten_more_by_default():
+    assert CFG.planet_pair_bonus == {"Coruscant": 10}
