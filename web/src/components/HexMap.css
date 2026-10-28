@@ -5,9 +5,9 @@
   height: 100%;
   user-select: none;
   /* Hyperspace routes: casing, core, and the quieter casing while a corporation is focused. */
-  --route-casing: #8996a7;
+  --route-casing: #7f8c9e;
   --route-core: #edf1f5;
-  --route-casing-quiet: #afb8c4;
+  --route-casing-quiet: #9ba6b5;
 }
 
 .hexmap__cell {
@@ -132,7 +132,7 @@
 }
 
 .hexmap__trace-group--dimmed {
-  opacity: 0.32;
+  opacity: 0.45;
 }
 
 .hexmap__route-glow {

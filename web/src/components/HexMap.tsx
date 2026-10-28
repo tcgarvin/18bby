@@ -46,7 +46,7 @@ const TRACE_HALO = 1.2;
 /** A lane's pale core is at least this wide, and wide enough for every corporation's slot. */
 const MIN_CORE_WIDTH = 9;
 /** The darker casing shows this much either side of the core. */
-const CASING_EDGE = 0.7;
+const CASING_EDGE = 1.1;
 /** The interchange disk where three spokes meet is this much wider than the lane, all round. */
 const JUNCTION_MARGIN = 0.8;
 const BADGE_RADIUS = S * 0.36;
