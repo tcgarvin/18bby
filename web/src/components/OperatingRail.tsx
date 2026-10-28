@@ -128,6 +128,7 @@ function CorporationList({ state, focusCorp, onFocus }: Pick<OperatingRailProps,
                 mark={null}
                 chip={STATUS_CHIP[corp.status]}
                 chipTone={corp.status}
+                roomy
               />
             </li>
           );
@@ -147,18 +148,29 @@ interface EntrySummaryProps {
   chip: string;
   /** Picks the chip's colours: rentry__chip--<tone>. */
   chipTone: string;
+  /** Labelled stats in a grid, with the fleets or facilities on a row of their own (the browsed rail). */
+  roomy?: boolean;
 }
 
-function EntrySummary({ state, corp, focused, onFocus, mark, chip, chipTone }: EntrySummaryProps) {
+function EntrySummary({ state, corp, focused, onFocus, mark, chip, chipTone, roomy = false }: EntrySummaryProps) {
   const closed = corp.status === "closed";
   const started = corp.status !== "unstarted";
+  const fleetIcons = state.deathStar && (
+    <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit} item={state.deathStar.fleets.item} />
+  );
   return (
     <button
       type="button"
       className="rentry__summary"
       onClick={() => onFocus(corp.id)}
       aria-pressed={focused}
-      title={focused ? "Showing this network on the map" : "Show this network on the map"}
+      title={
+        focused
+          ? roomy
+            ? "Show all networks on the map"
+            : "Showing this network on the map"
+          : "Show this network on the map"
+      }
     >
       {mark !== null && (
         <span className="rentry__mark" aria-hidden>
@@ -184,9 +196,16 @@ function EntrySummary({ state, corp, focused, onFocus, mark, chip, chipTone }: E
         <span title="Revenue its network earns now">
           <span className="rentry__k">revenue</span> <span className="num">{corp.revenue.total}</span>
         </span>
-        {state.deathStar && !closed && (
-          <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit} item={state.deathStar.fleets.item} />
-        )}
+        {state.deathStar &&
+          !closed &&
+          (roomy ? (
+            <span className="rentry__supply">
+              <span className="rentry__k">{state.deathStar.fleets.item === "facility" ? "Facilities" : "Fleets"}</span>
+              {fleetIcons}
+            </span>
+          ) : (
+            fleetIcons
+          ))}
       </span>
     </button>
   );

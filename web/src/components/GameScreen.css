@@ -144,8 +144,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 5px 10px;
+  min-width: 96px;
+  min-height: 30px;
+  padding: 4px 10px;
   border: 0;
   border-radius: 5px;
   background: transparent;
@@ -168,17 +169,22 @@
   outline-offset: 2px;
 }
 
+/* Always present on Shares and Map, hidden when that view is not live, so the segments keep their width. */
 .view-switch__live {
   display: inline-flex;
   align-items: center;
-  font: 600 10px var(--font-mono);
+  font: 500 10px var(--font-sans);
+}
+
+.view-switch__live[data-live="false"] {
+  visibility: hidden;
 }
 
 .view-switch__live::before {
   content: "";
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   margin-right: 4px;
   border-radius: 50%;
   background: var(--turn);
@@ -284,12 +290,13 @@
   align-items: center;
   gap: 12px;
   flex: none;
-  min-height: 34px;
-  padding: 3px 4px 3px 12px;
-  border: 1px solid var(--turn);
+  min-height: 32px;
+  padding: 3px 8px 3px 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--turn-bg);
-  font-size: 13px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
 }
 
 .browse-banner__text {
@@ -299,6 +306,18 @@
 
 .browse-banner__back {
   flex: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+}
+
+.browse-banner__back:hover {
+  background: var(--surface-2);
+}
+
+.browse-banner__back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* At the bottom: the top of every view holds the players, who are what the caption is about. */
@@ -417,6 +436,11 @@
   letter-spacing: 0.04em;
   color: #9a6a00;
   white-space: nowrap;
+}
+
+/* Outside the stock round the acting player is the operating president, who has nothing to do here. */
+.pcard__turn--operating {
+  color: var(--ink-3);
 }
 
 .pcard__stats {
@@ -539,6 +563,15 @@
   min-height: 52px;
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+.stockboard--browse .stockboard__head {
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
+.stockboard--browse .stockboard__prompt {
+  font-size: 13px;
 }
 
 .stockboard--yours .stockboard__head {
@@ -866,7 +899,8 @@
   color: var(--ink-2);
 }
 
-/* A token covers its cell, so the price it shows is the corporation's own. */
+/* A token covers its cell (or its band of it, when corporations share the cell: --slot of
+   --count, sized inline), so the price it shows is the corporation's own. */
 .mtoken,
 .mghost {
   position: absolute;
@@ -879,6 +913,7 @@
   transition:
     left 520ms cubic-bezier(0.3, 0.7, 0.3, 1),
     top 520ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    height 520ms cubic-bezier(0.3, 0.7, 0.3, 1),
     opacity 200ms;
 }
 
@@ -897,7 +932,21 @@
   color: #fff;
   font: 600 clamp(8px, calc(var(--cell-w) * 0.27), 13px) / 1 var(--font-mono);
   letter-spacing: 0.02em;
-  transform: translate(calc(var(--slot) * 18%), calc(var(--slot) * -18%));
+}
+
+/* Sharing a cell leaves each token a band, too short for the price under the id. */
+.mtoken--shared {
+  padding: 1px;
+}
+
+.mtoken--shared .mtoken__disc {
+  flex-direction: row;
+  font-size: clamp(6.5px, calc(var(--cell-w) * 0.2), 11px);
+  letter-spacing: 0;
+}
+
+.mtoken--shared .mtoken__price {
+  display: none;
 }
 
 .mtoken__price {
@@ -1237,6 +1286,42 @@
 }
 
 .rail--corporations .rentry__nums {
+  grid-column: 1 / -1;
+}
+
+/* Rounded on the right only: the left edge is the corporation's colour bar. */
+.rail--corporations .rentry__summary {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.rail--corporations .rentry__summary:hover {
+  background: var(--surface-2);
+}
+
+/* Roomier than the operating rail's one-line ticker: this rail has nothing else to hold. */
+.rail--corporations .rentry__summary {
+  gap: 10px 10px;
+  padding: 12px 12px 12px 12px;
+}
+
+.rail--corporations .rentry__nums {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.rail--corporations .rentry__nums > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail--corporations .rentry__k {
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.rail--corporations .rentry__supply {
   grid-column: 1 / -1;
 }
 

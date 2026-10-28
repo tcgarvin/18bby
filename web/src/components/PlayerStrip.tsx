@@ -68,7 +68,11 @@ function PlayerCard({ state, player, acting, explain }: PlayerCardProps) {
             Priority
           </span>
         )}
-        {acting && <span className="pcard__turn">to act</span>}
+        {acting && (
+          <span className={`pcard__turn${state.phase === "stock" ? "" : " pcard__turn--operating"}`}>
+            {state.phase === "stock" ? "to act" : "operating"}
+          </span>
+        )}
       </div>
       <dl className="pcard__stats">
         <div>

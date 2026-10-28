@@ -21,11 +21,11 @@ export function StockRoundView({ state, board, interactive, browsing, busy, keyb
     <div className="view view--stock">
       <PlayerStrip state={state} />
 
-      <section className={`panel stockboard${interactive ? " stockboard--yours" : ""}`}>
+      <section className={`panel stockboard${interactive ? " stockboard--yours" : ""}${browsing ? " stockboard--browse" : ""}`}>
         <header className="stockboard__head">
           <div className="stockboard__prompt">
             {browsing ? (
-              <span className="stockboard__title">Corporations · current holdings and prices</span>
+              <span className="stockboard__title">Corporations</span>
             ) : interactive ? (
               <>
                 <strong>{who}, your turn.</strong> Buy one share, sell, or pass.

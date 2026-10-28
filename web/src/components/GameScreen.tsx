@@ -111,7 +111,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   const shown = shownView(followed);
   const browsing = shown !== live;
   const interactive = !browsing && !replaying && display.waitingOnHuman && display.phase !== "game_over";
-  const banner = browseBanner(display, shown);
+  const banner = browseBanner(display.phase, shown);
 
   function selectView(view: GameView) {
     if (view === shown) return;

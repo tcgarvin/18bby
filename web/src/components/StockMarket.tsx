@@ -40,7 +40,8 @@ function fullWindow(market: number[][]): MarketWindow {
  *
  * Tokens are positioned absolutely from their cell's row and column (as percentages of the
  * grid) and keyed by corporation, so a CSS transition on left/top slides a token between
- * cells when its price moves.
+ * cells when its price moves. Corporations sharing a cell split it into equal bands, top to
+ * bottom (--slot of --count), so each stays legible at its real cell.
  */
 export function StockMarket({ state, window, ghosts = [], emphasis = null, fill = false }: StockMarketProps) {
   const market = state.stockMarket;
@@ -51,12 +52,23 @@ export function StockMarket({ state, window, ghosts = [], emphasis = null, fill 
   const cols = c1 - c0 + 1;
   const parSet = new Set(state.config.parPrices);
   const inView = ([r, c]: [number, number]) => r >= r0 && r <= r1 && c >= c0 && c <= c1;
-  const place = ([r, c]: [number, number]): CSSProperties => ({
-    left: `${((c - c0) * 100) / cols}%`,
-    top: `${((r - r0) * 100) / rows}%`,
-    width: `${100 / cols}%`,
-    height: `${100 / rows}%`,
-  });
+  /**
+   * The cell's box, or the `slot`th of `count` bands of it when corporations share the cell: stacked
+   * top to bottom for two, in two columns for more (an odd last one spans the row).
+   */
+  const place = ([r, c]: [number, number], slot = 0, count = 1): CSSProperties => {
+    const columns = count > 2 ? 2 : 1;
+    const bands = Math.ceil(count / columns);
+    const spans = columns === 2 && slot === count - 1 && count % 2 === 1;
+    const column = columns === 2 && !spans ? slot % 2 : 0;
+    const band = Math.floor(slot / columns);
+    return {
+      left: `${((c - c0 + (column / columns)) * 100) / cols}%`,
+      top: `${((r - r0 + band / bands) * 100) / rows}%`,
+      width: `${(spans ? 100 : 100 / columns) / cols}%`,
+      height: `${100 / rows / bands}%`,
+    };
+  };
 
   // A closed corporation's shares have left the game, so it has no place on the market.
   const started = state.corporations.filter((c) => c.marketCell !== null && c.status !== "closed");
@@ -67,6 +79,7 @@ export function StockMarket({ state, window, ghosts = [], emphasis = null, fill 
     slotOf.set(corp.id, crowd.get(key) ?? 0);
     crowd.set(key, (crowd.get(key) ?? 0) + 1);
   }
+  const countAt = (cell: [number, number]) => crowd.get(String(cell)) ?? 1;
 
   const frameStyle = {
     ["--cols" as string]: cols,
@@ -105,15 +118,18 @@ export function StockMarket({ state, window, ghosts = [], emphasis = null, fill 
           const cell = corp.marketCell as [number, number];
           if (!inView(cell)) return null;
           const dimmed = emphasis !== null && emphasis !== corp.id;
+          const slot = slotOf.get(corp.id) ?? 0;
+          const count = countAt(cell);
           return (
             <span
               key={corp.id}
               data-market-token={corp.id}
-              className={`mtoken${dimmed ? " mtoken--dimmed" : ""}`}
+              className={`mtoken${count > 1 ? " mtoken--shared" : ""}${dimmed ? " mtoken--dimmed" : ""}`}
               style={{
-                ...place(cell),
+                ...place(cell, slot, count),
                 ["--corp" as string]: corpColor(state, corp.id),
-                ["--slot" as string]: slotOf.get(corp.id) ?? 0,
+                ["--slot" as string]: slot,
+                ["--count" as string]: count,
               }}
               title={`${corp.id} at ${corp.price}`}
             >

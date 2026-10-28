@@ -79,35 +79,17 @@ export function viewName(view: GameView): string {
   return VIEW_NAMES[view];
 }
 
-/** What the game is doing now, for the read-only banner: "Operating round (building lanes)". */
-function phaseInProgress(state: Pick<GameState, "phase" | "facilities">): string {
-  switch (state.phase) {
-    case "stock":
-      return "Stock round in progress";
-    case "network":
-      return "Operating round in progress (building lanes)";
-    case "fleet":
-      return `Operating round in progress (${state.facilities ? "building facilities" : "buying fleets"})`;
-    case "dividend":
-      return "Operating round in progress (dividends)";
-    case "game_over":
-      return "The game is over";
-  }
-}
-
 /**
- * The banner over a browsed view: what the game is doing and that this view is read-only, with
- * the label of the button back to the live view. Null when `shown` is the live view.
+ * The banner over a browsed view: what it is, why nothing can be done in it, and the label of the
+ * button back to the live view. The round and step are already in the top bar, so the text stays
+ * short. Null when `shown` is the live view.
  */
-export function browseBanner(
-  state: Pick<GameState, "phase" | "facilities">,
-  shown: GameView,
-): { text: string; back: string } | null {
-  const live = liveView(state.phase);
+export function browseBanner(phase: Phase, shown: GameView): { text: string; back: string } | null {
+  const live = liveView(phase);
   if (shown === live) return null;
-  const readOnly = shown === "shares" ? "Shares are read-only." : "Map is read-only.";
+  const note = phase === "game_over" ? "final position" : "read-only";
   return {
-    text: `${phaseInProgress(state)} · ${readOnly}`,
-    back: live === "results" ? "Back to results" : `Back to ${viewName(live)}`,
+    text: `${viewName(shown)} · ${note}`,
+    back: live === "results" ? "View results" : `Back to ${viewName(live)}`,
   };
 }

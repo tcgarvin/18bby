@@ -12,7 +12,8 @@ interface TopBarProps {
   views: GameView[];
   /** The view on screen. */
   shownView: GameView;
-  /** The current phase's view, marked Live; null when none is (game over). */
+  /** The current phase's view, marked Live; null when none is (game over). The marker is always
+   * rendered (hidden when not live) so the segments keep their width. */
   liveView: GameView | null;
   onView: (view: GameView) => void;
   logOpen: boolean;
@@ -81,7 +82,11 @@ export function TopBar({
               title={VIEW_TITLES[view]}
             >
               {viewName(view)}
-              {view === liveView && <span className="view-switch__live">Live</span>}
+              {view !== "results" && (
+                <span className="view-switch__live" data-live={view === liveView} aria-hidden={view !== liveView}>
+                  Live
+                </span>
+              )}
             </button>
           ))}
         </div>

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { GameState } from "./api";
 import {
   availableViews,
   browseBanner,
@@ -9,8 +8,6 @@ import {
   shownView,
   viewForKey,
 } from "./gameView";
-
-const FACILITIES = {} as NonNullable<GameState["facilities"]>;
 
 describe("liveView", () => {
   it("puts the stock round on Shares and every operating step on the Map", () => {
@@ -92,31 +89,23 @@ describe("viewForKey", () => {
 
 describe("browseBanner", () => {
   it("has no banner on the live view", () => {
-    expect(browseBanner({ phase: "stock" }, "shares")).toBeNull();
-    expect(browseBanner({ phase: "network" }, "map")).toBeNull();
-    expect(browseBanner({ phase: "game_over" }, "results")).toBeNull();
+    expect(browseBanner("stock", "shares")).toBeNull();
+    expect(browseBanner("network", "map")).toBeNull();
+    expect(browseBanner("game_over", "results")).toBeNull();
   });
 
   it("says the map is read-only during the stock round", () => {
-    expect(browseBanner({ phase: "stock" }, "map")).toEqual({
-      text: "Stock round in progress · Map is read-only.",
-      back: "Back to Shares",
-    });
+    expect(browseBanner("stock", "map")).toEqual({ text: "Map · read-only", back: "Back to Shares" });
   });
 
-  it("names the operating step when browsing Shares", () => {
-    expect(browseBanner({ phase: "network" }, "shares")?.text).toBe(
-      "Operating round in progress (building lanes) · Shares are read-only.",
-    );
-    expect(browseBanner({ phase: "fleet", facilities: FACILITIES }, "shares")?.text).toContain("building facilities");
-    expect(browseBanner({ phase: "fleet" }, "shares")?.text).toContain("buying fleets");
-    expect(browseBanner({ phase: "dividend" }, "shares")?.back).toBe("Back to Map");
+  it("says Shares are read-only in every operating step", () => {
+    for (const phase of ["network", "fleet", "dividend"] as const) {
+      expect(browseBanner(phase, "shares")).toEqual({ text: "Shares · read-only", back: "Back to Map" });
+    }
   });
 
   it("leads back to the results at game over", () => {
-    expect(browseBanner({ phase: "game_over" }, "map")).toEqual({
-      text: "The game is over · Map is read-only.",
-      back: "Back to results",
-    });
+    expect(browseBanner("game_over", "map")).toEqual({ text: "Map · final position", back: "View results" });
+    expect(browseBanner("game_over", "shares")).toEqual({ text: "Shares · final position", back: "View results" });
   });
 });
