@@ -1,29 +1,47 @@
 import type { GameState } from "../api";
+import type { GameView } from "../gameView";
+import { viewName } from "../gameView";
 import { useRules } from "../help/rulesContext";
 import { corpColor, phaseSteps, playerName } from "../selectors";
 import { Help } from "./Help";
-import type { OverlayKind } from "./views/types";
 
 interface TopBarProps {
   state: GameState;
   gameId: string;
-  /** Overlays this view offers (the featured content has no toggle). */
-  overlays: OverlayKind[];
-  openOverlay: OverlayKind | null;
-  onToggleOverlay: (overlay: OverlayKind) => void;
+  /** The views the toggle offers, in order. */
+  views: GameView[];
+  /** The view on screen. */
+  shownView: GameView;
+  /** The current phase's view, marked Live; null when none is (game over). */
+  liveView: GameView | null;
+  onView: (view: GameView) => void;
+  logOpen: boolean;
+  onToggleLog: () => void;
   canUndo: boolean;
   onUndo: () => void;
   onLeave: () => void;
 }
 
-const OVERLAY_BUTTONS: Record<OverlayKind, { label: string; key: string; title: string }> = {
-  map: { label: "Map", key: "M", title: "Show the map" },
-  market: { label: "Market", key: "K", title: "Show the stock market" },
-  log: { label: "Log", key: "L", title: "Show the game log" },
+const VIEW_TITLES: Record<GameView, string> = {
+  shares: "Players, corporations and the stock market (S; V flips)",
+  map: "The map, with the corporations down the side (M; V flips)",
+  results: "Final standings",
 };
 
-/** Brand, where the game is (SR › OR › OR), who is acting, overlay toggles, Undo and New game. */
-export function TopBar({ state, gameId, overlays, openOverlay, onToggleOverlay, canUndo, onUndo, onLeave }: TopBarProps) {
+/** Brand, where the game is (SR › OR › OR), who is acting, the view toggle, Log, Undo and New game. */
+export function TopBar({
+  state,
+  gameId,
+  views,
+  shownView,
+  liveView,
+  onView,
+  logOpen,
+  onToggleLog,
+  canUndo,
+  onUndo,
+  onLeave,
+}: TopBarProps) {
   const rules = useRules();
   const steps = phaseSteps(state.roundLabel, rules.operatingRoundsPerStockRound, state.totalRounds);
   const displayRound = Math.min(state.roundNumber + 1, state.totalRounds);
@@ -52,26 +70,26 @@ export function TopBar({ state, gameId, overlays, openOverlay, onToggleOverlay, 
       </div>
 
       <div className="topbar__right">
-        <div className="toggles" role="group" aria-label="Show">
-          {(["map", "market", "log"] as OverlayKind[]).map((kind) => {
-            const button = OVERLAY_BUTTONS[kind];
-            const available = overlays.includes(kind);
-            return (
-              <button
-                type="button"
-                key={kind}
-                className={`toggle-btn${openOverlay === kind ? " toggle-btn--on" : ""}`}
-                disabled={!available}
-                aria-pressed={openOverlay === kind}
-                onClick={() => onToggleOverlay(kind)}
-                title={available ? button.title : `${button.label} is already on screen`}
-              >
-                {button.label}
-                <kbd>{button.key}</kbd>
-              </button>
-            );
-          })}
+        <div className="view-switch" role="group" aria-label="Game view">
+          {views.map((view) => (
+            <button
+              type="button"
+              key={view}
+              className="view-switch__button"
+              aria-pressed={shownView === view}
+              onClick={() => onView(view)}
+              title={VIEW_TITLES[view]}
+            >
+              {viewName(view)}
+              {view === liveView && <span className="view-switch__live">Live</span>}
+            </button>
+          ))}
         </div>
+        <button type="button" className="btn btn--small" aria-pressed={logOpen} onClick={onToggleLog} title="Show the game log">
+          <span>
+            Log <kbd>L</kbd>
+          </span>
+        </button>
         <button
           type="button"
           className="btn btn--small"
