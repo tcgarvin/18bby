@@ -4,6 +4,10 @@
   width: 100%;
   height: 100%;
   user-select: none;
+  /* Hyperspace routes: casing, core, and the quieter casing while a corporation is focused. */
+  --route-casing: #8996a7;
+  --route-core: #edf1f5;
+  --route-casing-quiet: #afb8c4;
 }
 
 .hexmap__cell {
@@ -82,33 +86,94 @@
   stroke-dasharray: none;
 }
 
-.hexmap__lane {
-  stroke: #9aa3ae;
-  stroke-linecap: round;
+/* ---------- Hyperspace routes: a slate casing, a pale core, corporation traces on top ---------- */
+
+.hexmap__routes path {
   fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hexmap__routes {
+  pointer-events: none;
+}
+
+.hexmap__route-casing {
+  stroke: var(--route-casing);
   transition: stroke 150ms;
 }
 
-.hexmap--focused .hexmap__lane {
-  stroke: #b9c0c9;
+.hexmap__route-core {
+  stroke: var(--route-core);
 }
 
-.hexmap__trace {
-  fill: none;
-  stroke-linecap: round;
+/* A lane cut short at a dangling bar ends flat against it. */
+.hexmap__routes path.hexmap__route--dangling {
+  stroke-linecap: butt;
+}
+
+.hexmap__junction {
+  fill: var(--route-core);
+  stroke: var(--route-casing);
+  transition: stroke 150ms;
+}
+
+.hexmap--focused .hexmap__route-casing,
+.hexmap--focused .hexmap__junction {
+  stroke: var(--route-casing-quiet);
+}
+
+.hexmap__trace-halo {
+  stroke: var(--route-core);
+}
+
+.hexmap__trace-group {
   transition: opacity 150ms;
 }
 
-.hexmap__trace--dimmed {
-  opacity: 0.35;
+.hexmap__trace-group--dimmed {
+  opacity: 0.32;
+}
+
+.hexmap__route-glow {
+  opacity: 0;
+  filter: blur(1.4px);
+  animation: hexmap-glow 1.3s ease-out;
+}
+
+.hexmap__route-glow--focus {
+  opacity: 0.07;
+  animation: none;
+}
+
+.hexmap__preview {
+  pointer-events: none;
 }
 
 .hexmap__preview path {
   fill: none;
   stroke-linecap: round;
-  stroke-dasharray: 3 4;
-  opacity: 0.85;
-  pointer-events: none;
+  stroke-linejoin: round;
+}
+
+.hexmap__preview-bands {
+  opacity: 0.18;
+}
+
+.hexmap__preview-junction {
+  fill: var(--route-core);
+  stroke-width: 0.8;
+}
+
+/* The shape a previewed upgrade replaces stays faintly visible under the preview. */
+.hexmap__routes .hexmap__route--superseded {
+  opacity: 0.18;
+}
+
+.hexmap__preview-trace {
+  stroke-width: 2.2;
+  stroke-dasharray: 4 3;
+  opacity: 0.9;
 }
 
 .hexmap__pair {
@@ -208,24 +273,28 @@
   }
 }
 
-/* Lanes and service that just appeared (a build replaying, or your own): they draw outward
-   from the tile's centre, over a glow in the builder's colour that fades. */
-.hexmap__lane--fresh,
+/* Lanes and service that just appeared (a build replaying, or your own): a new lane draws in edge
+   to edge from the network it extends, a junction's new arm from the centre out, the traces a
+   beat later, over a glow in the builder's colour that fades. */
+.hexmap__route-casing--fresh,
+.hexmap__route-core--fresh,
 .hexmap__trace--fresh {
   stroke-dasharray: 1 1;
   animation: hexmap-draw 650ms cubic-bezier(0.3, 0.6, 0.3, 1) both;
 }
 
 .hexmap__trace--fresh {
-  animation-delay: 120ms;
+  animation-delay: 100ms;
 }
 
-.hexmap__glow {
-  fill: none;
-  stroke-linecap: round;
-  pointer-events: none;
-  opacity: 0;
-  animation: hexmap-glow 1.3s ease-out;
+.hexmap__junction--fresh {
+  animation: hexmap-fade-in 180ms ease-out both;
+}
+
+@keyframes hexmap-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes hexmap-draw {
@@ -250,13 +319,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hexmap__lane--fresh,
+  .hexmap__route-casing--fresh,
+  .hexmap__route-core--fresh,
   .hexmap__trace--fresh,
-  .hexmap__glow {
+  .hexmap__junction--fresh,
+  .hexmap__route-glow {
     animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
   }
 
-  .hexmap__glow {
+  .hexmap__route-glow:not(.hexmap__route-glow--focus) {
     display: none;
   }
 }
@@ -338,14 +411,22 @@
 
 /* ---------- Facilities and planet exits (facility rules) ---------- */
 
-/* A lane facing a planet with no exit for it ends in a bar: it does not connect. */
-.hexmap__dangle {
+/* A lane facing a planet with no exit for it stops at a bar: it does not connect. */
+.hexmap__dangle,
+.hexmap__dangle-halo {
   fill: none;
-  stroke: var(--dangling);
-  stroke-width: 3;
   stroke-linecap: round;
-  /* A pale halo keeps the bar readable over lanes and traces. */
-  filter: drop-shadow(0 0 1.2px var(--exit-open-fill));
+}
+
+.hexmap__dangle {
+  stroke: var(--dangling);
+  stroke-width: 1.8;
+}
+
+/* A pale under-stroke keeps the bar readable against the lane's casing and the map. */
+.hexmap__dangle-halo {
+  stroke: var(--exit-open-fill);
+  stroke-width: 3.4;
 }
 
 .hexmap__open-exit {
