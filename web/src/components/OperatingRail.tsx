@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { GameState } from "../api";
+import type { CorporationState, GameState } from "../api";
 import { corpColor, findCorporation, operatingQueue, playerName } from "../selectors";
 import type { StepStage } from "../selectors";
 import { Ticker } from "../playback/Ticker";
@@ -8,22 +8,36 @@ import { Help } from "./Help";
 
 interface OperatingRailProps {
   state: GameState;
-  /** The corporation whose network the map emphasizes. */
+  /** The corporation whose network the map emphasizes, or null for every network. */
   focusCorp: string | null;
   onFocus: (corpId: string) => void;
-  /** The operating corporation's panel, shown inside its expanded entry. */
-  children: ReactNode;
+  /**
+   * "operating": the operating round's order, with the current corporation expanded. "corporations":
+   * every corporation in its fixed order with its status, for the Map browsed outside an
+   * operating round (there is no operating order then).
+   */
+  mode?: "operating" | "corporations";
+  /** The operating corporation's panel, shown inside its expanded entry (operating mode only). */
+  children?: ReactNode;
 }
 
 const STAGE_MARK: Record<StepStage, string> = { done: "✓", current: "▶", upcoming: "" };
 const CURRENT_CHIP: Partial<Record<GameState["phase"], string>> = { network: "operating", fleet: "fleets", dividend: "dividend" };
+const STATUS_CHIP: Record<CorporationState["status"], string> = {
+  unstarted: "unstarted",
+  parred: "parred",
+  floated: "floated",
+  closed: "bankrupt",
+};
 
 /**
- * The operating round's corporations, top to bottom in the order they operate. The current one
- * is expanded and holds its action panel. Animation anchors: data-order-corp, data-corp-id (the
- * operating views have no corporation cards), data-treasury-for, data-fleets-for.
+ * The corporations down the side of the map. In operating mode they run top to bottom in the
+ * order they operate, and the current one is expanded and holds its action panel. Animation
+ * anchors: data-order-corp (operating mode), data-corp-id (the map views have no corporation
+ * cards), data-treasury-for, data-fleets-for.
  */
-export function OperatingRail({ state, focusCorp, onFocus, children }: OperatingRailProps) {
+export function OperatingRail({ state, focusCorp, onFocus, mode = "operating", children }: OperatingRailProps) {
+  if (mode === "corporations") return <CorporationList state={state} focusCorp={focusCorp} onFocus={onFocus} />;
   const queue = operatingQueue(state);
   const firstUpcoming = queue.find((entry) => entry.stage === "upcoming")?.corpId;
   return (
@@ -59,47 +73,15 @@ export function OperatingRail({ state, focusCorp, onFocus, children }: Operating
               className={`rentry rentry--${entry.stage}${focused ? " rentry--focused" : ""}${closed ? " rentry--closed" : ""}`}
               style={{ ["--corp" as string]: corpColor(state, corp.id) }}
             >
-              <button
-                type="button"
-                className="rentry__summary"
-                onClick={() => onFocus(corp.id)}
-                aria-pressed={focused}
-                title={focused ? "Showing this network on the map" : "Show this network on the map"}
-              >
-                <span className="rentry__mark" aria-hidden>
-                  {STAGE_MARK[entry.stage] || index + 1}
-                </span>
-                <span className="rentry__id">{corp.id}</span>
-                <span className="rentry__who">
-                  <span className="rentry__president">{playerName(state, corp.president)}</span>
-                  <span className={`rentry__chip rentry__chip--${closed ? "closed" : entry.stage}`}>{chip}</span>
-                </span>
-                <span className="rentry__nums">
-                  <span title="Share price">
-                    <span className="rentry__k">price</span>{" "}
-                    <span className="num">
-                      <Ticker value={corp.price} />
-                    </span>
-                  </span>
-                  <span title="Treasury" data-treasury-for={corp.id}>
-                    <span className="rentry__k">treasury</span>{" "}
-                    <span className="num">
-                      <Ticker value={corp.treasury} />
-                    </span>
-                  </span>
-                  <span title="Revenue its network earns now">
-                    <span className="rentry__k">revenue</span> <span className="num">{corp.revenue.total}</span>
-                  </span>
-                  {state.deathStar && !closed && (
-                    <FleetIcons
-                      corpId={corp.id}
-                      fleets={corp.fleets}
-                      limit={state.deathStar.fleets.limit}
-                      item={state.deathStar.fleets.item}
-                    />
-                  )}
-                </span>
-              </button>
+              <EntrySummary
+                state={state}
+                corp={corp}
+                focused={focused}
+                onFocus={onFocus}
+                mark={STAGE_MARK[entry.stage] || String(index + 1)}
+                chip={chip}
+                chipTone={closed ? "closed" : entry.stage}
+              />
               {entry.stage !== "upcoming" && entry.log.length > 0 && (
                 <ul className="rentry__log">
                   {entry.log.map((line) => (
@@ -113,5 +95,99 @@ export function OperatingRail({ state, focusCorp, onFocus, children }: Operating
         })}
       </ol>
     </aside>
+  );
+}
+
+/** Every corporation in its fixed order, with its status; a click shows (or hides) its network. */
+function CorporationList({ state, focusCorp, onFocus }: Pick<OperatingRailProps, "state" | "focusCorp" | "onFocus">) {
+  const anyFloated = state.corporations.some((corp) => corp.status === "floated" || corp.status === "closed");
+  return (
+    <aside className="rail rail--corporations" aria-label="Corporations">
+      <h2 className="rail__title">
+        Corporations
+        <Help topic="float" />
+        <span className="rail__round">{state.roundLabel}</span>
+      </h2>
+      <ol className="rail__list">
+        {!anyFloated && <li className="rail__empty muted">No corporations floated yet.</li>}
+        {state.corporations.map((corp) => {
+          const focused = focusCorp === corp.id;
+          const closed = corp.status === "closed";
+          return (
+            <li
+              key={corp.id}
+              data-corp-id={corp.id}
+              className={`rentry rentry--${corp.status}${focused ? " rentry--focused" : ""}${closed ? " rentry--closed" : ""}`}
+              style={{ ["--corp" as string]: corpColor(state, corp.id) }}
+            >
+              <EntrySummary
+                state={state}
+                corp={corp}
+                focused={focused}
+                onFocus={onFocus}
+                mark={null}
+                chip={STATUS_CHIP[corp.status]}
+                chipTone={corp.status}
+              />
+            </li>
+          );
+        })}
+      </ol>
+    </aside>
+  );
+}
+
+interface EntrySummaryProps {
+  state: GameState;
+  corp: CorporationState;
+  focused: boolean;
+  onFocus: (corpId: string) => void;
+  /** The operating-order mark (position, tick or arrow), or null for none. */
+  mark: string | null;
+  chip: string;
+  /** Picks the chip's colours: rentry__chip--<tone>. */
+  chipTone: string;
+}
+
+function EntrySummary({ state, corp, focused, onFocus, mark, chip, chipTone }: EntrySummaryProps) {
+  const closed = corp.status === "closed";
+  const started = corp.status !== "unstarted";
+  return (
+    <button
+      type="button"
+      className="rentry__summary"
+      onClick={() => onFocus(corp.id)}
+      aria-pressed={focused}
+      title={focused ? "Showing this network on the map" : "Show this network on the map"}
+    >
+      {mark !== null && (
+        <span className="rentry__mark" aria-hidden>
+          {mark}
+        </span>
+      )}
+      <span className="rentry__id">{corp.id}</span>
+      <span className="rentry__who">
+        <span className="rentry__president">{corp.president ? playerName(state, corp.president) : corp.homeworld}</span>
+        <span className={`rentry__chip rentry__chip--${chipTone}`}>{chip}</span>
+      </span>
+      <span className="rentry__nums">
+        <span title="Share price">
+          <span className="rentry__k">price</span>{" "}
+          <span className="num">{started && !closed ? <Ticker value={corp.price} /> : "—"}</span>
+        </span>
+        <span title="Treasury" data-treasury-for={corp.id}>
+          <span className="rentry__k">treasury</span>{" "}
+          <span className="num">
+            <Ticker value={corp.treasury} />
+          </span>
+        </span>
+        <span title="Revenue its network earns now">
+          <span className="rentry__k">revenue</span> <span className="num">{corp.revenue.total}</span>
+        </span>
+        {state.deathStar && !closed && (
+          <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit} item={state.deathStar.fleets.item} />
+        )}
+      </span>
+    </button>
   );
 }

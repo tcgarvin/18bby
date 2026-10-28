@@ -5,10 +5,10 @@ import { HexMap } from "./HexMap";
 const NO_HEXES = new Set<string>();
 const NO_CHANGES = new Map<string, string[]>();
 
-/** A small, non-interactive map that opens the full map when clicked. */
+/** A small, non-interactive map that switches the screen to the Map view when clicked. */
 export function MapThumbnail({ state, board, onOpen }: { state: GameState; board: Board; onOpen: () => void }) {
   return (
-    <button type="button" className="mapthumb" onClick={onOpen} title="Open the map (M)">
+    <button type="button" className="mapthumb" onClick={onOpen} title="Switch to the Map view (M)">
       <HexMap
         board={board}
         tiles={state.tiles}
@@ -26,7 +26,7 @@ export function MapThumbnail({ state, board, onOpen }: { state: GameState; board
         facilities={state.facilities}
       />
       <span className="mapthumb__cta">
-        Open map <kbd>M</kbd>
+        View map <kbd>M</kbd>
       </span>
     </button>
   );

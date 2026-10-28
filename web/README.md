@@ -71,6 +71,9 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   Tested in `tilediff.test.ts`.
 - `src/hotkeys.ts`: the `useHotkeys` hook behind the keyboard shortcuts. Tested in
   `hotkeys.test.ts`.
+- `src/gameView.ts`: the Shares and Map views: which one is live in each phase, the snap back
+  to it on a phase change or a replay, the view hotkeys and the read-only banner's wording.
+  Tested in `gameView.test.ts`.
 - `src/logdiff.ts`: works out which log lines are new. The server sends only the last 200 lines,
   so the diff matches overlapping lines instead of comparing lengths.
 - `src/colors.ts`: corporation, region and planet-type palettes.
@@ -104,24 +107,30 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
 - `src/components/`:
   - `GameScreen`: the container for one game. It owns the server state, sends actions and undo,
     and keeps errors and the "since your move" ribbon. It draws a `display` state, which the
-    replay engine may hold on an intermediate state while it animates; the view is chosen from
-    `display.phase` alone, and controls appear only when the display is the latest state and a
-    human is to move (`interactive`). `App` switches between screens and restores the game named
-    in the URL.
+    replay engine may hold on an intermediate state while it animates. It shows one of two views
+    the player can flip between, Shares and Map (`src/gameView.ts`): the one belonging to
+    `display.phase` is live, the other is browsed read-only (`browsing` in `ViewProps`), with a
+    banner leading back. Only one view is mounted at a time, and a phase change or the start of
+    a replay snaps back to the live view in the same render. Controls appear only on the live
+    view, when the display is the latest state and a human is to move (`interactive`). `App`
+    switches between screens and restores the game named in the URL.
   - `views/`: one presentational view per phase, all taking `ViewProps` (`views/types.ts`):
-    `StockRoundView`, `NetworkView`, `FleetView` (Death Star rules: buy fleets, with
+    `StockRoundView` (also the Shares view browsed during an operating round or at game over,
+    without trades or Pass), `MapBrowseView` (the Map browsed during a stock round or at game
+    over: the whole map and every corporation), `NetworkView`, `FleetView` (Death Star rules: buy fleets, with
     `FleetActions` in the operating rail), `FacilityView` (the same step under the facility rules:
     pick a planet on the map or in `FacilityActions`, then where its new exit goes),
     `DividendView`, `GameOverView`.
-  - `TopBar` (round stepper, who is acting, overlay toggles, Undo), `RecentMoves` (the ribbon),
-    `Overlay` and `MapOverlay` (the map, market and log over any view).
+  - `TopBar` (round stepper, who is acting, the Shares | Map toggle with the live view marked,
+    Log, Undo), `RecentMoves` (the ribbon), `Overlay` (the game log over any view).
   - `PlayerStrip` (player cards, or a compact cash strip), `CorporationBoard` (corporation cards
     with IPO and pool certificate stacks and the inline buy, sell and par buttons), `CertStack`
     (a small pile of share certificates with its share count; the president's certificate is
     wider, gold-framed and starred; used on corporation and player cards, dividend payouts and
     the final standings, and copied by the flight layer for a share in flight), `StockMarket` (the grid, or a
     slice of it, with tokens positioned from their cell so they can slide), `OperatingRail` (the
-    operating order, with the current corporation's panel), `NetworkActions`, `GameOver`.
+    operating order, with the current corporation's panel; outside an operating round, every
+    corporation with its status), `NetworkActions`, `GameOver`.
   - `HexMap`: the board. It draws region tints, neutral lanes for charted tiles, and a narrow
     trace per corporation on each lane it serves. Each corporation keeps its own offset, so
     traces stay continuous across tiles. It draws asteroid fields and nebulae, planet badges,
@@ -154,7 +163,7 @@ effects fall back to the corporation card), `data-treasury-for`, `data-market-to
 Star rules `data-fleets-for` (a corporation's fleet icons, or its facility icons under the facility
 rules), `data-fleet-supply` and
 `data-death-star-track` (on the Death Star bar). Each appears at most
-once per view; second copies in overlays leave them off. The `caption-slot` at the bottom of
+once on screen, since only one view is mounted at a time. The `caption-slot` at the bottom of
 the stage holds the replay caption.
 
 What each kind of move animates (`src/playback/choreography.ts`): a buy flies a share certificate
@@ -178,7 +187,7 @@ and who is acting.
   their price, treasury and president, and stacks of the certificates for sale in the IPO and
   the pool. Each player card shows the certificates that player holds. On your turn each
   corporation shows the buys, sells and pars you may make, and **Pass** sits at the top. The
-  stock market sits beside them, and a small map opens the full map.
+  stock market sits beside them, and a small map switches to the Map view.
 - **Operating, building:** the map fills the screen. The operating order runs down the right,
   done, operating, then up next; the operating corporation's entry holds its network options.
   Click a highlighted hex to see its tile options, or an entry to show that network on the map.
@@ -198,8 +207,14 @@ and who is acting.
   revenue and whose lane it connects, and hovering one previews it on the map. <kbd>P</kbd>
   finishes, <kbd>Esc</kbd> closes the planet. In the network step, a chart or upgrade option
   facing a planet says whether it claims an exit there or dangles.
-- **Map, market and log** open over any view that does not already show them: <kbd>M</kbd>,
-  <kbd>K</kbd>, <kbd>L</kbd> or the top-bar buttons; <kbd>Esc</kbd> closes.
+- **Shares and Map.** The top bar's toggle flips between the two halves of the game at any
+  time: Shares (players, corporations, the stock market) and Map (the map with the corporations
+  down the side). The current phase's view is marked Live and is the only one with controls; the
+  other shows the same game read-only under a banner with a button back. A phase change or an
+  opponent replay snaps back to the live view. <kbd>V</kbd> flips, <kbd>M</kbd> picks the Map,
+  <kbd>S</kbd> the Shares; they work during a replay too. At game over the results come first
+  and the toggle adds Results.
+- **Log** opens over any view: <kbd>L</kbd> or the top-bar button; <kbd>Esc</kbd> closes.
 - **Undo** (top bar, <kbd>U</kbd> or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) takes back your last move,
   along with every bot move and forced move that followed it. It goes back as far as the game
   began; in a hotseat game it takes back whoever moved last.
@@ -220,8 +235,8 @@ and who is acting.
 - **Keyboard:** <kbd>P</kbd> passes in a stock round and ends network actions; with a hex
   picked, <kbd>1</kbd>–<kbd>9</kbd> choose a tile option and <kbd>Esc</kbd> closes the picker
   (or clears the map focus); in the dividend step <kbd>1</kbd> pays and <kbd>2</kbd> withholds.
-  Shortcuts are ignored while typing in a form field, and the view's own shortcuts pause while
-  an overlay is open.
+  Shortcuts are ignored while typing in a form field, and the view's own shortcuts (and the
+  view toggle's) pause while the log is open.
 
 ## Map conventions
 
@@ -229,7 +244,7 @@ and who is acting.
   `x = sqrt(3)·s·(q + r/2)`, `y = 1.5·s·r`. Exits `E SE SW W NW NE` have edge midpoints at
   0°, 60°, …, 300°, measured clockwise from +x with y pointing down.
 - Each hex takes the region of its nearest planet. Ties go to Core, then Mid Rim, then Outer Rim.
-- A corporation is in focus when you click its operating-order entry (or its button in the map
-  overlay) or when it is operating. The focused
+- A corporation is in focus when you click its operating-order entry (or its entry in the
+  corporation list of the browsed Map) or when it is operating. The focused
   corporation's traces and reachable planets are emphasized, and its scored pairs are drawn as
   arcs labelled with their value. Solid arcs are typed pairs; dashed arcs are basic routes.

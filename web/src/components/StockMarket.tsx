@@ -23,8 +23,6 @@ interface StockMarketProps {
   ghosts?: MarketGhost[];
   /** Dim every token but this corporation's. */
   emphasis?: string | null;
-  /** Put the data-market-token animation anchors on the tokens; off for a second copy. */
-  anchors?: boolean;
   /** Fill the parent's height instead of keeping the grid's own aspect ratio. */
   fill?: boolean;
 }
@@ -44,7 +42,7 @@ function fullWindow(market: number[][]): MarketWindow {
  * grid) and keyed by corporation, so a CSS transition on left/top slides a token between
  * cells when its price moves.
  */
-export function StockMarket({ state, window, ghosts = [], emphasis = null, anchors = true, fill = false }: StockMarketProps) {
+export function StockMarket({ state, window, ghosts = [], emphasis = null, fill = false }: StockMarketProps) {
   const market = state.stockMarket;
   const view = window ?? fullWindow(market);
   const [r0, r1] = view.rows;
@@ -110,7 +108,7 @@ export function StockMarket({ state, window, ghosts = [], emphasis = null, ancho
           return (
             <span
               key={corp.id}
-              data-market-token={anchors ? corp.id : undefined}
+              data-market-token={corp.id}
               className={`mtoken${dimmed ? " mtoken--dimmed" : ""}`}
               style={{
                 ...place(cell),

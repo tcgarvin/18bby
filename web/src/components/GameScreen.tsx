@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Action, Board, GameState, LogEntry } from "../api";
 import { ApiError, isHexAction, submitAction, undoAction } from "../api";
+import type { GameView } from "../gameView";
+import { availableViews, browseBanner, followSelection, initialSelection, liveView, shownView, viewForKey } from "../gameView";
 import { hexKey } from "../hex";
 import { useHotkeys } from "../hotkeys";
 import { newLogEntries } from "../logdiff";
@@ -14,18 +16,17 @@ import { changedFacilityHexes } from "../facilities";
 import { changedHexes } from "../tilediff";
 import { DeathStarBar } from "./DeathStar";
 import { LogPanel } from "./LogPanel";
-import { MapOverlay } from "./MapOverlay";
 import { Overlay } from "./Overlay";
 import { RecentMoves } from "./RecentMoves";
-import { StockMarket } from "./StockMarket";
 import { TopBar } from "./TopBar";
 import { DividendView } from "./views/DividendView";
 import { FacilityView } from "./views/FacilityView";
 import { FleetView } from "./views/FleetView";
 import { GameOverView } from "./views/GameOverView";
+import { MapBrowseView } from "./views/MapBrowseView";
 import { NetworkView } from "./views/NetworkView";
 import { StockRoundView } from "./views/StockRoundView";
-import type { OverlayKind, ViewProps } from "./views/types";
+import type { ViewProps } from "./views/types";
 import "./GameScreen.css";
 
 interface GameScreenProps {
@@ -36,15 +37,7 @@ interface GameScreenProps {
 }
 
 const NO_CHANGES = new Map<string, string[]>();
-
-/** Which overlays each phase offers: everything except what its view already features. */
-const OVERLAYS: Record<GameState["phase"], OverlayKind[]> = {
-  stock: ["map", "log"],
-  network: ["market", "log"],
-  fleet: ["market", "log"],
-  dividend: ["map", "market", "log"],
-  game_over: ["map", "market", "log"],
-};
+const VIEW_KEYS = ["v", "m", "s", "k"] as const;
 
 /** Log lines played automatically in the request that produced `state` (bots, forced moves). */
 function automaticEntries(state: GameState): LogEntry[] {
@@ -75,8 +68,14 @@ interface Replayable {
 /**
  * One game: owns the server state, sends actions and undo, and keeps errors and the "since your
  * move" summary. What it draws comes from `display`, which the replay engine holds on each
- * opponent move in turn while it animates `state.moves`; the phase view is chosen from
- * `display.phase` alone, and controls are offered only when `display` is the latest state.
+ * opponent move in turn while it animates `state.moves`.
+ *
+ * The screen has two views the player can flip between, Shares and Map (`gameView.ts`); the one
+ * for `display.phase` is live, the other is browsed read-only. Only one view is mounted at a
+ * time, so each animation anchor appears once. A phase change or the start of a replay snaps
+ * back to the live view in the same render, before the replay's effects look for their anchors.
+ * Controls are offered only on the live view, when `display` is the latest state and a human is
+ * to move.
  *
  * The "since your move" ribbon and the map's change outlines summarise a batch once it has
  * played, so they are hidden during the replay itself (whose captions say the same things).
@@ -88,22 +87,46 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   const [lastBatch, setLastBatch] = useState<Replayable | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<OverlayKind | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
   /** Hexes changed by bots or forced moves since the last submitted action. */
   const [changed, setChanged] = useState<Map<string, string[]>>(new Map());
 
   const playback = usePlayback(state, board.planets);
   const display: GameState = playback.display;
   const replaying = playback.playing;
-  const interactive = !replaying && display.waitingOnHuman && display.phase !== "game_over";
   const step = playback.current;
   const actorColor = step && step.frame?.corporation ? corpColor(display, step.frame.corporation) : "";
 
-  const available = OVERLAYS[display.phase];
-  const shownOverlay = overlay !== null && available.includes(overlay) ? overlay : null;
-  // An overlay belongs to the view it was opened over; a replay stepping through phases must not
-  // keep hiding and reviving it, or leave it covering the next turn.
-  useEffect(() => setOverlay(null), [display.phase]);
+  const [selection, setSelection] = useState(() => initialSelection(initialState.phase, false));
+  /** A manual switch fades the new view in; snaps (phase changes, replays) are immediate. */
+  const [entering, setEntering] = useState(false);
+  // Snap back during render, not in an effect, so a replay's first step never mounts on the
+  // browsed view and its effects find the live view's anchors.
+  const followed = followSelection(selection, display.phase, replaying);
+  if (followed !== selection) {
+    setSelection(followed);
+    if (followed.view === null) setEntering(false);
+  }
+  const live = liveView(display.phase);
+  const shown = shownView(followed);
+  const browsing = shown !== live;
+  const interactive = !browsing && !replaying && display.waitingOnHuman && display.phase !== "game_over";
+  const banner = browseBanner(display, shown);
+
+  function selectView(view: GameView) {
+    if (view === shown) return;
+    setSelection({ ...followed, view: view === live ? null : view });
+    setEntering(true);
+  }
+
+  function selectViewByKey(key: string) {
+    const next = viewForKey(key, shown, display.phase);
+    if (next === null || next === shown) return false;
+    selectView(next);
+  }
+
+  // View shortcuts work during a replay too, but not while the log is open.
+  const viewKeys = logOpen ? {} : Object.fromEntries(VIEW_KEYS.map((key) => [key, () => selectViewByKey(key)]));
 
   async function send(request: () => Promise<GameState>, onDone: (next: GameState) => void) {
     setBusy(true);
@@ -170,27 +193,21 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   // Watch again only while the batch's result is still the game on screen.
   const rewatch = lastBatch !== null && lastBatch.after === state ? lastBatch : null;
 
-  function toggleOverlay(kind: OverlayKind) {
-    if (!available.includes(kind)) return false;
-    setOverlay((current) => (current === kind ? null : kind));
-  }
-
   const canUndo = state.canUndo && !busy && !replaying;
   useHotkeys(
     {
+      ...viewKeys,
       "mod+z": () => (canUndo ? undo() : false),
       u: () => (canUndo ? undo() : false),
-      m: () => toggleOverlay("map"),
-      k: () => toggleOverlay("market"),
-      l: () => toggleOverlay("log"),
-      escape: () => (shownOverlay ? setOverlay(null) : false),
+      l: () => setLogOpen((open) => !open),
+      escape: () => (logOpen ? setLogOpen(false) : false),
     },
     !replaying,
   );
-  // While a replay runs, Space and Esc skip it (Esc closes an open overlay first) and every other
-  // shortcut is off.
+  // While a replay runs, Space and Esc skip it (Esc closes the log first) and the view shortcuts
+  // still switch views; every other shortcut is off.
   useHotkeys(
-    { " ": () => playback.skip(), escape: () => (shownOverlay ? setOverlay(null) : playback.skip()) },
+    { ...viewKeys, " ": () => playback.skip(), escape: () => (logOpen ? setLogOpen(false) : playback.skip()) },
     replaying,
   );
 
@@ -198,13 +215,39 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
     state: display,
     board,
     interactive,
+    browsing,
     busy,
-    keyboard: shownOverlay === null && !replaying,
+    keyboard: !logOpen && !replaying,
     changedHexes: replaying ? NO_CHANGES : changed,
     replayStep: step,
     onAct: act,
-    onOpen: (kind) => setOverlay(kind),
+    onView: selectView,
   };
+
+  function phaseView() {
+    if (shown === "shares") return <StockRoundView {...viewProps} />;
+    if (shown === "results") return <GameOverView {...viewProps} onNewGame={onLeave} />;
+    switch (display.phase) {
+      case "network":
+        return <NetworkView {...viewProps} />;
+      case "fleet":
+        return display.facilities ? <FacilityView {...viewProps} /> : <FleetView {...viewProps} />;
+      case "dividend":
+        return <DividendView {...viewProps} />;
+      default:
+        return <MapBrowseView {...viewProps} />;
+    }
+  }
+
+  const stageClass = [
+    "stage",
+    `stage--${display.phase}`,
+    `stage--view-${shown}`,
+    replaying ? "stage--replaying" : "",
+    entering ? "stage--entering" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <FlightLayer>
@@ -213,9 +256,12 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
         <TopBar
           state={display}
           gameId={gameId}
-          overlays={available}
-          openOverlay={shownOverlay}
-          onToggleOverlay={toggleOverlay}
+          views={availableViews(display.phase)}
+          shownView={shown}
+          liveView={display.phase === "game_over" ? null : live}
+          onView={selectView}
+          logOpen={logOpen}
+          onToggleLog={() => setLogOpen((open) => !open)}
           canUndo={canUndo}
           onUndo={undo}
           onLeave={onLeave}
@@ -229,7 +275,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             speed={playback.speed}
             onSpeed={playback.setSpeed}
             onReplay={rewatch ? () => playback.enqueue(rewatch.before, rewatch.after) : null}
-            onShowLog={() => setOverlay("log")}
+            onShowLog={() => setLogOpen(true)}
             onDismiss={dismissRecent}
           />
         )}
@@ -242,7 +288,7 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           </div>
         )}
 
-        <main className={`stage stage--${display.phase}${replaying ? " stage--replaying" : ""}`}>
+        <main className={stageClass}>
           {/* The replay caption: the move being animated, with speed and Skip. */}
           <div className="caption-slot" aria-live="polite">
             {step && (
@@ -258,44 +304,19 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
             )}
           </div>
           {step?.kind.kind === "phase" && <PhaseBanner title={step.caption} />}
-          {display.phase === "stock" ? (
-            <StockRoundView {...viewProps} />
-          ) : display.phase === "network" ? (
-            <NetworkView {...viewProps} />
-          ) : display.phase === "fleet" ? (
-            display.facilities ? (
-              <FacilityView {...viewProps} />
-            ) : (
-              <FleetView {...viewProps} />
-            )
-          ) : display.phase === "dividend" ? (
-            <DividendView {...viewProps} />
-          ) : (
-            <GameOverView {...viewProps} onNewGame={onLeave} />
+          {banner && (
+            <div className="browse-banner" role="status">
+              <span className="browse-banner__text">{banner.text}</span>
+              <button type="button" className="btn btn--small browse-banner__back" onClick={() => selectView(live)}>
+                {banner.back}
+              </button>
+            </div>
           )}
+          {phaseView()}
         </main>
 
-        {shownOverlay === "map" && (
-          <MapOverlay
-            state={display}
-            board={board}
-            changedHexes={replaying ? NO_CHANGES : changed}
-            onClose={() => setOverlay(null)}
-          />
-        )}
-        {shownOverlay === "market" && (
-          <Overlay title="Stock market" wide fit onClose={() => setOverlay(null)}>
-            <div className="overlay-market">
-              <p className="muted overlay-market__hint">
-                Paying moves right (two columns for a big payout), withholding left; selling moves down, a sold-out
-                corporation moves up.
-              </p>
-              <StockMarket state={display} anchors={false} />
-            </div>
-          </Overlay>
-        )}
-        {shownOverlay === "log" && (
-          <Overlay title="Game log" onClose={() => setOverlay(null)}>
+        {logOpen && (
+          <Overlay title="Game log" onClose={() => setLogOpen(false)}>
             <LogPanel state={display} fresh={fresh} />
           </Overlay>
         )}

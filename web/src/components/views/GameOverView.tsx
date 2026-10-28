@@ -9,7 +9,7 @@ interface GameOverViewProps extends ViewProps {
 }
 
 /** Final standings, with the closing market and map alongside. */
-export function GameOverView({ state, board, onOpen, onNewGame }: GameOverViewProps) {
+export function GameOverView({ state, board, onView, onNewGame }: GameOverViewProps) {
   return (
     <div className="view view--over">
       <section className="panel standings">
@@ -24,7 +24,7 @@ export function GameOverView({ state, board, onOpen, onNewGame }: GameOverViewPr
         <StockMarket state={state} />
       </section>
       <section className="panel stockmap">
-        <MapThumbnail state={state} board={board} onOpen={() => onOpen("map")} />
+        <MapThumbnail state={state} board={board} onOpen={() => onView("map")} />
       </section>
     </div>
   );

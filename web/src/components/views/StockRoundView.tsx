@@ -7,8 +7,12 @@ import { PlayerStrip } from "../PlayerStrip";
 import { StockMarket } from "../StockMarket";
 import type { ViewProps } from "./types";
 
-/** Who has what and what is for sale: players, corporations with inline trades, and the market. */
-export function StockRoundView({ state, board, interactive, busy, keyboard, onAct, onOpen }: ViewProps) {
+/**
+ * Who has what and what is for sale: players, corporations with inline trades, and the market.
+ * Browsed outside the stock round it is the Shares view: the same cards and market without
+ * trades, Pass or buy blocks.
+ */
+export function StockRoundView({ state, board, interactive, browsing, busy, keyboard, onAct, onView }: ViewProps) {
   const pass = interactive ? state.legalActions.find((a) => a.type === "pass") : undefined;
   useHotkeys({ p: () => (pass && !busy ? onAct(pass) : false) }, interactive && keyboard);
   const who = playerName(state, state.currentPlayer);
@@ -20,7 +24,9 @@ export function StockRoundView({ state, board, interactive, busy, keyboard, onAc
       <section className={`panel stockboard${interactive ? " stockboard--yours" : ""}`}>
         <header className="stockboard__head">
           <div className="stockboard__prompt">
-            {interactive ? (
+            {browsing ? (
+              <span className="stockboard__title">Corporations · current holdings and prices</span>
+            ) : interactive ? (
               <>
                 <strong>{who}, your turn.</strong> Buy one share, sell, or pass.
                 <Help topic="stockRound" />
@@ -52,7 +58,7 @@ export function StockRoundView({ state, board, interactive, busy, keyboard, onAc
       </section>
 
       <section className="panel stockmap">
-        <MapThumbnail state={state} board={board} onOpen={() => onOpen("map")} />
+        <MapThumbnail state={state} board={board} onOpen={() => onView("map")} />
       </section>
     </div>
   );
