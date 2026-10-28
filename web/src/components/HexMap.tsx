@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   Axial,
   Board,
@@ -18,7 +18,6 @@ import type {
 import { EMPIRE } from "../api";
 import { REGION_FILL, TAG_FILL, corporationColor } from "../colors";
 import {
-  DIRECTIONS,
   assignRegions,
   badgeText,
   cornersToPath,
@@ -31,15 +30,25 @@ import {
 } from "../hex";
 import { siteHexes, sitePlanet } from "../deathstar";
 import { laneConnects, planetExitsText, planetsByKey as limitedPlanets } from "../facilities";
+import { apothem, oppositeOf, piecePath, portEnd, stubPiece, tileRoute, tracePath, type LanePiece } from "../lanes";
 import { scatterBlobs } from "../terrain";
 import { DeathStarShape } from "./DeathStar";
 import "./HexMap.css";
 
 /** Hex side length in SVG units; everything else on the map scales from it. */
 const S = 34;
-const LANE_WIDTH = S * 0.36;
-const TRACE_WIDTH = S * 0.075;
-const TRACE_SPACING = S * 0.082;
+/** Corporation traces: width, focused width, and the distance between neighbouring slots. */
+const TRACE_WIDTH = 1.8;
+const FOCUS_TRACE_WIDTH = 2.3;
+const TRACE_SPACING = 2.6;
+/** Extra width of the under-stroke that separates crossing traces. */
+const TRACE_HALO = 1.2;
+/** A lane's pale core is at least this wide, and wide enough for every corporation's slot. */
+const MIN_CORE_WIDTH = 9;
+/** The darker casing shows this much either side of the core. */
+const CASING_EDGE = 0.7;
+/** The interchange disk where three spokes meet is this much wider than the lane, all round. */
+const JUNCTION_MARGIN = 0.8;
 const BADGE_RADIUS = S * 0.36;
 const NEUTRAL_CHANGE = "#5b6573";
 const ASTEROID_ROCKS = { count: 9, area: S * 0.7, minRadius: 1.1, maxRadius: 3.1, salt: 1, overlap: false };
@@ -51,8 +60,10 @@ const FACILITY_SIZE = 10;
 /** Open (unclaimed) exits show as small rings above the badge, where no lane can enter. */
 const OPEN_EXIT_RADIUS = 3.2;
 const OPEN_EXIT_SPACING = 8;
-/** A dangling lane's bar sits this far along the lane from the planet's edge, clear of its name. */
+/** A dangling lane stops at a bar this far (in centre-to-edge distances) short of the planet's edge, clear of its name. */
 const DANGLE_INSET = 0.24;
+/** The bar is this much longer than the lane is wide. */
+const DANGLE_OVERHANG = 2;
 
 interface HexMapProps {
   board: Board;
@@ -87,27 +98,6 @@ interface HexMapProps {
   facilityPreview?: BuildFacilityAction | null;
 }
 
-interface Segment {
-  key: string;
-  from: Point;
-  to: Point;
-  /** Canonical unit normal so a trace keeps the same side across the shared edge. */
-  normal: Point;
-  service: string[];
-}
-
-function oppositeOf(direction: DirectionName): DirectionName {
-  return DIRECTIONS[(DIRECTIONS.indexOf(direction) + 3) % 6];
-}
-
-function canonicalNormal(direction: DirectionName): Point {
-  const index = DIRECTIONS.indexOf(direction);
-  const base = index < 3 ? direction : oppositeOf(direction);
-  const mid = edgeMidpoint(base, 1);
-  const length = Math.hypot(mid.x, mid.y);
-  return { x: -mid.y / length, y: mid.x / length };
-}
-
 function add(a: Point, b: Point, scale = 1): Point {
   return { x: a.x + b.x * scale, y: a.y + b.y * scale };
 }
@@ -117,7 +107,7 @@ type Connects = (planetKey: string, side: DirectionName) => boolean;
 
 const OPEN_HUBS: Connects = () => true;
 
-/** The stub from a planet's edge on `side` into its badge. */
+/** The stub from a planet's edge on `side` to its badge's edge, for previews drawn over the badge. */
 function stubPoints(planetHex: Axial, side: DirectionName): { from: Point; to: Point } {
   const planetCenter = hexToPixel(planetHex, S);
   const outward = edgeMidpoint(side, S);
@@ -125,60 +115,130 @@ function stubPoints(planetHex: Axial, side: DirectionName): { from: Point; to: P
   return { from: add(planetCenter, outward), to: add(planetCenter, outward, BADGE_RADIUS / length) };
 }
 
-/**
- * Lane segments for charted tiles: one per exit from the tile center to the edge midpoint,
- * plus a stub into any planet the exit faces that it `connects` into (every planet, while they
- * are open hubs; under the facility rules only through a claimed exit).
- */
-function buildSegments(tiles: TileState[], planetsByKey: Map<string, Planet>, connects: Connects = OPEN_HUBS): Segment[] {
-  const segments: Segment[] = [];
-  for (const tile of tiles) {
-    const center = hexToPixel(tile.hex, S);
-    for (const exit of tile.exits) {
-      const normal = canonicalNormal(exit);
-      segments.push({
-        key: `${hexKey(tile.hex)}:${exit}`,
-        from: center,
-        to: add(center, edgeMidpoint(exit, S)),
-        normal,
-        service: tile.service,
-      });
-      const facing = neighbor(tile.hex, exit);
-      const side = oppositeOf(exit);
-      if (planetsByKey.has(hexKey(facing)) && connects(hexKey(facing), side)) {
-        segments.push({ key: `${hexKey(tile.hex)}:${exit}:stub`, ...stubPoints(facing, side), normal, service: tile.service });
-      }
-    }
-  }
-  return segments;
+/** One stroke of the lane network (a tile's route piece or a planet stub) and who serves it. */
+interface LaneStroke {
+  piece: LanePiece;
+  /** The charted tile the stroke belongs to (for a stub, the tile whose exit runs into the planet). */
+  tileKey: string;
+  service: string[];
+  /** Freshness keys (its exits, or the stub) any of which, when new, make the stroke draw in. */
+  drawKeys: string[];
+  /** Prefix of the freshness key for a corporation's service on the stroke's tile. */
+  serviceKey: string;
+  /** The stroke stops short at a dangling bar, so it ends flat there. */
+  dangling: boolean;
 }
 
-/** A lane that faces an exit-limited planet without an exit there (facility rules). */
+interface Junction {
+  key: string;
+  at: Point;
+  drawKeys: string[];
+}
+
+/** A lane that faces an exit-limited planet without an exit there (facility rules): it stops at a bar. */
 interface DanglingEnd {
   key: string;
   planet: PlanetFacilities;
-  side: DirectionName;
-  /** Where the lane meets the planet's hex. */
+  /** Where the lane stops, and the unit vector across it there. */
   at: Point;
-  /** Unit vector across the lane at its end. */
   across: Point;
 }
 
-function danglingEnds(planets: PlanetFacilities[]): DanglingEnd[] {
-  return planets.flatMap((planet) =>
-    planet.dangling.map((side) => {
-      const center = hexToPixel(planet.hex, S);
-      const mid = edgeMidpoint(side, S);
-      const length = Math.hypot(mid.x, mid.y);
-      return {
-        key: `${hexKey(planet.hex)}:${side}`,
-        planet,
-        side,
-        at: add(center, mid, 1 + DANGLE_INSET),
-        across: { x: -mid.y / length, y: mid.x / length },
-      };
+interface LaneNetwork {
+  strokes: LaneStroke[];
+  junctions: Junction[];
+  dangling: DanglingEnd[];
+  /** Every exit, stub and service key, for spotting what is new. */
+  keys: string[];
+}
+
+function exitKey(tileKey: string, exit: DirectionName): string {
+  return `${tileKey}:x:${exit}`;
+}
+
+/**
+ * The exit a two-exit route is drawn from: one that continues another lane or runs into a planet,
+ * so a newly charted lane draws in from the network it extends.
+ */
+function anchorExit(tile: TileState, exitsByKey: Map<string, DirectionName[]>, hubs: Map<string, Planet>): DirectionName | undefined {
+  return tile.exits.find((exit) => {
+    const facing = hexKey(neighbor(tile.hex, exit));
+    return hubs.has(facing) || (exitsByKey.get(facing) ?? []).includes(oppositeOf(exit));
+  });
+}
+
+/**
+ * The drawn lane network: each charted tile's route through its exits; a stub into any planet an
+ * exit faces and `connects` into (every planet, while they are open hubs; under the facility rules
+ * only through a claimed exit); and the dangling ends of lanes that face a planet without an
+ * exit, where the route stops short at a bar.
+ */
+function buildNetwork(
+  tiles: TileState[],
+  planetsByKey: Map<string, Planet>,
+  connects: Connects = OPEN_HUBS,
+  danglingPlanets: PlanetFacilities[] = [],
+): LaneNetwork {
+  const exitsByKey = new Map(tiles.map((tile) => [hexKey(tile.hex), tile.exits] as const));
+  const cutBack = apothem(S) * DANGLE_INSET;
+  const trims = new Map<string, Partial<Record<DirectionName, number>>>();
+  for (const planet of danglingPlanets) {
+    for (const side of planet.dangling) {
+      const tileKey = hexKey(neighbor(planet.hex, side));
+      trims.set(tileKey, { ...trims.get(tileKey), [oppositeOf(side)]: cutBack });
+    }
+  }
+  const strokes: LaneStroke[] = [];
+  const junctions: Junction[] = [];
+  const keys: string[] = [];
+  const routes = new Map<string, LanePiece[]>();
+  for (const tile of tiles) {
+    const tileKey = hexKey(tile.hex);
+    const tileTrims = trims.get(tileKey) ?? {};
+    const startExit = anchorExit(tile, exitsByKey, planetsByKey);
+    const route = tileRoute(tile.hex, tile.exits, S, { startExit, trims: tileTrims });
+    routes.set(tileKey, route.pieces);
+    const serviceKey = `${tileKey}:s:`;
+    keys.push(...tile.exits.map((exit) => exitKey(tileKey, exit)), ...tile.service.map((corp) => serviceKey + corp));
+    for (const piece of route.pieces) {
+      const ends: DirectionName[] = [];
+      if (piece.startPort) ends.push(piece.startPort.exit);
+      if (piece.endPort) ends.push(piece.endPort.exit);
+      strokes.push({
+        piece,
+        tileKey,
+        service: tile.service,
+        drawKeys: ends.map((exit) => exitKey(tileKey, exit)),
+        serviceKey,
+        dangling: ends.some((exit) => tileTrims[exit] !== undefined),
+      });
+    }
+    if (route.junction) {
+      junctions.push({ key: tileKey, at: route.junction, drawKeys: tile.exits.map((exit) => exitKey(tileKey, exit)) });
+    }
+    for (const exit of tile.exits) {
+      const facing = neighbor(tile.hex, exit);
+      const side = oppositeOf(exit);
+      if (planetsByKey.has(hexKey(facing)) && connects(hexKey(facing), side)) {
+        const stub = stubPiece(facing, side, S);
+        keys.push(stub.key);
+        strokes.push({ piece: stub, tileKey, service: tile.service, drawKeys: [stub.key, exitKey(tileKey, exit)], serviceKey, dangling: false });
+      }
+    }
+  }
+  const dangling = danglingPlanets.flatMap((planet) =>
+    planet.dangling.map((side): DanglingEnd => {
+      const exit = oppositeOf(side);
+      const pieces = routes.get(hexKey(neighbor(planet.hex, side))) ?? [];
+      const end = pieces.map((piece) => portEnd(piece, exit)).find((found) => found !== null);
+      // Should the tiles not show the lane (a replay frame in between), the bar goes where its end would be.
+      const outward = edgeMidpoint(side, S);
+      const at = end?.at ?? add(hexToPixel(planet.hex, S), outward, 1 + DANGLE_INSET);
+      const along = end?.tangent ?? { x: outward.x / apothem(S), y: outward.y / apothem(S) };
+      return { key: `${hexKey(planet.hex)}:${side}`, planet, at, across: { x: -along.y, y: along.x } };
     }),
   );
+  return { strokes, junctions, dangling, keys };
 }
 
 /** Offset of facility marker `index` from its planet's centre. */
@@ -252,23 +312,30 @@ function line(from: Point, to: Point): string {
 }
 
 /**
- * Segments that the preview action would add or give service on. A new exit facing an
- * exit-limited planet claims an open exit there if it has one (`claims`); service claims nothing.
+ * The lane the preview action would leave on its hex: the tile's whole resulting exit set, drawn
+ * with the same geometry as built lanes. A new exit facing an exit-limited planet claims an open
+ * exit there if it has one (`claims`); service claims nothing.
  */
-function previewSegments(
+function previewNetwork(
   preview: HexAction,
   tiles: TileState[],
   planetsByKey: Map<string, Planet>,
   corp: string,
   connects: Connects,
   claims: Connects,
-): Segment[] {
-  const existing = tiles.find((t) => hexKey(t.hex) === hexKey(preview.hex));
+): LaneNetwork {
+  const existing = tiles.find((t) => hexKey(t.hex) === hexKey(preview.hex))?.exits ?? [];
   let exits: DirectionName[];
   if (preview.type === "chart") exits = preview.exits;
-  else if (preview.type === "upgrade") exits = [preview.exit];
-  else exits = existing?.exits ?? [];
-  return buildSegments([{ hex: preview.hex, exits, service: [corp] }], planetsByKey, preview.type === "service" ? connects : claims);
+  else if (preview.type === "upgrade") exits = [...existing, preview.exit];
+  else exits = existing;
+  return buildNetwork([{ hex: preview.hex, exits, service: [corp] }], planetsByKey, preview.type === "service" ? connects : claims);
+}
+
+/** Width of a lane's core: at least MIN_CORE_WIDTH, and room for every slot's trace with a margin. */
+function coreWidth(corporationCount: number): number {
+  const outermost = ((corporationCount - 1) / 2) * TRACE_SPACING;
+  return Math.max(MIN_CORE_WIDTH, 2 * outermost + TRACE_WIDTH + 1.5);
 }
 
 export function HexMap(props: HexMapProps) {
@@ -315,13 +382,14 @@ export function HexMap(props: HexMapProps) {
     () => (key, side) => laneConnects(limited, key, side) || (limited.get(key)?.unclaimed ?? 0) > 0,
     [limited],
   );
-  const segments = useMemo(() => buildSegments(tiles, planetsByKey, connects), [tiles, planetsByKey, connects]);
-  const dangling = useMemo(() => danglingEnds(facilities?.planets ?? []), [facilities]);
-  const builtKeys = useMemo(
-    () => segments.flatMap((seg) => [seg.key, ...seg.service.map((corpId) => `${seg.key}:${corpId}`)]),
-    [segments],
+  const network = useMemo(
+    () => buildNetwork(tiles, planetsByKey, connects, facilities?.planets),
+    [tiles, planetsByKey, connects, facilities],
   );
-  const fresh = useFreshKeys(builtKeys);
+  // Freshness follows exits, stubs and service as they are added, so an upgrade that reshapes a
+  // tile draws in only its new arm.
+  const fresh = useFreshKeys(network.keys);
+  const maskId = `hexmap-badges-${useId().replace(/:/g, "")}`;
   // A facility is new when its build number, or its owner (a seizure), was not on the map before.
   const facilityKeys = useMemo(
     () => (facilities?.planets ?? []).flatMap((p) => p.facilities.map((f) => facilityKey(p, f))),
@@ -341,8 +409,13 @@ export function HexMap(props: HexMapProps) {
 
   const focus = corporations.find((c) => c.id === focusCorp) ?? null;
   const reachable = new Set(focus?.reachablePlanets ?? []);
+  // Slots come from the game's full corporation list, so a corporation's trace keeps its place on
+  // every lane whoever else shares it.
   const slotOffset = (corpId: string): number =>
     (corpIds.indexOf(corpId) - (corpIds.length - 1) / 2) * TRACE_SPACING;
+  const core = coreWidth(corpIds.length);
+  const casing = core + 2 * CASING_EDGE;
+  const [boxX, boxY, boxWidth, boxHeight] = box.split(" ").map(Number);
   const homeworlds = new Map<string, CorporationState[]>();
   for (const corp of corporations) {
     homeworlds.set(corp.homeworld, [...(homeworlds.get(corp.homeworld) ?? []), corp]);
@@ -359,6 +432,14 @@ export function HexMap(props: HexMapProps) {
           <stop offset="0%" className="hexmap__wisp-core" />
           <stop offset="100%" className="hexmap__wisp-edge" />
         </radialGradient>
+        {/* Lanes and traces stop in a clean circle at a planet's badge, even when the planet is dimmed. */}
+        <mask id={maskId} maskUnits="userSpaceOnUse" x={boxX} y={boxY} width={boxWidth} height={boxHeight}>
+          <rect x={boxX} y={boxY} width={boxWidth} height={boxHeight} fill="#fff" />
+          {hubs.map((hub) => {
+            const center = hexToPixel(hub.hex, S);
+            return <circle key={hexKey(hub.hex)} cx={center.x} cy={center.y} r={BADGE_RADIUS - 0.5} fill="#000" />;
+          })}
+        </mask>
       </defs>
       <g className="hexmap__cells">
         {board.hexes.map((hex) => {
@@ -390,52 +471,17 @@ export function HexMap(props: HexMapProps) {
         })}
       </g>
 
-      <g className="hexmap__lanes">
-        {segments.map((seg) => (
-          <path
-            key={seg.key}
-            d={line(seg.from, seg.to)}
-            strokeWidth={LANE_WIDTH}
-            className={`hexmap__lane${fresh.has(seg.key) ? " hexmap__lane--fresh" : ""}`}
-            pathLength={fresh.has(seg.key) ? 1 : undefined}
-          />
-        ))}
-      </g>
-
-      <g className="hexmap__traces">
-        {/* A glow in the builder's colour behind lanes and service that just appeared. */}
-        {segments.flatMap((seg) =>
-          seg.service
-            .filter((corpId) => fresh.has(`${seg.key}:${corpId}`))
-            .map((corpId) => (
-              <path
-                key={`${seg.key}:${corpId}:glow`}
-                d={line(seg.from, seg.to)}
-                stroke={corporationColor(corpId, corpIds)}
-                strokeWidth={LANE_WIDTH * 1.5}
-                className="hexmap__glow"
-              />
-            )),
-        )}
-        {segments.flatMap((seg) =>
-          seg.service.map((corpId) => {
-            const key = `${seg.key}:${corpId}`;
-            const offset = slotOffset(corpId);
-            const dimmed = focus !== null && corpId !== focus.id;
-            const isFresh = fresh.has(key);
-            return (
-              <path
-                key={key}
-                d={line(add(seg.from, seg.normal, offset), add(seg.to, seg.normal, offset))}
-                stroke={corporationColor(corpId, corpIds)}
-                strokeWidth={focus?.id === corpId ? TRACE_WIDTH * 1.35 : TRACE_WIDTH}
-                className={`hexmap__trace${dimmed ? " hexmap__trace--dimmed" : ""}${isFresh ? " hexmap__trace--fresh" : ""}`}
-                pathLength={isFresh ? 1 : undefined}
-              />
-            );
-          }),
-        )}
-      </g>
+      <LaneLayers
+        network={network}
+        fresh={fresh}
+        focusId={focus?.id ?? null}
+        corpIds={corpIds}
+        slotOffset={slotOffset}
+        core={core}
+        casing={casing}
+        mask={`url(#${maskId})`}
+        superseded={preview?.type === "upgrade" && focus ? hexKey(preview.hex) : null}
+      />
 
       <g className="hexmap__changes">
         {board.hexes
@@ -464,16 +510,14 @@ export function HexMap(props: HexMapProps) {
       </g>
 
       {preview && focus && (
-        <g className="hexmap__preview">
-          {previewSegments(preview, tiles, planetsByKey, focus.id, connects, claims).map((seg) => (
-            <path
-              key={seg.key}
-              d={line(seg.from, seg.to)}
-              stroke={corporationColor(focus.id, corpIds)}
-              strokeWidth={LANE_WIDTH * 0.7}
-            />
-          ))}
-        </g>
+        <PreviewLane
+          network={previewNetwork(preview, tiles, planetsByKey, focus.id, connects, claims)}
+          color={corporationColor(focus.id, corpIds)}
+          offset={slotOffset(focus.id)}
+          core={core}
+          casing={casing}
+          mask={`url(#${maskId})`}
+        />
       )}
 
       {focus && (
@@ -596,18 +640,17 @@ export function HexMap(props: HexMapProps) {
         })}
       </g>
 
-      {dangling.length > 0 && (
+      {network.dangling.length > 0 && (
         <g className="hexmap__dangling">
-          {dangling.map((end) => {
-            const half = LANE_WIDTH * 0.62;
+          {network.dangling.map((end) => {
+            const half = (casing + DANGLE_OVERHANG) / 2;
+            const d = line(add(end.at, end.across, -half), add(end.at, end.across, half));
             return (
-              <path
-                key={end.key}
-                d={line(add(end.at, end.across, -half), add(end.at, end.across, half))}
-                className="hexmap__dangle"
-              >
+              <g key={end.key}>
                 <title>{`Dangling lane: ${end.planet.name} has no exit on this side, so the lane does not connect. A facility built there can give it the new exit.`}</title>
-              </path>
+                <path d={d} className="hexmap__dangle-halo" />
+                <path d={d} className="hexmap__dangle" />
+              </g>
             );
           })}
         </g>
@@ -638,6 +681,146 @@ export function HexMap(props: HexMapProps) {
         ))}
       </g>
     </svg>
+  );
+}
+
+interface LaneLayersProps {
+  network: LaneNetwork;
+  fresh: Set<string>;
+  focusId: string | null;
+  corpIds: string[];
+  slotOffset: (corpId: string) => number;
+  core: number;
+  casing: number;
+  mask: string;
+  /** The tile whose current shape a previewed upgrade replaces: drawn faintly under the preview. */
+  superseded: string | null;
+}
+
+/**
+ * The lane network as hyperspace routes: every casing, then every core, then the corporations'
+ * traces (the focused one last), then the interchange disks, so routes merge without seams at
+ * borders and junctions. Glows in a corporation's colour sit under the casings: briefly behind
+ * what was just built, steadily behind the focused corporation's network.
+ */
+function LaneLayers({ network, fresh, focusId, corpIds, slotOffset, core, casing, mask, superseded }: LaneLayersProps) {
+  const { strokes, junctions } = network;
+  const drawsIn = (keys: string[]): boolean => keys.some((key) => fresh.has(key));
+  const fadeClass = (tileKey: string): string => (tileKey === superseded ? " hexmap__route--superseded" : "");
+  const strokeClass = (base: string, stroke: LaneStroke): string =>
+    `${base}${drawsIn(stroke.drawKeys) ? ` ${base}--fresh` : ""}${stroke.dangling ? " hexmap__route--dangling" : ""}${fadeClass(stroke.tileKey)}`;
+  const pathOf = (stroke: LaneStroke): string => piecePath(stroke.piece);
+  const glows = strokes.flatMap((stroke) => {
+    const building = stroke.service.filter((corpId) => fresh.has(stroke.serviceKey + corpId));
+    const builders = building.length > 0 ? building : drawsIn(stroke.drawKeys) ? stroke.service.slice(0, 1) : [];
+    const glow = builders.map((corpId) => ({ corpId, focus: false }));
+    if (focusId !== null && stroke.service.includes(focusId) && !builders.includes(focusId)) glow.push({ corpId: focusId, focus: true });
+    return glow.map(({ corpId, focus }) => (
+      <path
+        key={`${stroke.piece.key}:${corpId}`}
+        d={pathOf(stroke)}
+        stroke={corporationColor(corpId, corpIds)}
+        strokeWidth={casing + 3}
+        className={`hexmap__route-glow${focus ? " hexmap__route-glow--focus" : ""}`}
+      />
+    ));
+  });
+  // Each corporation's traces form one group, dimmed as a whole so overlapping ends at hex
+  // borders do not show as darker dots; the focused corporation's group is painted last.
+  const traceCorps = corpIds
+    .filter((corpId) => strokes.some((stroke) => stroke.service.includes(corpId)))
+    .sort((a, b) => Number(a === focusId) - Number(b === focusId));
+  return (
+    <g className="hexmap__routes" mask={mask}>
+      <g>{glows}</g>
+      <g>
+        {strokes.map((stroke) => (
+          <path
+            key={stroke.piece.key}
+            d={pathOf(stroke)}
+            strokeWidth={casing}
+            className={strokeClass("hexmap__route-casing", stroke)}
+            pathLength={drawsIn(stroke.drawKeys) ? 1 : undefined}
+          />
+        ))}
+      </g>
+      <g>
+        {strokes.map((stroke) => (
+          <path
+            key={stroke.piece.key}
+            d={pathOf(stroke)}
+            strokeWidth={core}
+            className={strokeClass("hexmap__route-core", stroke)}
+            pathLength={drawsIn(stroke.drawKeys) ? 1 : undefined}
+          />
+        ))}
+      </g>
+      <g>
+        {traceCorps.map((corpId) => (
+          <g key={corpId} className={`hexmap__trace-group${focusId !== null && corpId !== focusId ? " hexmap__trace-group--dimmed" : ""}`}>
+            {(["hexmap__trace-halo", "hexmap__trace"] as const).map((layer) =>
+              strokes
+                .filter((stroke) => stroke.service.includes(corpId))
+                .map((stroke) => {
+                  const isFresh = fresh.has(stroke.serviceKey + corpId) || drawsIn(stroke.drawKeys);
+                  const width = corpId === focusId ? FOCUS_TRACE_WIDTH : TRACE_WIDTH;
+                  // The core-coloured under-strokes go first, and part the traces of corporations
+                  // painted earlier wherever this corporation's trace crosses them.
+                  return (
+                    <path
+                      key={`${layer}:${stroke.piece.key}`}
+                      d={tracePath(stroke.piece, slotOffset(corpId))}
+                      stroke={layer === "hexmap__trace" ? corporationColor(corpId, corpIds) : undefined}
+                      strokeWidth={layer === "hexmap__trace" ? width : width + TRACE_HALO}
+                      className={`${layer}${isFresh ? " hexmap__trace--fresh" : ""}${fadeClass(stroke.tileKey)}`}
+                      pathLength={isFresh ? 1 : undefined}
+                    />
+                  );
+                }),
+            )}
+          </g>
+        ))}
+      </g>
+      {/* Spokes meet under an interchange disk, like a small planet hub, which also hides where their traces join. */}
+      <g>
+        {junctions.map((junction) => (
+          <circle
+            key={junction.key}
+            cx={junction.at.x}
+            cy={junction.at.y}
+            r={core / 2 + JUNCTION_MARGIN}
+            strokeWidth={CASING_EDGE * 1.15}
+            className={`hexmap__junction${drawsIn(junction.drawKeys) ? " hexmap__junction--fresh" : ""}${fadeClass(junction.key)}`}
+          />
+        ))}
+      </g>
+    </g>
+  );
+}
+
+/**
+ * The lane a previewed build would leave, in the builder's colour: translucent bands (one group,
+ * so overlaps do not darken), the interchange disk if it becomes a junction, and a dashed trace.
+ */
+function PreviewLane(props: { network: LaneNetwork; color: string; offset: number; core: number; casing: number; mask: string }) {
+  const { network, color, offset, core, casing, mask } = props;
+  return (
+    <g className="hexmap__preview" mask={mask} stroke={color}>
+      <g className="hexmap__preview-bands">
+        {network.strokes.map(({ piece }) => (
+          <path key={piece.key} d={piecePath(piece)} strokeWidth={casing} />
+        ))}
+        {network.junctions.map((junction) => (
+          <circle key={junction.key} cx={junction.at.x} cy={junction.at.y} r={core / 2 + JUNCTION_MARGIN + CASING_EDGE} fill={color} stroke="none" />
+        ))}
+      </g>
+      {network.strokes.map(({ piece }) => (
+        <path key={piece.key} d={tracePath(piece, offset)} className="hexmap__preview-trace" />
+      ))}
+      {network.junctions.map((junction) => (
+        <circle key={junction.key} cx={junction.at.x} cy={junction.at.y} r={core / 2 + JUNCTION_MARGIN} className="hexmap__preview-junction" />
+      ))}
+    </g>
   );
 }
 
@@ -743,8 +926,8 @@ function FacilityPreview({ action, planet, color }: { action: BuildFacilityActio
     <g className="hexmap__facility-preview">
       {stub && (
         <>
-          <path d={line(stub.from, stub.to)} stroke={color} strokeWidth={LANE_WIDTH * 0.7} />
-          <circle cx={stub.from.x} cy={stub.from.y} r={LANE_WIDTH * 0.75} stroke={color} className="hexmap__facility-preview-ring" />
+          <path d={line(stub.from, stub.to)} stroke={color} strokeWidth={MIN_CORE_WIDTH * 0.8} />
+          <circle cx={stub.from.x} cy={stub.from.y} r={MIN_CORE_WIDTH * 0.9} stroke={color} className="hexmap__facility-preview-ring" />
         </>
       )}
       <rect
