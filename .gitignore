@@ -11,3 +11,4 @@ web/*.tsbuildinfo
 public/
 .vercel/
 .env*.local
+.claude/worktrees/
