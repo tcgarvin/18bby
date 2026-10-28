@@ -11,7 +11,14 @@ from bby18.actions import BuyFleet, BuyShare, FinishFleets, NoNetworkAction, Pas
 from bby18.api.serialize import action_to_json, match_action, session_to_json
 from bby18.board import Planet, Terrain, load_board
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
-from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG, UNLIMITED, FleetTier
+from bby18.config import (
+    CLASSIC_CONFIG,
+    DEFAULT_CONFIG,
+    FLEET_CONFIG,
+    FOUR_CORPORATIONS,
+    UNLIMITED,
+    FleetTier,
+)
 from bby18.death_star import SITE_NAME, SitePlacementError, place_sites
 from bby18.game import Game
 from bby18.hexgrid import Hex
@@ -665,6 +672,8 @@ def test_default_death_star_numbers_match_the_decisions_doc():
 def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
     assert FLEET_CONFIG == replace(
         DEFAULT_CONFIG,
+        corporations=FOUR_CORPORATIONS,
+        planet_pair_bonus={},
         facility_rules=False,
         fleet_limit=4,
         death_star_stage_values=(40, 50, 60, 70),

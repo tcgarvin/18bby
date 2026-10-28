@@ -24,7 +24,7 @@ from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
 from bby18.metrics import LATE_ROUND, count_log, planets_touched
 from bby18.playtest import play_one
-from bby18.sweep import parse_spec, run_sweep
+from bby18.sweep import parse_spec, run_sweep, to_jsonable
 
 RULES = DEFAULT_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
@@ -231,6 +231,8 @@ def test_report_rejects_a_variant_mixing_facility_rules_on_and_off():
 
 def test_a_sweep_spec_variant_plays_the_fleet_rules():
     fleets = {
+        "corporations": ["CEC", "KDY", "CSC", "KTG"],
+        "planet_pair_bonus": {},
         "facility_rules": False,
         "fleet_limit": 4,
         "death_star_stage_values": [40, 50, 60, 70],
@@ -247,7 +249,10 @@ def test_a_sweep_spec_variant_plays_the_fleet_rules():
     rows = run_sweep(spec.variants, spec.seeds, spec.player_counts, spec.bot_kinds, workers=1)
     by_variant = {r["variant"]: r for r in rows}
     assert by_variant["facilities"]["overrides"] == {}
-    assert by_variant["fleets"]["overrides"] == fleets
+    assert by_variant["fleets"]["overrides"] == {
+        **fleets,
+        "corporations": [to_jsonable(c) for c in FLEETS.corporations],
+    }
     assert f"{ROW_PREFIX}facilities_built" in by_variant["facilities"]
     assert f"{DS}launched" in by_variant["facilities"]
     assert not [k for k in by_variant["fleets"] if k.startswith(ROW_PREFIX)]

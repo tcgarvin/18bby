@@ -23,6 +23,7 @@ from bby18.bots.stable import STABLE
 from bby18.config import (
     UNLIMITED,
     DEFAULT_CONFIG,
+    SIX_CORPORATIONS,
     CorporationSpec,
     FleetTier,
     GameConfig,
@@ -92,6 +93,8 @@ def _coerce(hint: Any, value: Any) -> Any:
             return value
         if isinstance(value, Mapping):
             return CorporationSpec(**value)
+        if isinstance(value, str):
+            return _corporation_by_id(value)
         return CorporationSpec(*value)
     if hint is FleetTier:
         return _coerce_fleet_tier(value)
@@ -114,6 +117,14 @@ def _coerce(hint: Any, value: Any) -> Any:
             for k, v in value.items()
         }
     raise TypeError(f"unsupported field type {hint}")
+
+
+def _corporation_by_id(corp_id: str) -> CorporationSpec:
+    """One of ``SIX_CORPORATIONS``, named by its id in a spec."""
+    for spec in SIX_CORPORATIONS:
+        if spec.id == corp_id:
+            return spec
+    raise ValueError(f"No corporation {corp_id!r}; name one of {[c.id for c in SIX_CORPORATIONS]}")
 
 
 def _coerce_fleet_tier(value: Any) -> FleetTier:

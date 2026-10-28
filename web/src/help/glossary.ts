@@ -265,7 +265,7 @@ export const GLOSSARY = {
   basicRoute: {
     term: "Basic route",
     summary: (r) =>
-      `Any two leftover reachable planets that do not form a trade pair still earn ${r.basicRouteValue} together. No bonuses apply.`,
+      `Any two leftover reachable planets that do not form a trade pair still earn ${r.basicRouteValue} together. They never get the regional bonus.`,
     section: "revenue",
   },
   regionalBonus: {

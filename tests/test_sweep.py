@@ -236,3 +236,17 @@ def test_failed_game_does_not_stop_the_sweep_but_is_reported(monkeypatch):
         run_sweep({"baseline": DEFAULT_CONFIG}, range(1, 4), [3], ["random"], workers=1)
     assert [r["seed"] for r in info.value.rows] == [1, 3]
     assert [f["seed"] for f in info.value.failures] == [2]
+
+
+def test_a_spec_names_corporations_by_id():
+    spec = parse_spec(
+        {"variants": {"four": {"corporations": ["CEC", "KDY", "CSC", "KTG"]}}, "seeds": [1, 1]}
+    )
+    assert [c.homeworld for c in spec.variants["four"].corporations] == [
+        "Corellia",
+        "Kuat",
+        "Coruscant",
+        "Kashyyyk",
+    ]
+    with pytest.raises(ValueError, match="No corporation"):
+        parse_spec({"variants": {"bad": {"corporations": ["XYZ"]}}, "seeds": [1, 1]})

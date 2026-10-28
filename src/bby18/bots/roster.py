@@ -4,7 +4,8 @@ A player picks a difficulty, not a strategy; bot seats are filled with character
 game seed, so a saved game rebuilds with the same opponents. The strategy is revealed when the
 game ends. A character's carelessness at each difficulty comes from ``BOT_NOISE`` in
 ``config.py``, calibrated per strategy so every character at one difficulty is about equally hard
-to beat (see ``docs/sweeps/difficulty-2026-10-26``).
+to beat (see ``docs/sweeps/difficulty-2026-10-28``). Characters start corporations by
+the Death Star site (``roster_policy``).
 """
 
 from __future__ import annotations
@@ -96,11 +97,27 @@ def character_named(name: str) -> Character:
     raise KeyError(f"No character named {name!r}")
 
 
+ROSTER_START_ORDER = "site"
+"""How characters choose what to start, unless their strategy starts at random: like a person
+at the table, they weigh where the Death Star is (``GreedyPolicy.start_order``)."""
+
+
+def roster_policy(strategy: str) -> GreedyPolicy:
+    """The stable strategy as characters play it, before any noise: the stable as tournaments
+    seat it, but starting corporations by ``ROSTER_START_ORDER`` (bot kind ``strategy@site``)."""
+    policy = STABLE[strategy]
+    if policy.start_order == "random":
+        return policy
+    return replace(policy, start_order=ROSTER_START_ORDER)
+
+
 def character_policy(character: Character, difficulty: str) -> GreedyPolicy:
     """The policy ``character`` plays at ``difficulty``."""
     if difficulty not in BOT_NOISE:
         raise ValueError(f"Unknown difficulty {difficulty!r}; choose from {DIFFICULTIES}")
-    return replace(STABLE[character.strategy], noise=BOT_NOISE[difficulty][character.strategy])
+    return replace(
+        roster_policy(character.strategy), noise=BOT_NOISE[difficulty][character.strategy]
+    )
 
 
 def draw_characters(seed: int, count: int) -> list[Character]:

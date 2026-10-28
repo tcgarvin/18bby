@@ -16,11 +16,14 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   `src/bby18/tournament.py`. A sweep spec with `"tournament": "stable"` plays every lineup in
   every seat order; `bby18 tournament-report --rows rows.jsonl` finds best responses and
   equilibria. The balance goal is no single dominant strategy, not equal win rates.
-- Death Star rules in sweeps: the rules are the default (with facilities since 2026-10-27), so a
-  spec variant `{}` plays them. Add `"facility_rules": false, "fleet_limit": 4,
-  "death_star_stage_values": [40, 50, 60, 70]` (`FLEET_CONFIG`) to compare with the fleet rules
-  of 2026-10-26; `"death_star_rules": false, "facility_rules": false` (`CLASSIC_CONFIG`'s rules;
-  facilities need the Death Star rules) to compare with the rules before 2026-10-26, and
+- Death Star rules in sweeps: the rules are the default (with facilities since 2026-10-27, six
+  corporations and Coruscant's +10 pair bonus since 2026-10-28), so a spec variant `{}` plays
+  them; seat `strategy@site` bot kinds there (site-aware starting, as the web opponents play).
+  Add `"corporations": ["CEC", "KDY", "CSC", "KTG"], "planet_pair_bonus": {},
+  "facility_rules": false, "fleet_limit": 4, "death_star_stage_values": [40, 50, 60, 70]`
+  (`FLEET_CONFIG`) to compare with the fleet rules of 2026-10-26; the same corporations and bonus
+  with `"death_star_rules": false, "facility_rules": false` (`CLASSIC_CONFIG`'s rules; facilities
+  need the Death Star rules) to compare with the rules before 2026-10-26, and
   `"map_file": "map-127.json"` for the board before the east edge was cut (also 2026-10-26).
   Games with `death_star_rules` on get `ds.*` row fields from a move
   observer (`src/bby18/death_star_metrics.py`, no log parsing); `bby18 death-star-report --rows
@@ -29,10 +32,11 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   touched; games with `facility_rules` on add `fac.*` fields
   (`src/bby18/facility_metrics.py`), which the report prints as a facilities block. Bots price
   planet exits in their routes in `src/bby18/bots/routing.py`.
-- Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy with a
-  per-difficulty `noise` from `BOT_NOISE` in `config.py`. Recalibrate with
-  `docs/sweeps/difficulty-2026-10-27` specs (script in `docs/sweeps/difficulty-2026-10-25`) when
-  the rules or a strategy change.
+- Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy started
+  by the Death Star site (`roster_policy`, bot kind `strategy@site`) with a per-difficulty
+  `noise` from `BOT_NOISE` in `config.py`. Recalibrate with `docs/sweeps/difficulty-2026-10-28`
+  specs (script in `docs/sweeps/difficulty-2026-10-25`, reference `builder@site`) when the rules
+  or a strategy change.
 - Rule enforcement: `src/bby18/game.py` and `src/bby18/network.py`. Drivers and bots decide what
   to do; these modules decide whether it is legal and apply the consequences.
 - Death Star rules (`death_star_rules`, the default since 2026-10-26) with facilities and planet

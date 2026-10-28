@@ -35,7 +35,7 @@ from bby18.hexgrid import Hex
 from bby18.revenue import compute_revenue
 from bby18.state import Corporation, CorpStatus, Player
 
-START_ORDERS = ("fixed", "random", "best_home")
+START_ORDERS = ("fixed", "random", "best_home", "site")
 PAR_CHOICES = ("min", "max", "random", "mid")
 ROUTING_MODES = ("straight", "path")
 NO_ROUTE_COST = 1000
@@ -65,8 +65,9 @@ class GreedyPolicy:
     """
 
     start_order: str = "fixed"
-    """Which unstarted corporation to start: "fixed" (config order), "random", or
-    "best_home" (highest revenue potential near its homeworld, ties random)."""
+    """Which unstarted corporation to start: "fixed" (config order), "random", "best_home"
+    (highest revenue potential near its homeworld, ties random), or "site" (``best_home`` plus
+    the Death Star contract the homeworld is placed to win, scaled by ``contract_weight``)."""
     par_choice: str = "min"
     """Par when starting: "min", "max", "random" or "mid" among the affordable pars. "max" is
     the highest par the player can float alone, or the highest affordable if none."""
@@ -329,10 +330,13 @@ class GreedyBot:
             shuffled = list(options)
             self.rng.shuffle(shuffled)
             return shuffled
-        keyed = [
-            (-self.home_potential(game, game.corp(o.corp_id)), self.rng.random(), o)
-            for o in options
-        ]
+
+        def score(corp: Corporation) -> float:
+            if order == "site":
+                return self.home_potential(game, corp) + self.site_appeal(game, corp)
+            return self.home_potential(game, corp)
+
+        keyed = [(-score(game.corp(o.corp_id)), self.rng.random(), o) for o in options]
         keyed.sort(key=lambda t: (t[0], t[1]))
         return [o for _, _, o in keyed]
 
@@ -344,6 +348,18 @@ class GreedyBot:
         home = game.homeworld(corp)
         nearby = [p for p in game.board.planets if p.hex.distance(home) <= self.policy.home_radius]
         return game.planet_revenue(nearby).total
+
+    def site_appeal(self, game: Game, corp: Corporation) -> float:
+        """The active site's contract value as seen from the homeworld, times ``contract_weight``:
+        full within ``home_radius`` hexes, falling to nothing at twice that, so that a player
+        weighs where the Death Star is when choosing what to start. 0 with no site."""
+        site = game.death_star_site()
+        if site is None:
+            return 0.0
+        distance = game.homeworld(corp).distance(site)
+        radius = self.policy.home_radius
+        reach = max(0.0, min(1.0, (2 * radius - distance) / radius))
+        return self.policy.contract_weight * game.contract_value() * reach
 
     def _loser_sale(
         self, game: Game, player: Player, legal: list[StockAction]

@@ -1,10 +1,11 @@
 import random
+from dataclasses import replace
 
 import pytest
 
 from bby18.actions import BuyShare, PassStock, SellShares, ShareSource, StockAction
 from bby18.bots import GreedyBot, GreedyPolicy
-from bby18.config import CLASSIC_CONFIG
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, CorporationSpec
 from bby18.game import Game
 from bby18.playtest import BOT_KINDS, make_deciders, play_one, seat_kinds
 from bby18.runner import run_game
@@ -377,3 +378,64 @@ def test_noisy_kind_string_builds_a_noisy_stable_bot():
     assert game.is_over()
     with pytest.raises(ValueError):
         seat_kinds("baron~lots", 3)
+
+
+def test_start_order_kind_string_sets_the_start_order():
+    deciders = make_deciders(
+        Game.new(["A", "B", "C"], CLASSIC_CONFIG, 1), "baron@site~0.2", random.Random(1)
+    )
+    for bot in deciders.values():
+        assert isinstance(bot, GreedyBot)
+        assert bot.policy.start_order == "site"
+        assert bot.policy.noise == 0.2
+    with pytest.raises(ValueError):
+        seat_kinds("baron@nearest", 3)
+
+
+def test_site_appeal_is_the_contract_value_near_the_site_and_nothing_far_away():
+    game = Game.new(["A", "B", "C"], DEFAULT_CONFIG, 1)
+    site = game.death_star_site()
+    assert site is not None
+    bot = GreedyBot(random.Random(1), GreedyPolicy(start_order="site", contract_weight=2.0))
+    radius = bot.policy.home_radius
+    for corp in game.corporations.values():
+        distance = game.homeworld(corp).distance(site)
+        appeal = bot.site_appeal(game, corp)
+        if distance <= radius:
+            assert appeal == 2.0 * game.contract_value()
+        elif distance >= 2 * radius:
+            assert appeal == 0
+        else:
+            assert 0 < appeal < 2.0 * game.contract_value()
+
+
+def test_site_start_order_without_a_site_plays_like_best_home():
+    best_home = _play(4, GreedyPolicy(start_order="best_home"))
+    site = _play(4, GreedyPolicy(start_order="site"))
+    assert _log(site) == _log(best_home)
+
+
+def test_site_start_order_prefers_the_corporation_nearest_the_site():
+    game = Game.new(["A", "B", "C"], DEFAULT_CONFIG, 1)
+    bot = GreedyBot(random.Random(1), GreedyPolicy(start_order="site", contract_weight=10.0))
+    player = game.players[0]
+    legal = game.legal_stock_actions(player, set())
+    starts = bot._start_options(game, player, [a for a in legal if isinstance(a, BuyShare)])
+    site = game.death_star_site()
+    assert site is not None
+    nearest = min(game.homeworld(c).distance(site) for c in game.corporations.values())
+    assert game.homeworld(game.corp(starts[0].corp_id)).distance(site) == nearest
+
+
+def test_six_corporation_game_with_site_aware_bots_completes():
+    config = replace(
+        DEFAULT_CONFIG,
+        corporations=DEFAULT_CONFIG.corporations
+        + (
+            CorporationSpec("IGB", "InterGalactic Banking Clan", "Mygeeto"),
+            CorporationSpec("RRC", "Ryloth Ryll Combine", "Ryloth"),
+        ),
+    )
+    game, _ = play_one(5, 3, "mix:baron@site,contractor@site,staller@site", config)
+    assert game.is_over()
+    assert len(game.corporations) == 6

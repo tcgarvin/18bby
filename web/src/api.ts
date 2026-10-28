@@ -508,6 +508,8 @@ export interface Rules {
   regionalBonus: number;
   regionalBonusRegions: Region[];
   basicRouteValue: number;
+  /** Planet name -> extra value of every trade pair or basic route that includes it. */
+  planetPairBonus: Record<string, number>;
   stockMarket: number[][];
   parColumn: number;
   parPrices: number[];

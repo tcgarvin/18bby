@@ -1,0 +1,12 @@
+four: 14580 games, corps started/game 3.21
+  floated in % of games: {'CEC': '100%', 'CSC': '21%', 'KDY': '100%', 'KTG': '99%'}
+  a corp nearest the first site floats: 100%; corps within 4 of it float 100% of the time
+six-d4: 14580 games, corps started/game 3.16
+  floated in % of games: {'CEC': '57%', 'CSC': '0%', 'IGB': '1%', 'KDY': '100%', 'KTG': '100%', 'RRC': '57%'}
+  a corp nearest the first site floats: 100%; corps within 4 of it float 100% of the time
+six-d5: 14580 games, corps started/game 3.18
+  floated in % of games: {'CEC': '64%', 'CSC': '0%', 'IGB': '10%', 'KDY': '100%', 'KTG': '100%', 'RRC': '44%'}
+  a corp nearest the first site floats: 94%; corps within 4 of it float 93% of the time
+six-d5-c14: 14580 games, corps started/game 3.18
+  floated in % of games: {'CEC': '64%', 'CSC': '0%', 'IGB': '10%', 'KDY': '100%', 'KTG': '100%', 'RRC': '44%'}
+  a corp nearest the first site floats: 94%; corps within 4 of it float 93% of the time

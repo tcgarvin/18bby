@@ -1,0 +1,67 @@
+{
+ "variants": {
+  "four": {
+   "corporations": [
+    "CEC",
+    "KDY",
+    "CSC",
+    "KTG"
+   ],
+   "planet_pair_bonus": {}
+  },
+  "six-d4": {
+   "corporations": [
+    "CEC",
+    "KDY",
+    "CSC",
+    "KTG",
+    "IGB",
+    "RRC"
+   ],
+   "planet_pair_bonus": {}
+  },
+  "six-d5": {
+   "corporations": [
+    "CEC",
+    "KDY",
+    "CSC",
+    "KTG",
+    "IGB",
+    "RRC"
+   ],
+   "death_star_max_homeworld_distance": 5,
+   "planet_pair_bonus": {}
+  },
+  "six-d5-c14": {
+   "corporations": [
+    "CEC",
+    "KDY",
+    "CSC",
+    "KTG",
+    "IGB",
+    "RRC"
+   ],
+   "death_star_max_homeworld_distance": 5,
+   "certificate_limit": 14,
+   "planet_pair_bonus": {}
+  }
+ },
+ "seeds": [
+  1,
+  20
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "admiral@site",
+  "early-builder@site",
+  "targeted@site",
+  "baron@site",
+  "contractor@site",
+  "baron-prestige@site",
+  "staller@site",
+  "builder@site",
+  "baron-tycoon@site"
+ ]
+}
