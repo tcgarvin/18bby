@@ -112,14 +112,7 @@
   stroke-linecap: butt;
 }
 
-.hexmap__junction {
-  fill: var(--route-core);
-  stroke: var(--route-casing);
-  transition: stroke 150ms;
-}
-
-.hexmap--focused .hexmap__route-casing,
-.hexmap--focused .hexmap__junction {
+.hexmap--focused .hexmap__route-casing {
   stroke: var(--route-casing-quiet);
 }
 
@@ -158,11 +151,6 @@
 
 .hexmap__preview-bands {
   opacity: 0.18;
-}
-
-.hexmap__preview-junction {
-  fill: var(--route-core);
-  stroke-width: 0.8;
 }
 
 /* The shape a previewed upgrade replaces stays faintly visible under the preview. */
@@ -274,7 +262,7 @@
 }
 
 /* Lanes and service that just appeared (a build replaying, or your own): a new lane draws in edge
-   to edge from the network it extends, a junction's new arm from the centre out, the traces a
+   to edge from the network it extends (a junction's new bends too), the traces a
    beat later, over a glow in the builder's colour that fades. */
 .hexmap__route-casing--fresh,
 .hexmap__route-core--fresh,
@@ -285,16 +273,6 @@
 
 .hexmap__trace--fresh {
   animation-delay: 100ms;
-}
-
-.hexmap__junction--fresh {
-  animation: hexmap-fade-in 180ms ease-out both;
-}
-
-@keyframes hexmap-fade-in {
-  from {
-    opacity: 0;
-  }
 }
 
 @keyframes hexmap-draw {
@@ -322,7 +300,6 @@
   .hexmap__route-casing--fresh,
   .hexmap__route-core--fresh,
   .hexmap__trace--fresh,
-  .hexmap__junction--fresh,
   .hexmap__route-glow {
     animation: none;
     stroke-dasharray: none;
