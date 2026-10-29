@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Axial, DirectionName } from "./api";
 import { DIRECTIONS, hexKey, neighbor } from "./hex";
 import { edgeKey, slotOffset, solveLaneOrder, type LaneOrder, type LaneTile } from "./laneOrder";
-import { leftNormal, oppositeOf, pointAt, tangentAt, tileRoute, tracePoint, trunkPiece, type LanePiece } from "./lanes";
+import type { Point } from "./hex";
+import { leftNormal, oppositeOf, pointAt, tangentAt, tileRoute, tracePoint, type LanePiece } from "./lanes";
 
 const SIZE = 34;
 const CORPS = ["A", "B", "C", "D"];
-const OPTIONS = { treeMaxCorps: 2, isHub: () => false };
+const OPTIONS = { isHub: () => false };
+const SPACING = 2.6;
 
 /** Tiles along a winding path from `start`, each with exits back and onward (the ends face open space). */
 function path(start: Axial, moves: DirectionName[], service: string[]): LaneTile[] {
@@ -35,6 +37,43 @@ function sides(order: LaneOrder, tile: LaneTile, piece: LanePiece, from: Directi
     const [start, end] = [slotOffset(order, tile.hex, from, corp), slotOffset(order, tile.hex, to, corp)];
     return [side(piece, start, end, 0), side(piece, start, end, 1)];
   });
+}
+
+/** Each corporation's drawn traces on a tile, as polylines, following the bends `order` gives it. */
+function drawnTraces(order: LaneOrder, tile: LaneTile): { corp: string; points: Point[] }[] {
+  const lanes = order.tiles.get(hexKey(tile.hex));
+  if (lanes === undefined) throw new Error(`No lanes for ${hexKey(tile.hex)}`);
+  const pieces = tileRoute(tile.hex, tile.exits, SIZE, { bends: lanes.bends }).pieces;
+  return [...lanes.traces].flatMap(([corp, trace]) =>
+    trace.bends.map(([a, b]) => {
+      const piece = pieces.find((p) => [a, b].includes(p.startPort?.exit as DirectionName) && [a, b].includes(p.endPort?.exit as DirectionName));
+      if (piece === undefined) throw new Error(`No ${a}-${b} bend on ${hexKey(tile.hex)}`);
+      const [from, to] = [piece.startPort?.exit, piece.endPort?.exit] as DirectionName[];
+      const [start, end] = [slotOffset(order, tile.hex, from, corp) * SPACING, slotOffset(order, tile.hex, to, corp) * SPACING];
+      return { corp, points: [...Array(201).keys()].map((i) => tracePoint(piece, start, end, i / 200)) };
+    }),
+  );
+}
+
+function segmentsCross(p: Point, q: Point, r: Point, s: Point): boolean {
+  const cross = (o: Point, a: Point, b: Point): number => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  return cross(p, q, r) * cross(p, q, s) < 0 && cross(r, s, p) * cross(r, s, q) < 0;
+}
+
+/** How many times traces of different corporations cross on a tile, as drawn. */
+function drawnCrossings(order: LaneOrder, tile: LaneTile): number {
+  const traces = drawnTraces(order, tile);
+  let count = 0;
+  for (let i = 0; i < traces.length; i++) {
+    for (let j = i + 1; j < traces.length; j++) {
+      if (traces[i].corp === traces[j].corp) continue;
+      const [a, b] = [traces[i].points, traces[j].points];
+      for (let m = 1; m < a.length; m++) {
+        for (let n = 1; n < b.length; n++) if (segmentsCross(a[m - 1], a[m], b[n - 1], b[n])) count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 function crossings(ends: number[][]): number {
@@ -113,7 +152,7 @@ describe("solveLaneOrder", () => {
     expect(slotOffset(order, [0, 0], "W", "A")).toBe(-0.5);
   });
 
-  it("runs two corporations parallel along a junction's trunk, wherever the lanes beyond lead", () => {
+  it("forks two corporations through a junction with the one crossing they need, wherever the lanes beyond lead", () => {
     for (const branch of ["SE", "NW", "NE", "SW"] as DirectionName[]) {
       const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", branch], service: ["A", "B"] };
       // Bends beyond each arm, so the arms' orders are not free.
@@ -124,37 +163,95 @@ describe("solveLaneOrder", () => {
         { hex: neighbor([0, 0], branch), exits: [oppositeOf(branch), branch], service: ["A", "B"] },
       ];
       const order = solveLaneOrder(tiles, CORPS, OPTIONS);
-      expect(order.trunks.get(hexKey([0, 0]))).toEqual({ trunk: ["E", "W"], branch });
-      const piece = trunkPiece(junction.hex, "E", "W", SIZE, 5);
-      const ends = sides(order, junction, piece, "E", "W");
-      expect(crossings(ends)).toBe(0);
-      for (const [start, end] of ends) expect(start).toBeCloseTo(end, 6);
-      for (const tile of tiles.slice(1)) {
-        const [from, to] = tile.exits;
-        const bend = tileRoute(tile.hex, tile.exits, SIZE, { startExit: from }).pieces[0];
-        expect(crossings(sides(order, tile, bend, from, to))).toBe(0);
-      }
+      for (const corp of ["A", "B"]) expect(order.tiles.get(hexKey([0, 0]))?.traces.get(corp)?.bends).toHaveLength(2);
+      expect(drawnCrossings(order, junction)).toBe(1);
+      for (const tile of tiles.slice(1)) expect(drawnCrossings(order, tile)).toBe(0);
     }
   });
 
-  it("runs a Y junction's trunk where its traces carry on, into tiles or planets", () => {
-    // Exits E, SW and NW are all two sides apart. Both corporations carry on to the east and
-    // into a planet to the north-west; only one carries on to the south-west.
-    const junction: LaneTile = { hex: [0, 0], exits: ["E", "SW", "NW"], service: ["A", "B"] };
+  it("orders a fork's ends so two corporations cross once in it, not twice", () => {
+    // Into a planet to the west, on to the north-east, and a dead end to the south-west: the
+    // west border's order is free, and must suit the fork.
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "NE", "SW"], service: ["A", "B"] };
+    const tiles: LaneTile[] = [junction, { hex: neighbor([0, 0], "NE"), exits: ["SW", "NE"], service: ["A", "B"] }];
+    for (const corps of [CORPS, [...CORPS].reverse()]) {
+      const planet = hexKey(neighbor([0, 0], "W"));
+      const order = solveLaneOrder(tiles, corps, { isHub: (key) => key === planet });
+      expect(drawnCrossings(order, junction)).toBe(1);
+    }
+  });
+
+  it("draws no spur into a tile the corporation does not serve", () => {
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "SE"], service: ["A", "B"] };
     const tiles: LaneTile[] = [
       junction,
       { hex: neighbor([0, 0], "E"), exits: ["W", "E"], service: ["A", "B"] },
-      { hex: neighbor([0, 0], "SW"), exits: ["NE", "SW"], service: ["A"] },
+      { hex: neighbor([0, 0], "SE"), exits: ["NW", "SE"], service: ["B"] },
     ];
-    const planet = hexKey(neighbor([0, 0], "NW"));
-    const order = solveLaneOrder(tiles, CORPS, { ...OPTIONS, isHub: (key) => key === planet });
-    expect(order.trunks.get(hexKey([0, 0]))).toEqual({ trunk: ["E", "NW"], branch: "SW" });
+    const order = solveLaneOrder(tiles, CORPS, OPTIONS);
+    const lanes = order.tiles.get(hexKey([0, 0]));
+    expect(lanes?.traces.get("A")).toEqual({ exits: ["W", "E"], bends: [["W", "E"]] });
+    expect(lanes?.traces.get("B")?.exits).toEqual(["W", "E", "SE"]);
+    expect(order.orders.get(edgeKey([0, 0], "SE"))).toEqual(["B"]);
+    // With A on the far side from the spur, nothing crosses.
+    expect(drawnCrossings(order, junction)).toBe(0);
   });
 
-  it("draws a junction busier than treeMaxCorps as spokes, with no trunk", () => {
-    const tiles: LaneTile[] = [{ hex: [0, 0], exits: ["W", "E", "SE"], service: ["A", "B", "C"] }];
-    expect(solveLaneOrder(tiles, CORPS, OPTIONS).trunks.size).toBe(0);
-    expect(solveLaneOrder(tiles, CORPS, { ...OPTIONS, treeMaxCorps: 3 }).trunks.size).toBe(1);
+  it("changes the order on two of a junction's borders at once to keep a spur clear", () => {
+    // B forks on to the east; A turns north-east only. B must be on the outside of the turn on
+    // both the west and north-east borders, which no change to one border alone reaches.
+    for (const corps of [CORPS, [...CORPS].reverse()]) {
+      const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "NE"], service: ["A", "B"] };
+      const tiles: LaneTile[] = [
+        junction,
+        { hex: neighbor([0, 0], "W"), exits: ["E", "W"], service: ["A", "B"] },
+        { hex: neighbor([0, 0], "E"), exits: ["W", "E"], service: ["B"] },
+        { hex: neighbor([0, 0], "NE"), exits: ["SW", "NE"], service: ["A", "B"] },
+      ];
+      expect(drawnCrossings(solveLaneOrder(tiles, corps, OPTIONS), junction)).toBe(0);
+    }
+  });
+
+  it("still runs a corporation across a junction it carries on from through only one exit", () => {
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "SE"], service: ["A", "B"] };
+    const tiles: LaneTile[] = [
+      junction,
+      { hex: neighbor([0, 0], "W"), exits: ["E", "W"], service: ["B"] },
+      { hex: neighbor([0, 0], "E"), exits: ["W", "E"], service: ["A", "B"] },
+      { hex: neighbor([0, 0], "SE"), exits: ["NW", "SE"], service: ["B"] },
+    ];
+    const trace = solveLaneOrder(tiles, CORPS, OPTIONS).tiles.get(hexKey([0, 0]))?.traces.get("A");
+    // From E, straight on to W is gentler than the turn to SE.
+    expect(trace).toEqual({ exits: ["W", "E"], bends: [["W", "E"]] });
+  });
+
+  it("forks three corporations through a junction with only the three crossings they need", () => {
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "SE"], service: ["A", "B", "C"] };
+    const order = solveLaneOrder([junction], CORPS, OPTIONS);
+    expect(drawnCrossings(order, junction)).toBe(3);
+  });
+
+  it("gives each corporation its own bend where they carry on different ways, crossing nothing", () => {
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "SE"], service: ["A", "B", "C"] };
+    const tiles: LaneTile[] = [
+      junction,
+      { hex: neighbor([0, 0], "W"), exits: ["E", "W"], service: ["A", "C"] },
+      { hex: neighbor([0, 0], "E"), exits: ["W", "E"], service: ["A", "B"] },
+      { hex: neighbor([0, 0], "SE"), exits: ["NW", "SE"], service: ["B", "C"] },
+    ];
+    const order = solveLaneOrder(tiles, CORPS, OPTIONS);
+    const lanes = order.tiles.get(hexKey([0, 0]));
+    expect(lanes?.bends.map((bend) => [...bend].sort().join("-")).sort()).toEqual(["E-SE", "E-W", "SE-W"]);
+    expect(lanes?.traces.get("A")?.bends).toEqual([["W", "E"]]);
+    expect(drawnCrossings(order, junction)).toBe(0);
+  });
+
+  it("draws the lane to an exit none of its corporations reaches", () => {
+    const junction: LaneTile = { hex: [0, 0], exits: ["W", "E", "SE"], service: ["A"] };
+    const tiles: LaneTile[] = [junction, { hex: neighbor([0, 0], "SE"), exits: ["NW", "SE"], service: ["B"] }];
+    const lanes = solveLaneOrder(tiles, CORPS, OPTIONS).tiles.get(hexKey([0, 0]));
+    expect(lanes?.traces.get("A")?.bends).toEqual([["W", "E"]]);
+    expect(lanes?.bends.map((bend) => [...bend].sort().join("-")).sort()).toEqual(["E-W", "SE-W"]);
   });
 
   it("names each physical edge the same from both sides", () => {

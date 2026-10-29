@@ -3,10 +3,8 @@ import type { Axial, DirectionName } from "./api";
 import { DIRECTIONS, hexToPixel, neighbor, type Point } from "./hex";
 import {
   apothem,
-  branchTrace,
+  bendCurve,
   canonicalNormal,
-  curveLength,
-  junctionTrunk,
   oppositeOf,
   portEnd,
   piecePath,
@@ -17,7 +15,6 @@ import {
   tileRoute,
   tracePath,
   tracePoint,
-  trunkPiece,
   type LanePiece,
 } from "./lanes";
 
@@ -101,17 +98,23 @@ describe("tileRoute", () => {
     close(pointAt(piece.curve, 0), edgeMid(HEX, "SW"));
   });
 
-  it("joins three exits at a junction with one straight spoke per exit", () => {
-    for (const exits of [["E", "SW", "NW"], ["E", "SE", "W"], ["E", "SE", "SW"]] as DirectionName[][]) {
-      const route = tileRoute(HEX, exits, SIZE);
-      expect(route.junction).not.toBeNull();
-      expect(route.pieces).toHaveLength(3);
-      for (const piece of route.pieces) {
-        expect(piece.curve.kind).toBe("line");
-        close(pointAt(piece.curve, 0), route.center);
-      }
+  it("draws a junction as a fork of ordinary bends out of its gentlest exit", () => {
+    const center = hexToPixel(HEX, SIZE);
+    const keys = (exits: DirectionName[], bends?: [DirectionName, DirectionName][]): string[] =>
+      tileRoute(HEX, exits, SIZE, { bends }).pieces.map((piece) => [piece.startPort?.exit, piece.endPort?.exit].sort().join("-"));
+    // From W both bends are gentle (straight to E, two sides round to SE); from E or SE one is sharp.
+    expect(keys(["E", "SE", "W"]).sort()).toEqual(["E-W", "SE-W"]);
+    expect(keys(["E", "SE", "W"], [["E", "W"], ["E", "SE"], ["SE", "W"]]).sort()).toEqual(["E-SE", "E-W", "SE-W"]);
+    for (const piece of tileRoute(HEX, ["E", "SW", "NW"], SIZE).pieces) {
+      const [from, to] = [piece.startPort?.exit, piece.endPort?.exit] as DirectionName[];
+      expect(piece.curve).toEqual(bendCurve(center, from, to, SIZE));
     }
-    expect(tileRoute(HEX, ["E"], SIZE).junction).toBeNull();
+  });
+
+  it("draws a one-exit tile as a spoke from the centre", () => {
+    const [piece] = tileRoute(HEX, ["E"], SIZE).pieces;
+    expect(piece.startPort).toBeNull();
+    close(pointAt(piece.curve, 0), hexToPixel(HEX, SIZE));
   });
 
   it("produces finite path data for every exit combination", () => {
@@ -220,80 +223,6 @@ describe("traces", () => {
           close(start, tracePoint(piece, first, last, piece.t0), 2);
           close(end, tracePoint(piece, first, last, piece.t1), 2);
         }
-      }
-    }
-  });
-
-  it("run parallel to junction spokes, close enough to the centre for the interchange disk to cover", () => {
-    const route = tileRoute(HEX, ["E", "SE", "W"], SIZE);
-    for (const piece of route.pieces) {
-      for (const offset of [-3.9, 3.9]) {
-        const p = tracePoint(piece, offset, offset, 0);
-        expect(Math.hypot(p.x - route.center.x, p.y - route.center.y)).toBeCloseTo(3.9, 6);
-      }
-    }
-  });
-});
-
-/** Every set of three distinct exits. */
-function junctionExits(): DirectionName[][] {
-  return exitSets().filter((set) => set.length === 3);
-}
-
-describe("junction trunks", () => {
-  it("run through the widest pair of exits, the branch being the third", () => {
-    expect(junctionTrunk(["E", "SE", "W"])).toEqual({ trunk: ["E", "W"], branch: "SE" });
-    expect(junctionTrunk(["E", "SE", "SW"])).toEqual({ trunk: ["E", "SW"], branch: "SE" });
-    // All three pairs of a Y are equally wide: the preference picks, then DIRECTIONS order.
-    expect(junctionTrunk(["E", "SW", "NW"])).toEqual({ trunk: ["E", "SW"], branch: "NW" });
-    expect(junctionTrunk(["E", "SW", "NW"], (exit) => (exit === "E" ? 0 : 1))).toEqual({ trunk: ["SW", "NW"], branch: "E" });
-  });
-
-  it("follow the spokes from edge midpoint to edge midpoint, smoothly round the corner", () => {
-    for (const exits of junctionExits()) {
-      const [from, to] = junctionTrunk(exits).trunk;
-      const piece = trunkPiece(HEX, from, to, SIZE, 5);
-      close(pointAt(piece.curve, 0), edgeMid(HEX, from));
-      close(pointAt(piece.curve, 1), edgeMid(HEX, to));
-      const length = curveLength(piece.curve);
-      for (let i = 1; i < 100; i++) {
-        const [a, b] = [pointAt(piece.curve, (i - 1) / 100), pointAt(piece.curve, i / 100)];
-        // Evenly spaced by length, with no kink: neighbouring tangents agree.
-        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(length / 100, 1);
-        const [ta, tb] = [tangentAt(piece.curve, (i - 1) / 100), tangentAt(piece.curve, i / 100)];
-        expect(ta.x * tb.x + ta.y * tb.y).toBeGreaterThan(0.95);
-      }
-      // Never further from the spokes than the bend radius allows.
-      const center = hexToPixel(HEX, SIZE);
-      const mid = pointAt(piece.curve, 0.5);
-      expect(Math.hypot(mid.x - center.x, mid.y - center.y)).toBeLessThan(5);
-    }
-  });
-
-  it("branch traces run along the branch spoke from the trunk trace out to the border", () => {
-    for (const exits of junctionExits()) {
-      const { trunk, branch } = junctionTrunk(exits);
-      const piece = trunkPiece(HEX, trunk[0], trunk[1], SIZE, 5);
-      for (const [start, end, offset] of [[0, 0, 0], [1.3, -1.3, 1.3], [-1.3, 1.3, -1.3], [1.3, 1.3, -6.5]]) {
-        const { path, meet: from, border: to } = branchTrace(piece, start, end, HEX, branch, offset, SIZE, 2.7);
-        expect(path).not.toMatch(/NaN|Infinity/);
-        expect(path).toMatch(/^M[-\d.,]+A2\.70,2\.70 0 0 [01] [-\d.,]+L[-\d.,]+$/);
-        const normal = canonicalNormal(branch);
-        const border = edgeMid(HEX, branch);
-        close(to, { x: border.x + normal.x * offset, y: border.y + normal.y * offset });
-        // The path ends at the border.
-        expect(path.endsWith(`L${to.x.toFixed(2)},${to.y.toFixed(2)}`)).toBe(true);
-        // The meeting point lies on the trunk trace.
-        let nearest = Infinity;
-        for (let i = 0; i <= 2000; i++) {
-          const p = tracePoint(piece, start, end, i / 2000);
-          nearest = Math.min(nearest, Math.hypot(p.x - from.x, p.y - from.y));
-        }
-        expect(nearest).toBeLessThan(0.1);
-        // And the branch is parallel to its spoke.
-        const u = sideVector(branch);
-        const along = { x: to.x - from.x, y: to.y - from.y };
-        expect(Math.abs(along.x * u.y - along.y * u.x)).toBeLessThan(1e-6);
       }
     }
   });

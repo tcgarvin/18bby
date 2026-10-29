@@ -38,9 +38,11 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   specs (script in `docs/sweeps/difficulty-2026-10-25`, reference `builder@site`) when the rules
   or a strategy change.
 - Lane drawing on the web map: route and trace geometry in `web/src/lanes.ts`; the order of
-  corporation traces across each border (crossings, then drift, then corporation order, packed
-  around the lane's centre) is solved for the whole map in `web/src/laneOrder.ts`. Junctions with
-  one or two corporations draw a trunk and branch; busier ones keep the interchange disk.
+  corporation traces across each border and each corporation's fork stem at junctions
+  (crossings counted per hex, then drift, then sharp bends, then corporation order, packed
+  around the lane's centre) is solved for the whole map in `web/src/laneOrder.ts`. Junctions
+  draw as forks of ordinary bends, no disks; a corporation's trace reaches only the exits where
+  it carries on (no spurs into hexes it doesn't serve).
 - Rule enforcement: `src/bby18/game.py` and `src/bby18/network.py`. Drivers and bots decide what
   to do; these modules decide whether it is legal and apply the consequences.
 - Death Star rules (`death_star_rules`, the default since 2026-10-26) with facilities and planet

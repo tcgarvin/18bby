@@ -19,7 +19,7 @@ const BOARD: Board = {
   planets: [{ name: "Corellia", hex: neighbor([1, 0], "NE"), region: "Core", tags: ["I"] }],
 };
 
-/** A junction for one corporation, one for two (drawn as trees), and one for three (spokes under a disk). */
+/** Junctions where corporations fork, carry straight on, or stop short of a tile they do not serve. */
 const TILES: TileState[] = [
   { hex: [0, 0], exits: ["E", "W", "SE"], service: ["A", "B"] },
   { hex: [1, 0], exits: ["W", "NE"], service: ["A", "B"] },
@@ -52,24 +52,20 @@ function count(markup: string, className: string): number {
 }
 
 describe("HexMap lanes", () => {
-  it("draws an interchange disk only at the junction busier than two corporations", () => {
+  it("draws each corporation's traces where it carries on, and on the stub into the planet", () => {
     const markup = render();
     expect(markup).not.toMatch(/NaN|Infinity/);
-    expect(count(markup, "hexmap__junction")).toBe(1);
+    // At 0,0 A forks three ways (2) and B, which does not serve the tile to the west, bends from
+    // east to south-east (1). Two-exit tiles: one each (2 + 1). At 0,1 A and B fork into open
+    // space and from the north-west (2 + 2), and C bends between the open ends (1). C forks at
+    // -2,1 (2). The stub into Corellia: 2.
+    expect(count(markup, "hexmap__trace")).toBe(15);
+    expect(count(markup, "hexmap__trace-halo")).toBe(15);
   });
 
-  it("draws each corporation's traces on every tile it serves, and on the stub into the planet", () => {
-    const markup = render();
-    // Trees: a trunk and a branch per corporation (2 + 4). Two-exit tiles: one piece each (2 + 1).
-    // The busy junction: a spoke per exit per corporation (9). The stub into Corellia: 2.
-    expect(count(markup, "hexmap__trace")).toBe(20);
-    expect(count(markup, "hexmap__trace-halo")).toBe(20);
-  });
-
-  it("previews an upgrade that makes a junction, without a disk for its one corporation", () => {
+  it("previews an upgrade that makes a junction as a fork", () => {
     const markup = render({ focusCorp: "A", preview: { type: "upgrade", hex: [-1, 0], exit: "SW", cost: 80 } });
     expect(markup).not.toMatch(/NaN|Infinity/);
     expect(count(markup, "hexmap__preview-trace")).toBe(2);
-    expect(count(markup, "hexmap__preview-junction")).toBe(0);
   });
 });
