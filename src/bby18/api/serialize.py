@@ -25,6 +25,7 @@ from bby18.actions import (
     NoNetworkAction,
     PassStock,
     SellShares,
+    SurrenderFacility,
     Upgrade,
 )
 from bby18.board import Board
@@ -33,7 +34,15 @@ from bby18.death_star import SITE_NAME, STAGE_NAMES, DeathStarTrack
 from bby18.game import BuyBlock, Game, LogEntry
 from bby18.hexgrid import Direction, Hex
 from bby18.network import Tile
-from bby18.session import OPERATING_PHASES, Action, Dividend, GameSession, Phase, PlayedMove
+from bby18.revenue import RevenueResult, ScoredChain, ScoredPair
+from bby18.session import (
+    CORPORATION_PHASES,
+    Action,
+    Dividend,
+    GameSession,
+    Phase,
+    PlayedMove,
+)
 from bby18.state import Corporation, Facility, Player
 
 Json = dict[str, Any]
@@ -97,6 +106,8 @@ def action_to_json(action: Action) -> Json:
         if action.exit_side is not None:
             data["exit"] = action.exit_side.name
         return data
+    if isinstance(action, SurrenderFacility):
+        return {"type": "surrender_facility", "planet": hex_to_json(action.planet)}
     if isinstance(action, Dividend):
         return {"type": "dividend", "choice": action.value}
     raise TypeError(f"Cannot serialize {action!r}")
@@ -130,17 +141,58 @@ def _dividend_preview(game: Game, corp: Corporation, revenue: int) -> Json | Non
 
 def _fleet_revenue(game: Game, corp: Corporation) -> Json:
     """What a corporation's network would earn with one more fleet, and with no fleet limit at
-    all, so a client can show what the next fleet adds and how many pairs go unrun."""
+    all, so a client can show what the next fleet adds and how many pairs go unrun. Under the
+    chain rules each fleet (facility) runs a chain, so ``uncappedPairs`` counts chains, and the
+    chains may stop in the middle where the corporation holds a facility now."""
     if not corp.floated:
         return {"withNextFleet": 0, "uncapped": 0, "uncappedPairs": 0}
     planets = game.reachable_planets(corp)
     floor = game.config.homeworld_basic_income
-    with_next = game.planet_revenue(planets, game.pair_cap(corp) + 1)
-    uncapped = game.planet_revenue(planets)
+    middles = game.middle_stops(corp)
+    with_next = game.planet_revenue(planets, game.pair_cap(corp) + 1, middles)
+    uncapped = game.planet_revenue(planets, middle_stops=middles)
     return {
         "withNextFleet": max(with_next.total, floor),
         "uncapped": max(uncapped.total, floor),
-        "uncappedPairs": len(uncapped.pairs),
+        "uncappedPairs": _runs(game, uncapped),
+    }
+
+
+def _runs(game: Game, revenue: RevenueResult) -> int:
+    """How many fleets (facilities) ``revenue`` keeps busy: one per chain under the chain
+    rules, one per pair otherwise."""
+    return len(revenue.chains) if game.config.chain_rules else len(revenue.pairs)
+
+
+def pair_to_json(pair: ScoredPair) -> Json:
+    """One scoring pair, or one link of a chain (``a`` the source, ``b`` the target)."""
+    return {
+        "a": pair.a.name,
+        "b": pair.b.name,
+        "value": pair.value,
+        "typed": pair.typed,
+        "contract": pair.contract,
+    }
+
+
+def chain_to_json(chain: ScoredChain) -> Json:
+    """One supply chain: its stops in the order the cargo travels, the link between each two
+    consecutive stops, the regional bonus it earns once, and its value (links plus bonus)."""
+    return {
+        "stops": [stop.name for stop in chain.stops],
+        "links": [pair_to_json(link) for link in chain.links],
+        "regional": chain.regional,
+        "value": chain.value,
+    }
+
+
+def revenue_to_json(revenue: RevenueResult) -> Json:
+    """A revenue result: every scoring pair (every chain link, under the chain rules) and the
+    chains (empty under the pair rules, where each pair stands alone)."""
+    return {
+        "total": revenue.total,
+        "pairs": [pair_to_json(pair) for pair in revenue.pairs],
+        "chains": [chain_to_json(chain) for chain in revenue.chains],
     }
 
 
@@ -169,21 +221,9 @@ def _corp_to_json(game: Game, corp_id: str) -> Json:
         "fleets": corp.fleets,
         "reachablePlanets": [p.name for p in game.reachable_planets(corp)] if corp.floated else [],
         "revenue": (
-            {
-                "total": revenue.total,
-                "pairs": [
-                    {
-                        "a": pair.a.name,
-                        "b": pair.b.name,
-                        "value": pair.value,
-                        "typed": pair.typed,
-                        "contract": pair.contract,
-                    }
-                    for pair in revenue.pairs
-                ],
-            }
+            revenue_to_json(revenue)
             if revenue is not None
-            else {"total": 0, "pairs": []}
+            else {"total": 0, "pairs": [], "chains": []}
         ),
     }
     if game.config.death_star_rules:
@@ -317,8 +357,10 @@ def planet_exits_map(game: Game) -> dict[Hex, Json]:
 
 def facilities_to_json(game: Game, planets: Iterable[Json]) -> Json:
     """The facility rules' state with ``planets`` (from ``planet_exits_map``: all of them, or a
-    move frame's changed ones), and the facility the next seizure would take from each
-    corporation that owns one."""
+    move frame's changed ones), the facility the next seizure would take from each
+    corporation that owns one (none under the chain rules, where each chooses), and, while a
+    seizure waits on those choices, the corporations still to choose and the choosing one's
+    options."""
     return {
         "perPlanet": game.config.facilities_per_planet,
         "planets": list(planets),
@@ -326,7 +368,31 @@ def facilities_to_json(game: Game, planets: Iterable[Json]) -> Json:
             {"corp": corp_id, "hex": hex_to_json(f.planet)}
             for corp_id, f in game.facilities_to_seize().items()
         ],
+        "surrenderQueue": list(game.surrender_queue),
+        "surrenderOptions": _surrender_options(game),
     }
+
+
+def _surrender_options(game: Game) -> list[Json]:
+    """While a seizure waits under the chain rules, for each facility the choosing corporation
+    (first in the surrender queue) may surrender: the planet's name and what its network would
+    earn after giving it up, with one chain fewer and no middle stop there unless another of its
+    facilities stays on the planet. Empty when no seizure waits."""
+    if not game.surrender_queue:
+        return []
+    corp = game.corp(game.surrender_queue[0])
+    floor = game.config.homeworld_basic_income
+    options: list[Json] = []
+    for action in game.legal_surrenders(corp):
+        revenue = game.revenue_after_surrender(corp, action, game.contract_value())
+        options.append(
+            {
+                "action": action_to_json(action),
+                "name": game.board.planet_at(action.planet).name,
+                "revenue": max(revenue.total, floor),
+            }
+        )
+    return options
 
 
 def _facility_options(session: GameSession) -> list[Json]:
@@ -421,7 +487,7 @@ def _turn_to_json(session: GameSession) -> Json:
         "roundNumber": game.round_number,
         "currentPlayer": None if over else session.current_player.id,
         "currentCorporation": (
-            session.current_corporation.id if session.phase in OPERATING_PHASES else None
+            session.current_corporation.id if session.phase in CORPORATION_PHASES else None
         ),
         "priorityPlayer": game.players[game.priority_player].id,
         "operatingOrder": session.operating_queue,
@@ -466,6 +532,7 @@ def session_to_json(session: GameSession, moves: Sequence[Json] = ()) -> Json:
             "typedPairValue": game.config.typed_pair_value,
             "regionalBonus": game.config.regional_bonus,
             "basicRouteValue": game.config.basic_route_value,
+            "chainRules": game.config.chain_rules,
         },
         "log": [log_entry_to_json(i, e) for i, e in enumerate(game.log)][-200:],
         "moves": list(moves),
@@ -576,6 +643,10 @@ def rules_to_json(config: GameConfig) -> Json:
         "deathStar": death_star_rules_to_json(config),
         "facilityRules": config.facility_rules,
         "facilities": facility_rules_to_json(config),
+        "chainRules": config.chain_rules,
+        "commodityOrder": dict(
+            sorted(config.commodity_order.items(), key=lambda kv: (kv[1], kv[0]))
+        ),
     }
 
 

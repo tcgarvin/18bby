@@ -1,0 +1,32 @@
+{
+ "very-easy": {
+  "baron": 0.86,
+  "baron-prestige": 0.92,
+  "baron-tycoon": 0.84,
+  "builder": 0.79,
+  "churner": 0.08,
+  "diversifier": 0.8,
+  "early-builder": 0.83,
+  "hoarder": 0.4,
+  "prestige": 0.83,
+  "spoiler": 0.73,
+  "straight": 0.69,
+  "targeted": 0.79,
+  "tycoon": 0.76
+ },
+ "easy": {
+  "baron": 0.76,
+  "baron-prestige": 0.86,
+  "baron-tycoon": 0.76,
+  "builder": 0.66,
+  "churner": 0.0,
+  "diversifier": 0.65,
+  "early-builder": 0.73,
+  "hoarder": 0.5,
+  "prestige": 0.57,
+  "spoiler": 0.41,
+  "straight": 0.1,
+  "targeted": 0.74,
+  "tycoon": 0.63
+ }
+}

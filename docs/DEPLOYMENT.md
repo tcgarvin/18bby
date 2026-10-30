@@ -58,6 +58,12 @@ most 3 facilities, contracts at 50-80). A recorded `buy_fleet` is no longer lega
 play differently, so most such games fail to replay (`SaveOutdated`), answer 409 and cannot be
 resumed. Players start a new game.
 
+**Saves from 2026-10-27 (pair rules).** Games saved before supply chains replay from their seed
+under the chain rules (one chain per facility, a surrender step at each seizure). Revenue and the
+bots' choices change, and a seizure now asks for a surrender the old actions never answered, so
+most such games fail to replay, answer 409 and cannot be resumed; a few may replay into a
+different game. Players start a new game.
+
 Build: `vercel.json` sets the FastAPI framework and builds the frontend into `public/`.
 `[tool.vercel]` in `pyproject.toml` names the entrypoint as a path from the repository root
 (`src.bby18.api.main:app`); Vercel installs the package itself with `uv sync --no-editable`, so

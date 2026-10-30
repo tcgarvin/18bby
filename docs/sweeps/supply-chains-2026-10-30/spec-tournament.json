@@ -1,0 +1,30 @@
+{
+ "variants": {
+  "facilities": {},
+  "chains-l3": {
+   "chain_rules": true
+  },
+  "chains-l4": {
+   "chain_rules": true,
+   "fleet_limit": 4
+  }
+ },
+ "seeds": [
+  1,
+  20
+ ],
+ "players": [
+  3
+ ],
+ "tournament": [
+  "admiral@site",
+  "early-builder@site",
+  "targeted@site",
+  "baron@site",
+  "contractor@site",
+  "baron-prestige@site",
+  "staller@site",
+  "builder@site",
+  "baron-tycoon@site"
+ ]
+}

@@ -17,9 +17,10 @@ export interface GlossaryEntry {
 
 /**
  * Optional rule sets a term or section may belong to: the Death Star rules, and within them
- * either fleets or (the facility rules, the default since 2026-10-27) facilities.
+ * either fleets or (the facility rules, the default since 2026-10-27) facilities, and within
+ * those the supply chains.
  */
-export type RuleSet = "deathStar" | "fleets" | "facilities";
+export type RuleSet = "deathStar" | "fleets" | "facilities" | "chains";
 
 /** The rules-page section that explains `entry` under `rules`. */
 export function sectionOf(entry: GlossaryEntry, rules: Rules): SectionId {
@@ -37,6 +38,8 @@ export function inForce(only: RuleSet | undefined, rules: Rules): boolean {
       return rules.deathStarRules && !rules.facilityRules;
     case "facilities":
       return rules.deathStarRules && rules.facilityRules;
+    case "chains":
+      return rules.deathStarRules && rules.facilityRules && rules.chainRules;
   }
 }
 
@@ -74,6 +77,16 @@ export const SECTION_IDS: SectionId[] = [
   "verify",
   "glossary",
 ];
+
+/** "A, R → I → M, S → W": the commodity order, lowest rank first. */
+function commodityText(r: Rules): string {
+  const ranks = new Map<number, string[]>();
+  for (const [tag, rank] of Object.entries(r.commodityOrder)) ranks.set(rank, [...(ranks.get(rank) ?? []), tag]);
+  return [...ranks.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, tags]) => tags.sort().join(", "))
+    .join(" → ");
+}
 
 const sharePercent = (r: Rules): number => 100 / r.sharesPerCorporation;
 
@@ -252,8 +265,10 @@ export const GLOSSARY = {
   },
   revenue: {
     term: "Revenue",
-    summary: () =>
-      "Money a corporation earns each operating turn from pairs of planets in its network. The engine picks the best set of pairs for you.",
+    summary: (r) =>
+      r.chainRules
+        ? "Money a corporation earns each operating turn from supply chains through its network, one per facility it owns. The engine picks the best chains for you."
+        : "Money a corporation earns each operating turn from pairs of planets in its network. The engine picks the best set of pairs for you.",
     section: "revenue",
   },
   typedPair: {
@@ -261,6 +276,13 @@ export const GLOSSARY = {
     summary: (r) =>
       `Two planets whose types fit a supply chain (${r.typedPairs.map(([a, b]) => `${a}↔${b}`).join(", ")}) earn ${r.typedPairValue}. A planet is used in at most one pair per turn.`,
     section: "revenue",
+  },
+  chain: {
+    term: "Supply chain",
+    summary: (r) =>
+      `Cargo climbs from raw goods up to the construction site: ${commodityText(r)}. Each link pays ${r.typedPairValue} (a link into the site pays the contract value), and a chain whose first and last stops short of the site are one in the ${r.regionalBonusRegions[0]} and one in the ${r.regionalBonusRegions[1]} earns +${r.regionalBonus} once. A planet with one of your facilities can be a middle stop. No planet is in two of your chains.`,
+    section: "revenue",
+    only: "chains",
   },
   basicRoute: {
     term: "Basic route",
@@ -315,7 +337,7 @@ export const GLOSSARY = {
   facility: {
     term: "Facility",
     summary: (r) =>
-      `A facility on a planet runs one revenue pair for its owner, wherever its pairs are, and gives the planet one more exit for anyone's lanes. A corporation may own up to ${r.deathStar.fleetLimit}, a planet may hold ${r.facilities.perPlanet}, and a corporation must own at least one after its facility step. It floats with a free one on its homeworld.`,
+      `A facility on a planet runs one revenue ${r.chainRules ? "chain (and lets that planet be a middle stop of one)" : "pair"} for its owner, wherever its pairs are, and gives the planet one more exit for anyone's lanes. A corporation may own up to ${r.deathStar.fleetLimit}, a planet may hold ${r.facilities.perPlanet}, and a corporation must own at least one after its facility step. It floats with a free one on its homeworld.`,
     section: "facilities",
     only: "facilities",
   },
@@ -382,7 +404,9 @@ export const GLOSSARY = {
   seizure: {
     term: "Seizure",
     summary: (r) =>
-      r.facilityRules
+      r.chainRules
+        ? `When the ${stageOf(r, "seizure")} stage fills, at the end of that round every corporation that owns a facility hands the Empire one of its choice, in operating order. It becomes Imperial, keeps its slot and exit, and runs chains for nobody. A corporation left with none must build one at its next turn or go bankrupt.`
+        : r.facilityRules
         ? `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes over one facility from every corporation that has one: the one nearest the construction site. It becomes Imperial, keeps its slot and exit, and runs pairs for nobody. A corporation left with none must build one at its next turn or go bankrupt.`
         : `When the ${stageOf(r, "seizure")} stage fills, at the end of that round the Empire takes one fleet from every corporation that has one. A corporation left with none must buy one at its next turn or go bankrupt.`,
     section: "death-star",

@@ -11,15 +11,13 @@ from bby18.api.auth import AuthError
 from bby18.api.saves import new_session
 from bby18.api.serialize import action_to_json, match_action, rules_to_json, session_to_json
 from bby18.api.store import MemoryStore, Seat
-from bby18.config import DEFAULT_CONFIG, FLEET_CONFIG
+from bby18.config import FACILITY_CONFIG, FLEET_CONFIG
 from bby18.death_star import SITE_NAME
 from bby18.game import EMPIRE, Game
 from bby18.hexgrid import Direction, Hex
 from bby18.session import GameSession
 from bby18.state import Corporation
 
-FACILITY_CONFIG = DEFAULT_CONFIG
-"""The rules the API serves."""
 SEATS = [{"name": "Me"}, {"name": "Bot", "bot": True, "difficulty": "easy"}]
 
 

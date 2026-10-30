@@ -22,7 +22,7 @@ function operator(overrides: Partial<CorporationState> = {}): CorporationState {
     status: "floated",
     treasury: 200,
     fleets: 1,
-    revenue: { total: 70, pairs: [{ a: "Corellia", b: "Kuat", value: 70, typed: true, contract: false }] },
+    revenue: { total: 70, pairs: [{ a: "Corellia", b: "Kuat", value: 70, typed: true, contract: false }], chains: [] },
     fleetRevenue: { withNextFleet: 110, uncapped: 130, uncappedPairs: 3 },
     ...overrides,
   });
@@ -71,6 +71,7 @@ describe("the track", () => {
     expect(resultText("completion", track)).toMatch(/game ends after this round/);
     const facilities = deathStarState({ fleets: { ...track.fleets, item: "facility" } });
     expect(resultText("seizure", facilities)).toMatch(/takes over each corporation's facility nearest the site/);
+    expect(resultText("seizure", facilities, true)).toMatch(/one facility of its choice/);
   });
 
   it("ends at the backstop unless the station launched", () => {
@@ -136,9 +137,38 @@ describe("seizureRisk", () => {
 describe("pairUsage", () => {
   it("compares the pairs run with the pairs the network offers", () => {
     const usage = pairUsage(operator());
-    expect(usage).toEqual({ run: 1, available: 3, fleets: 1, item: "fleet" });
+    expect(usage).toEqual({ run: 1, available: 3, fleets: 1, item: "fleet", unit: "pair" });
     expect(pairUsageText(usage!)).toBe("1 of 3 pairs run · 1 fleet");
-    expect(pairUsageText({ run: 2, available: 2, fleets: 3, item: "fleet" })).toBe("2 pairs run · 3 fleets");
+    expect(pairUsageText({ run: 2, available: 2, fleets: 3, item: "fleet", unit: "pair" })).toBe("2 pairs run · 3 fleets");
+  });
+
+  it("counts chains under the chain rules", () => {
+    const corp = operator({
+      fleets: 2,
+      revenue: {
+        total: 80,
+        pairs: [
+          { a: "Kessel", b: "Sullust", value: 30, typed: true, contract: false },
+          { a: "Sullust", b: "Corellia", value: 30, typed: true, contract: false },
+        ],
+        chains: [
+          {
+            stops: ["Kessel", "Sullust", "Corellia"],
+            links: [
+              { a: "Kessel", b: "Sullust", value: 30, typed: true, contract: false },
+              { a: "Sullust", b: "Corellia", value: 30, typed: true, contract: false },
+            ],
+            regional: 20,
+            value: 80,
+          },
+        ],
+      },
+      fleetRevenue: { withNextFleet: 110, uncapped: 130, uncappedPairs: 2 },
+    });
+    const usage = pairUsage(corp, "facility", true)!;
+    expect(usage).toMatchObject({ run: 1, available: 2, unit: "chain" });
+    expect(pairUsageText(usage)).toBe("1 of 2 chains run · 2 facilities");
+    expect(pairUsageText({ ...usage, run: 1, available: 1 })).toBe("1 chain run · 2 facilities");
   });
 
   it("counts facilities under the facility rules", () => {

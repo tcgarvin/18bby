@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from bby18.actions import BuildFacility, BuyShare, Chart, ShareSource
-from bby18.config import DEFAULT_CONFIG, FLEET_CONFIG, SEIZURE
+from bby18.config import FACILITY_CONFIG, FLEET_CONFIG, SEIZURE
 from bby18.death_star_metrics import ROW_PREFIX as DS
 from bby18.death_star_report import death_star_report, variant_report
 from bby18.facility_metrics import (
@@ -26,7 +26,7 @@ from bby18.metrics import LATE_ROUND, count_log, planets_touched
 from bby18.playtest import play_one
 from bby18.sweep import parse_spec, run_sweep, to_jsonable
 
-RULES = DEFAULT_CONFIG
+RULES = FACILITY_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 FLEETS = FLEET_CONFIG
 
@@ -231,6 +231,7 @@ def test_report_rejects_a_variant_mixing_facility_rules_on_and_off():
 
 def test_a_sweep_spec_variant_plays_the_fleet_rules():
     fleets = {
+        "chain_rules": False,
         "corporations": ["CEC", "KDY", "CSC", "KTG"],
         "planet_pair_bonus": {},
         "facility_rules": False,
@@ -239,7 +240,7 @@ def test_a_sweep_spec_variant_plays_the_fleet_rules():
     }
     spec = parse_spec(
         {
-            "variants": {"facilities": {}, "fleets": fleets},
+            "variants": {"facilities": {"chain_rules": False}, "fleets": fleets},
             "seeds": [1, 1],
             "bots": ["mix:baron,early-builder,targeted"],
         }
@@ -248,7 +249,7 @@ def test_a_sweep_spec_variant_plays_the_fleet_rules():
     assert spec.variants["fleets"] == FLEETS
     rows = run_sweep(spec.variants, spec.seeds, spec.player_counts, spec.bot_kinds, workers=1)
     by_variant = {r["variant"]: r for r in rows}
-    assert by_variant["facilities"]["overrides"] == {}
+    assert by_variant["facilities"]["overrides"] == {"chain_rules": False}
     assert by_variant["fleets"]["overrides"] == {
         **fleets,
         "corporations": [to_jsonable(c) for c in FLEETS.corporations],

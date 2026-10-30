@@ -118,7 +118,13 @@ function CorporationCard({ state, corp, explain, options, busy, onAct }: Corpora
                 {explain && <Help topic={item === "facility" ? "facility" : "fleet"} />}
               </dt>
               <dd>
-                <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={fleetLimit} item={item} />
+                <FleetIcons
+                  corpId={corp.id}
+                  fleets={corp.fleets}
+                  limit={fleetLimit}
+                  item={item}
+                  runs={state.config.chainRules ? "chain" : "pair"}
+                />
               </dd>
             </div>
           )}

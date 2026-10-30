@@ -27,7 +27,11 @@ export interface Board {
   planets: Planet[];
 }
 
-export type Phase = "stock" | "network" | "fleet" | "dividend" | "game_over";
+/**
+ * "surrender": a seizure under the chain rules, after an operating or stock round; each
+ * corporation that owns a facility, in operating order, chooses the one the Empire takes.
+ */
+export type Phase = "stock" | "network" | "fleet" | "dividend" | "surrender" | "game_over";
 
 /** "closed": bankrupt under the Death Star rules; its shares have left the game. */
 export type CorpStatus = "unstarted" | "parred" | "floated" | "closed";
@@ -91,6 +95,12 @@ export interface BuildFacilityAction {
   cost: number;
 }
 
+/** At a seizure under the chain rules, hand the Empire one's facility on `planet` (the newest there, if two). */
+export interface SurrenderFacilityAction {
+  type: "surrender_facility";
+  planet: Axial;
+}
+
 export type Action =
   | PassAction
   | BuyAction
@@ -102,6 +112,7 @@ export type Action =
   | BuyFleetAction
   | FinishFleetsAction
   | BuildFacilityAction
+  | SurrenderFacilityAction
   | DividendAction;
 
 export type HexAction = ChartAction | UpgradeAction | ServiceAction;
@@ -120,6 +131,7 @@ export interface PlayerState {
   certificates: number;
 }
 
+/** A scoring pair, or under the chain rules one link of a chain: cargo goes from `a` to `b`. */
 export interface RevenuePair {
   a: string;
   b: string;
@@ -129,11 +141,32 @@ export interface RevenuePair {
   contract: boolean;
 }
 
+/**
+ * One supply chain (chain rules): its stops in the order the cargo travels, the link between each
+ * two consecutive stops, the regional bonus it earns once, and its value (links plus bonus). A
+ * basic route is a chain of two stops.
+ */
+export interface RevenueChain {
+  stops: string[];
+  links: RevenuePair[];
+  regional: number;
+  value: number;
+}
+
+/** A corporation's revenue now. */
+export interface Revenue {
+  total: number;
+  /** Every scoring pair; under the chain rules, every link of every chain. */
+  pairs: RevenuePair[];
+  /** The chains run, best first (chain rules); empty under the pair rules, where pairs stand alone. */
+  chains: RevenueChain[];
+}
+
 /** Revenue with more fleets than the corporation owns (Death Star rules). */
 export interface FleetRevenue {
   /** Revenue with one more fleet than it owns now. */
   withNextFleet: number;
-  /** Revenue with no fleet limit at all, and how many pairs that runs. */
+  /** Revenue with no fleet limit at all, and how many pairs (chains, under the chain rules) that runs. */
   uncapped: number;
   uncappedPairs: number;
 }
@@ -163,7 +196,7 @@ export interface CorporationState {
    */
   fleets: number;
   reachablePlanets: string[];
-  revenue: { total: number; pairs: RevenuePair[] };
+  revenue: Revenue;
   /** Present only under the Death Star rules. */
   fleetRevenue?: FleetRevenue;
 }
@@ -273,14 +306,31 @@ export interface FacilityOption {
   lane: string[];
 }
 
+/** One facility the choosing corporation may surrender at a seizure (chain rules). */
+export interface SurrenderOption {
+  /** One of `legalActions`, unchanged. */
+  action: SurrenderFacilityAction;
+  /** The planet's name. */
+  name: string;
+  /** What its network would earn after giving it up: one chain fewer, and no middle stop there. */
+  revenue: number;
+}
+
 /** The facility rules' state. */
 export interface FacilitiesState {
   /** Most facilities, corporate or Imperial, one planet may hold. */
   perPlanet: number;
   /** Every planet with limited exits. In a move frame, only those the move changed. */
   planets: PlanetFacilities[];
-  /** The facility the next seizure would take from each corporation that owns one: the one nearest the site. */
+  /**
+   * The facility the next seizure would take from each corporation that owns one: the one nearest
+   * the site. Empty under the chain rules, where each corporation chooses.
+   */
   seizureTargets: { corp: string; hex: Axial }[];
+  /** While a seizure waits (chain rules), the corporations still to choose, the choosing one first; else empty. */
+  surrenderQueue: string[];
+  /** While a seizure waits, the choosing corporation's options and what each leaves it earning; else empty. */
+  surrenderOptions: SurrenderOption[];
   /** During the operating corporation's facility step, each legal build and what it would do; else empty. */
   options: FacilityOption[];
 }
@@ -320,6 +370,8 @@ export interface GameConfig {
   typedPairValue: number;
   regionalBonus: number;
   basicRouteValue: number;
+  /** Whether revenue runs supply chains (one per facility) and a seizure lets each corporation choose. */
+  chainRules: boolean;
 }
 
 /** Why the current player can buy no share of a corporation this stock turn. */
@@ -384,7 +436,7 @@ export interface MoveFrame {
   roundLabel: string;
   /** Player id of whoever made the move (a corporation's president in operating rounds). */
   actor: string;
-  /** The operating corporation for network and dividend moves; null in a stock round. */
+  /** The operating corporation for network and dividend moves, the choosing one for a surrender; null in a stock round. */
   corporation: string | null;
   action: Action;
   /** False for the move the client submitted; true for bot and forced moves. */
@@ -535,6 +587,13 @@ export interface Rules {
   facilityRules: boolean;
   /** Their own numbers, listed whether or not they are in force. */
   facilities: FacilityRules;
+  /**
+   * Whether the supply-chain rules are in force (they need the facility rules): one chain per
+   * facility, climbing `commodityOrder`, and a seizure takes the facility each corporation chooses.
+   */
+  chainRules: boolean;
+  /** Planet tag -> rank: a chain link runs from a lower rank to a higher one (raw goods first, the site last). */
+  commodityOrder: Record<string, number>;
 }
 
 export interface FacilityRules {

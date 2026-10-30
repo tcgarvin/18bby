@@ -65,7 +65,7 @@ function corporation(id: string, overrides: Partial<CorporationState> = {}): Cor
     lastRevenue: 0,
     fleets: 0,
     reachablePlanets: [],
-    revenue: { total: 0, pairs: [] },
+    revenue: { total: 0, pairs: [], chains: [] },
     ...overrides,
   };
 }

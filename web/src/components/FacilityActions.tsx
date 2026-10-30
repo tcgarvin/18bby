@@ -80,9 +80,11 @@ export function FacilityActions(props: FacilityActionsProps) {
   if (!deathStar || !state.facilities) return null;
   const limit = deathStar.fleets.limit;
   const price = deathStar.fleets.price;
-  const usage = pairUsage(corp, "facility");
+  const chainRules = state.config.chainRules;
+  const usage = pairUsage(corp, "facility", chainRules);
   const seizure = nextSeizure(deathStar);
-  const target = seizureTarget(state, corp.id);
+  // Under the chain rules each corporation chooses what it gives up, so there is no target to name.
+  const target = chainRules ? null : seizureTarget(state, corp.id);
   const president = playerName(state, corp.president);
 
   return (
@@ -123,7 +125,7 @@ export function FacilityActions(props: FacilityActionsProps) {
           {corp.id} owns no facility, so it must build one before it can earn. <Help topic="bankruptcy" />
         </p>
       )}
-      {seizure && target && (
+      {seizure && (target || (chainRules && corp.fleets > 0)) && (
         <p
           className={`fleetpanel__note${corp.fleets === 1 && corp.treasury < price ? " fleetpanel__note--danger" : ""}`}
           role={corp.fleets === 1 && corp.treasury < price ? "alert" : undefined}
@@ -132,7 +134,9 @@ export function FacilityActions(props: FacilityActionsProps) {
           {seizure.cubesToGo === 0
             ? `The ${seizure.stage.name} stage has filled: at the end of this round`
             : `When the ${seizure.stage.name} stage fills (${seizure.cubesToGo} ${seizure.cubesToGo === 1 ? "cube" : "cubes"} to go),`}{" "}
-          the Empire takes over each corporation's facility nearest the site: {corp.id}'s at {target.name}.{" "}
+          {target
+            ? `the Empire takes over each corporation's facility nearest the site: ${corp.id}'s at ${target.name}.`
+            : `each corporation hands the Empire one facility of its choice; ${corp.id}'s president picks which.`}{" "}
           {corp.fleets === 1 &&
             (corp.treasury >= price
               ? `With one facility, ${corp.id} would have none and must build another at its next turn, ${price} at today's price; its treasury of ${corp.treasury} covers that today.`

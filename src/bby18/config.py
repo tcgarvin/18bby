@@ -192,6 +192,21 @@ class GameConfig:
     ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit when charted
     (or upgraded) toward the planet, first come, first served, and the planet connects only
     through claimed sides. A seizure turns the facility nearest the site Imperial."""
+    chain_rules: bool = True
+    """Supply chains, adopted 2026-10-30 (``FACILITY_CONFIG`` and older configs turn it off;
+    requires ``facility_rules``; see "Supply chains" in docs/DECISIONS.md).
+    Revenue runs at most one chain per facility owned instead of one pair: a chain carries
+    goods up ``commodity_order`` along typed links (contracts count as links into the site), and
+    a planet holding one of the corporation's facilities may be a middle stop, where the chain
+    drops one cargo and picks up the next. Each link pays its pair value and a chain whose ends
+    are in the regional-bonus regions earns the regional bonus once. A seizure takes the
+    facility each corporation chooses to surrender, not the one nearest the site."""
+    commodity_order: dict[str, int] = field(
+        default_factory=lambda: {"A": 0, "R": 0, "I": 1, "M": 2, "S": 2, "W": 3}
+    )
+    """Tag -> rank under ``chain_rules``: a link runs from the lower rank to the higher, so a
+    chain only climbs. Raw goods (A, R), then Industry, then Market and Shipyards, then the Death
+    Star site. Every typed pair needs two ranked tags of different rank."""
     planet_base_exits: int = 1
     """Exits a planet has before any facility is built on it (``facility_rules`` only)."""
     facilities_per_planet: int = 2
@@ -267,6 +282,25 @@ class GameConfig:
             raise ValueError("planet_base_exits cannot be negative")
         if self.facilities_per_planet < 1:
             raise ValueError("facilities_per_planet must be at least 1")
+        if self.chain_rules and not self.facility_rules:
+            raise ValueError("chain_rules requires facility_rules")
+        best_basic = self.basic_route_value + sum(
+            sorted(self.planet_pair_bonus.values(), reverse=True)[:2]
+        )
+        if self.chain_rules and min(self.death_star_stage_values, default=0) < best_basic:
+            # The chain search fills leftover chains with basic routes on the premise that a
+            # contract is never worth less than a basic route.
+            raise ValueError("chain_rules needs every contract value to be at least a basic route")
+        rank = self.commodity_order
+        for pair in self.typed_pairs:
+            if len(pair) != 2 or any(tag not in rank for tag in pair):
+                raise ValueError(f"commodity_order must rank both tags of typed pair {set(pair)}")
+            low, high = sorted(rank[tag] for tag in pair)
+            if low == high:
+                raise ValueError(f"Typed pair {set(pair)} needs tags of different rank")
+        for tag in self.contract_partner_tags:
+            if tag not in rank or rank.get(self.death_star_tag, -1) <= rank[tag]:
+                raise ValueError("commodity_order must rank the site above every partner tag")
 
     def _validate_death_star_rules(self) -> None:
         """Raise ``ValueError`` if the fleet or Death Star numbers cannot make a game."""
@@ -329,10 +363,17 @@ IPO_PRICE_RULES = ("par", "market_after_float")
 CAPITALIZATION_RULES = ("full", "incremental")
 
 DEFAULT_CONFIG = GameConfig()
-"""The adopted rules (2026-10-27): the Death Star track with facilities and planet exits, at
-most 3 facilities per corporation, contracts at 50/60/70/80. The web app serves these."""
+"""The adopted rules (2026-10-30): the Death Star track with facilities and planet exits, supply
+chains (one chain per facility, at most 3 facilities per corporation, the owner choosing what a
+seizure takes), contracts at 50/60/70/80. The web app serves these."""
+
+FACILITY_CONFIG = replace(DEFAULT_CONFIG, chain_rules=False, fleet_limit=3)
+"""The rules adopted 2026-10-27 and played until supply chains, kept for comparison sweeps and
+tests: facilities and planet exits, one pair per facility, at most 3 facilities, the Empire
+seizing the facility nearest the site."""
 
 FLEET_CONFIG = GameConfig(
+    chain_rules=False,
     corporations=FOUR_CORPORATIONS,
     planet_pair_bonus={},
     facility_rules=False,
@@ -365,39 +406,38 @@ DIFFICULTY_TARGET_SHARE: dict[str, float] = {"very-easy": 0.43, "easy": 0.40}
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
 facility rules the 1.0 noise maximum gives 0.45-0.53, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-28 for DIFFICULTY_TARGET_SHARE with six corporations and site-aware
-    # starting (docs/sweeps/difficulty-2026-10-28); "easy" until 2026-10-29.
+    # Calibrated 2026-10-30 for DIFFICULTY_TARGET_SHARE under the supply-chain rules
+    # (docs/sweeps/difficulty-2026-10-30). Churner barely responds to noise and keeps its
+    # earlier values.
     "very-easy": {
-        "baron": 0.91,
+        "baron": 0.86,
         "baron-prestige": 0.92,
-        "baron-tycoon": 0.9,
-        "builder": 0.86,
+        "baron-tycoon": 0.84,
+        "builder": 0.79,
         "churner": 0.28,
-        "diversifier": 0.88,
-        "early-builder": 0.89,
-        "hoarder": 0.6,
-        "prestige": 0.86,
-        "spoiler": 0.74,
-        "straight": 0.74,
-        "targeted": 0.86,
-        "tycoon": 0.85,
+        "diversifier": 0.8,
+        "early-builder": 0.83,
+        "hoarder": 0.4,
+        "prestige": 0.83,
+        "spoiler": 0.73,
+        "straight": 0.69,
+        "targeted": 0.79,
+        "tycoon": 0.76,
     },
-    # Fitted 2026-10-29 on 60 maps (docs/sweeps/difficulty-2026-10-29). Hoarder cannot be made
-    # harder than about 42.5%, so it stays the one character easier than the target.
     "easy": {
-        "baron": 0.79,
-        "baron-prestige": 0.85,
-        "baron-tycoon": 0.77,
-        "builder": 0.56,
+        "baron": 0.76,
+        "baron-prestige": 0.86,
+        "baron-tycoon": 0.76,
+        "builder": 0.66,
         "churner": 0.12,
-        "diversifier": 0.56,
-        "early-builder": 0.76,
-        "hoarder": 0.7,
-        "prestige": 0.6,
-        "spoiler": 0.51,
-        "straight": 0.11,
-        "targeted": 0.71,
-        "tycoon": 0.56,
+        "diversifier": 0.65,
+        "early-builder": 0.73,
+        "hoarder": 0.5,
+        "prestige": 0.57,
+        "spoiler": 0.41,
+        "straight": 0.1,
+        "targeted": 0.74,
+        "tycoon": 0.63,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

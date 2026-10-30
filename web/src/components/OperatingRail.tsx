@@ -22,7 +22,12 @@ interface OperatingRailProps {
 }
 
 const STAGE_MARK: Record<StepStage, string> = { done: "✓", current: "▶", upcoming: "" };
-const CURRENT_CHIP: Partial<Record<GameState["phase"], string>> = { network: "operating", fleet: "fleets", dividend: "dividend" };
+const CURRENT_CHIP: Partial<Record<GameState["phase"], string>> = {
+  network: "operating",
+  fleet: "fleets",
+  dividend: "dividend",
+  surrender: "choosing",
+};
 const STATUS_CHIP: Record<CorporationState["status"], string> = {
   unstarted: "unstarted",
   parred: "parred",
@@ -43,8 +48,17 @@ export function OperatingRail({ state, focusCorp, onFocus, mode = "operating", c
   return (
     <aside className="rail" aria-label="Operating order">
       <h2 className="rail__title">
-        Operating order
-        <Help topic="operatingOrder" />
+        {state.phase === "surrender" ? (
+          <>
+            Seizure
+            <Help topic="seizure" />
+          </>
+        ) : (
+          <>
+            Operating order
+            <Help topic="operatingOrder" />
+          </>
+        )}
         <span className="rail__round">{state.roundLabel}</span>
       </h2>
       <ol className="rail__list">
@@ -156,7 +170,10 @@ function EntrySummary({ state, corp, focused, onFocus, mark, chip, chipTone, roo
   const closed = corp.status === "closed";
   const started = corp.status !== "unstarted";
   const fleetIcons = state.deathStar && (
-    <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit} item={state.deathStar.fleets.item} />
+    <FleetIcons corpId={corp.id} fleets={corp.fleets} limit={state.deathStar.fleets.limit}
+      item={state.deathStar.fleets.item}
+      runs={state.config.chainRules ? "chain" : "pair"}
+    />
   );
   return (
     <button

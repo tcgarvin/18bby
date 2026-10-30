@@ -34,7 +34,7 @@ export function corporation(id: string, overrides: Partial<CorporationState> = {
     lastRevenue: 0,
     fleets: 0,
     reachablePlanets: [],
-    revenue: { total: 0, pairs: [] },
+    revenue: { total: 0, pairs: [], chains: [] },
     ...overrides,
   };
 }
@@ -89,6 +89,7 @@ export function gameState(overrides: Partial<GameState> = {}): GameState {
       typedPairValue: 30,
       regionalBonus: 10,
       basicRouteValue: 10,
+      chainRules: false,
     },
     log: [],
     moves: [],
@@ -120,7 +121,15 @@ export function frameState(state: GameState, tiles: TileState[] = [], planets: P
     tiles,
     ...(state.deathStar ? { deathStar: state.deathStar } : {}),
     ...(facilities
-      ? { facilities: { perPlanet: facilities.perPlanet, planets, seizureTargets: facilities.seizureTargets } }
+      ? {
+          facilities: {
+            perPlanet: facilities.perPlanet,
+            planets,
+            seizureTargets: facilities.seizureTargets,
+            surrenderQueue: facilities.surrenderQueue,
+            surrenderOptions: facilities.surrenderOptions,
+          },
+        }
       : {}),
   };
 }
@@ -238,6 +247,8 @@ export function withFacilities(state: GameState, planets?: PlanetFacilities[]): 
         planetFacilities("Kuat", [-3, 2]),
       ],
       seizureTargets: [],
+      surrenderQueue: [],
+      surrenderOptions: [],
       options: [],
     },
   };

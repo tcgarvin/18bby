@@ -25,6 +25,7 @@ from bby18.actions import (
     SellShares,
     ShareSource,
     StockAction,
+    SurrenderFacility,
     Upgrade,
 )
 from bby18.board import Board, Planet, Terrain, load_board
@@ -99,6 +100,10 @@ class Game:
     """Every facility on the board, oldest first (facility rules)."""
     facilities_built: int = 0
     """Facilities built so far, home facilities included: the next one's ``build_number``."""
+    surrender_queue: list[str] = field(default_factory=list)
+    """Under the chain rules, the corporations (ids, in operating order) that still have to
+    choose the facility they surrender at the seizure being resolved; empty otherwise. While it
+    is not empty the Death Star track waits (see ``resolve_death_star``)."""
     facility_seizure_ties: int = 0
     """Seizures at which a corporation's facilities nearest the site lay on more than one
     planet, so the most-recently-built tie-break decided which planet the Empire took. Two on
@@ -175,20 +180,38 @@ class Game:
 
     def revenue(self, corp: Corporation) -> RevenueResult:
         """This turn's revenue: the best matching of the reachable planets, using at most one
-        pair per fleet under the Death Star rules."""
-        result = self.planet_revenue(self.reachable_planets(corp), self.pair_cap(corp))
+        pair per fleet under the Death Star rules (one chain per facility under the chain
+        rules)."""
+        result = self.planet_revenue(
+            self.reachable_planets(corp), self.pair_cap(corp), self.middle_stops(corp)
+        )
         if self.config.homeworld_basic_income > 0:
             result = replace(result, floor=self.config.homeworld_basic_income)
         return result
 
     def planet_revenue(
-        self, planets: list[Planet], max_pairs: int = NO_PAIR_LIMIT
+        self,
+        planets: list[Planet],
+        max_pairs: int = NO_PAIR_LIMIT,
+        middle_stops: frozenset[Hex] = frozenset(),
     ) -> RevenueResult:
         """Pair revenue of ``planets`` at the current contract value, using at most
-        ``max_pairs`` pairs, without the experimental income floor. For what-if evaluation."""
+        ``max_pairs`` pairs (chains, under the chain rules, which may stop in the middle at
+        ``middle_stops``), without the experimental income floor. For what-if evaluation."""
         return compute_revenue(
-            planets, self.config, contract_value=self.contract_value(), max_pairs=max_pairs
+            planets,
+            self.config,
+            contract_value=self.contract_value(),
+            max_pairs=max_pairs,
+            middle_stops=middle_stops,
         )
+
+    def middle_stops(self, corp: Corporation) -> frozenset[Hex]:
+        """Planets where a chain of ``corp`` may stop in the middle: those holding one of its
+        facilities. Empty unless the chain rules are on."""
+        if not self.config.chain_rules:
+            return frozenset()
+        return frozenset(f.planet for f in self.facilities_of(corp))
 
     def pair_cap(self, corp: Corporation) -> int:
         """Most pairs ``corp`` may run: its fleets under the Death Star rules (its facilities
@@ -829,14 +852,24 @@ class Game:
     def resolve_death_star(self) -> None:
         """Apply, in order, the result of every stage filled but not yet resolved. The session
         calls this at the end of every operating round and stock round. Does nothing with the
-        Death Star rules off."""
+        Death Star rules off.
+
+        Under the chain rules a seizure stops here with ``surrender_queue`` set: each
+        corporation that owns a facility chooses one to surrender (``surrender_facility``), and
+        the caller calls this again once the queue is empty to apply any later stages."""
         if not self.config.death_star_rules:
             return
         track = self.death_star
+        if self.surrender_queue:
+            raise ValueError("A seizure is waiting for facilities to be surrendered")
         while track.stages_resolved < track.stages_filled(self.config):
             result = self.config.death_star_stage_results[track.stages_resolved]
             track.stages_resolved += 1
-            if result == SEIZURE:
+            if result == SEIZURE and self.config.chain_rules:
+                self._begin_surrender()
+                if self.surrender_queue:
+                    return
+            elif result == SEIZURE:
                 self._seize_fleets()
             elif result == SITE_MOVE:
                 self._move_site()
@@ -879,12 +912,63 @@ class Game:
         if not seized_any:
             self._log(EMPIRE, "finds no facilities to take over")
 
+    def _begin_surrender(self) -> None:
+        """Start a seizure under the chain rules: queue every floated corporation that owns a
+        facility, in operating order, to choose the one it surrenders."""
+        if self.death_star.active_site is None:
+            raise ValueError("A seizure needs a construction site on the board")
+        self.surrender_queue = [c.id for c in self.operating_order() if self.facilities_of(c)]
+        if not self.surrender_queue:
+            self._log(EMPIRE, "finds no facilities to take over")
+            return
+        names = ", ".join(self.surrender_queue)
+        self._log(EMPIRE, f"demands a facility from {names}")
+
+    def legal_surrenders(self, corp: Corporation) -> list[SurrenderFacility]:
+        """The facilities ``corp`` may surrender now: one choice per planet it holds one on.
+        Empty unless it is the corporation the seizure waits on."""
+        if not self.surrender_queue or self.surrender_queue[0] != corp.id:
+            return []
+        return [SurrenderFacility(h) for h in sorted({f.planet for f in self.facilities_of(corp)})]
+
+    def revenue_after_surrender(
+        self, corp: Corporation, action: SurrenderFacility, contract_value: int
+    ) -> RevenueResult:
+        """What ``corp``'s network would earn at ``contract_value`` after ``action``: one chain
+        fewer, and no middle stop at the planet unless another of its facilities stays there.
+        Without the experimental income floor."""
+        held = [f.planet for f in self.facilities_of(corp)]
+        kept = frozenset(held)
+        if held.count(action.planet) == 1:
+            kept -= {action.planet}
+        return compute_revenue(
+            self.reachable_planets(corp),
+            self.config,
+            contract_value=contract_value,
+            max_pairs=max(corp.fleets - 1, 0),
+            middle_stops=kept,
+        )
+
+    def surrender_facility(self, corp: Corporation, action: SurrenderFacility) -> None:
+        """``corp`` hands the Empire its facility on ``action.planet`` (the newest, if it has
+        two there). It stays on the planet, fills its slot and keeps its exit."""
+        if action not in self.legal_surrenders(corp):
+            raise IllegalAction(f"{corp.id} cannot surrender a facility at {action.planet} now")
+        owned = [f for f in self.facilities_of(corp) if f.planet == action.planet]
+        taken = max(owned, key=lambda f: f.build_number)
+        self.facilities[self.facilities.index(taken)] = replace(taken, owner=EMPIRE)
+        corp.fleets -= 1
+        self.surrender_queue.pop(0)
+        name = self.board.planet_at(taken.planet).name
+        self._log(EMPIRE, f"takes over {corp.id}'s facility at {name}; it owns {corp.fleets}")
+
     def facilities_to_seize(self) -> dict[str, Facility]:
         """The facility a seizure would take now from each floated corporation that owns one,
         by corporation id (see ``_seize_facilities``). Empty when no construction site is on
-        the board, so no seizure can come."""
+        the board, so no seizure can come, and under the chain rules, where each corporation
+        chooses."""
         site = self.death_star.active_site
-        if site is None:
+        if site is None or self.config.chain_rules:
             return {}
         targets: dict[str, Facility] = {}
         for corp in self.corporations.values():

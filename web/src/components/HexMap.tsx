@@ -28,6 +28,7 @@ import {
   neighbor,
   type Point,
 } from "../hex";
+import { chainOfLink, chainStory } from "../chains";
 import { siteHexes, sitePlanet } from "../deathstar";
 import { laneConnects, planetExitsText, planetsByKey as limitedPlanets } from "../facilities";
 import { slotOffset, solveLaneOrder, type CorpTrace, type LaneOrder } from "../laneOrder";
@@ -290,6 +291,32 @@ function buildNetwork(
   return { strokes, traces, dangling, keys };
 }
 
+/** Where along a chain link its arrowhead sits: short of the target, clear of its badge. */
+const ARROW_AT = 0.78;
+const ARROW_SIZE = 6;
+
+/**
+ * A small triangle on the quadratic curve from `from` (via `control`) to `to`, pointing the way
+ * the cargo travels, for a chain link on the map.
+ */
+export function arrowheadPath(from: Point, control: Point, to: Point): string {
+  const t = ARROW_AT;
+  const u = 1 - t;
+  const tip = {
+    x: u * u * from.x + 2 * u * t * control.x + t * t * to.x,
+    y: u * u * from.y + 2 * u * t * control.y + t * t * to.y,
+  };
+  const tangent = { x: 2 * u * (control.x - from.x) + 2 * t * (to.x - control.x), y: 2 * u * (control.y - from.y) + 2 * t * (to.y - control.y) };
+  const length = Math.hypot(tangent.x, tangent.y) || 1;
+  const along = { x: tangent.x / length, y: tangent.y / length };
+  const back = { x: tip.x - along.x * ARROW_SIZE, y: tip.y - along.y * ARROW_SIZE };
+  const half = ARROW_SIZE * 0.55;
+  const left = { x: back.x - along.y * half, y: back.y + along.x * half };
+  const right = { x: back.x + along.y * half, y: back.y - along.x * half };
+  const f = (p: Point) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  return `M${f(tip)}L${f(left)}L${f(right)}Z`;
+}
+
 /** Offset of facility marker `index` from its planet's centre. */
 function facilitySpot(index: number): Point {
   const radians = (FACILITY_ANGLES[index % FACILITY_ANGLES.length] * Math.PI) / 180;
@@ -458,6 +485,7 @@ export function HexMap(props: HexMapProps) {
 
   const focus = corporations.find((c) => c.id === focusCorp) ?? null;
   const reachable = new Set(focus?.reachablePlanets ?? []);
+  const chained = (focus?.revenue.chains.length ?? 0) > 0;
   const core = coreWidth(corpIds.length);
   const casing = core + 2 * CASING_EDGE;
   const [boxX, boxY, boxWidth, boxHeight] = box.split(" ").map(Number);
@@ -575,16 +603,28 @@ export function HexMap(props: HexMapProps) {
             const bow = Math.min(S * 1.2, length * 0.18);
             const control = { x: mid.x - ((pb.y - pa.y) / length) * bow, y: mid.y + ((pb.x - pa.x) / length) * bow };
             const labelAt = { x: (mid.x + control.x) / 2, y: (mid.y + control.y) / 2 };
+            // Under the chain rules a link carries cargo one way, so it gets an arrowhead, and it
+            // tells the whole chain it belongs to.
+            const chain = chained ? chainOfLink(focus.revenue, pair) : null;
+            const color = corporationColor(focus.id, corpIds);
             return (
               <g key={`${pair.a}-${pair.b}`}>
+                {chain && <title>{chainStory(chain)}</title>}
                 <path
                   d={`M${pa.x},${pa.y}Q${control.x},${control.y} ${pb.x},${pb.y}`}
-                  stroke={corporationColor(focus.id, corpIds)}
+                  stroke={color}
                   className={`hexmap__pair${pair.contract ? " hexmap__pair--contract" : pair.typed ? "" : " hexmap__pair--basic"}`}
                 />
+                {chain && (
+                  <path
+                    d={arrowheadPath(pa, control, pb)}
+                    fill={pair.contract ? undefined : color}
+                    className={`hexmap__pair-arrow${pair.contract ? " hexmap__pair-arrow--contract" : ""}`}
+                  />
+                )}
                 <g transform={`translate(${labelAt.x},${labelAt.y})`} className={pair.contract ? "hexmap__pair-label--contract" : undefined}>
-                  {pair.contract && <title>{`Contract ${pair.a} ↔ ${pair.b}: ${pair.value}, and a cube on the Death Star track`}</title>}
-                  <rect x={-13} y={-8} width={26} height={16} rx={8} className="hexmap__pair-pill" stroke={corporationColor(focus.id, corpIds)} />
+                  {pair.contract && !chain && <title>{`Contract ${pair.a} ↔ ${pair.b}: ${pair.value}, and a cube on the Death Star track`}</title>}
+                  <rect x={-13} y={-8} width={26} height={16} rx={8} className="hexmap__pair-pill" stroke={color} />
                   <text className="hexmap__pair-value" dy="0.35em">
                     {pair.value}
                   </text>
@@ -921,8 +961,8 @@ function FacilityMarker({ facility, at, color, fresh }: { facility: FacilityStat
       <g className={`hexmap__facility${imperial ? " hexmap__facility--imperial" : ""}${fresh ? " hexmap__facility--fresh" : ""}`}>
         <title>
           {imperial
-            ? "Imperial facility: it fills a slot and keeps its exit, but runs pairs for nobody"
-            : `${facility.owner} facility: one revenue pair for ${facility.owner}, and an exit for this planet`}
+            ? "Imperial facility: it fills a slot and keeps its exit, but earns for nobody"
+            : `${facility.owner} facility: revenue for ${facility.owner}, and an exit for this planet`}
         </title>
         {imperial ? (
           <>

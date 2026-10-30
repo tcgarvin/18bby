@@ -1,0 +1,15 @@
+strategy        share  s.e.  games
+churner          36.7   1.3     90
+straight         38.6   1.3     90
+early-builder    38.9   1.2     90
+baron            39.2   1.1     90
+prestige         40.0   1.2     90
+baron-tycoon     40.7   1.1     90
+builder          40.7   1.1     90
+targeted         40.8   1.1     90
+tycoon           40.8   1.3     90
+spoiler          41.0   1.2     90
+diversifier      41.5   1.1     90
+baron-prestige   42.0   1.4     90
+hoarder          44.1   1.2     90
+overall          40.4         1170

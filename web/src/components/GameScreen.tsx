@@ -26,6 +26,7 @@ import { GameOverView } from "./views/GameOverView";
 import { MapBrowseView } from "./views/MapBrowseView";
 import { NetworkView } from "./views/NetworkView";
 import { StockRoundView } from "./views/StockRoundView";
+import { SurrenderView } from "./views/SurrenderView";
 import type { ViewProps } from "./views/types";
 import "./GameScreen.css";
 
@@ -234,6 +235,8 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
         return display.facilities ? <FacilityView {...viewProps} /> : <FleetView {...viewProps} />;
       case "dividend":
         return <DividendView {...viewProps} />;
+      case "surrender":
+        return <SurrenderView {...viewProps} />;
       default:
         return <MapBrowseView {...viewProps} />;
     }
@@ -266,7 +269,9 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
           onUndo={undo}
           onLeave={onLeave}
         />
-        {display.deathStar && <DeathStarBar deathStar={display.deathStar} over={display.phase === "game_over"} />}
+        {display.deathStar && (
+          <DeathStarBar deathStar={display.deathStar} over={display.phase === "game_over"} chainRules={display.config.chainRules} />
+        )}
         {recent.length > 0 && !replaying && (
           <RecentMoves
             state={display}

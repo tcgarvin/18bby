@@ -113,3 +113,14 @@ class BuildFacility:
 
 
 FleetAction = BuyFleet | FinishFleets | BuildFacility
+
+
+@dataclass(frozen=True)
+class SurrenderFacility:
+    """At a seizure under the chain rules, hand the Empire one's facility on ``planet`` (the
+    newest there, if the corporation has two)."""
+
+    planet: Hex
+
+    def __str__(self) -> str:
+        return f"surrender the facility at {self.planet}"

@@ -69,3 +69,41 @@ describe("HexMap lanes", () => {
     expect(count(markup, "hexmap__preview-trace")).toBe(2);
   });
 });
+
+describe("HexMap revenue arcs", () => {
+  const planets = [
+    { name: "Kessel", hex: [-2, 2] as Axial, region: "Outer Rim" as const, tags: ["R"] },
+    { name: "Sullust", hex: [0, 2] as Axial, region: "Mid Rim" as const, tags: ["I"] },
+    { name: "Kuat", hex: [2, -1] as Axial, region: "Core" as const, tags: ["S"] },
+  ];
+  const links = [
+    { a: "Kessel", b: "Sullust", value: 30, typed: true, contract: false },
+    { a: "Sullust", b: "Kuat", value: 30, typed: true, contract: false },
+  ];
+
+  function focused(chains: boolean): string {
+    const corp = corporation("A", {
+      status: "floated",
+      revenue: {
+        total: 80,
+        pairs: links,
+        chains: chains ? [{ stops: ["Kessel", "Sullust", "Kuat"], links, regional: 20, value: 80 }] : [],
+      },
+    });
+    return render({ board: { ...BOARD, planets }, tiles: [], corporations: [corp], focusCorp: "A" });
+  }
+
+  it("points each chain link the way its cargo travels and tells the whole chain", () => {
+    const markup = focused(true);
+    expect(markup).not.toMatch(/NaN|Infinity/);
+    expect(count(markup, "hexmap__pair")).toBe(2);
+    expect(count(markup, "hexmap__pair-arrow")).toBe(2);
+    expect(markup).toContain("<title>Kessel → Sullust → Kuat · 30 + 30 + 20 regional</title>");
+  });
+
+  it("draws plain pairs without arrows under the pair rules", () => {
+    const markup = focused(false);
+    expect(count(markup, "hexmap__pair")).toBe(2);
+    expect(count(markup, "hexmap__pair-arrow")).toBe(0);
+  });
+});

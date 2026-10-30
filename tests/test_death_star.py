@@ -14,6 +14,7 @@ from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.config import (
     CLASSIC_CONFIG,
     DEFAULT_CONFIG,
+    FACILITY_CONFIG,
     FLEET_CONFIG,
     FOUR_CORPORATIONS,
     UNLIMITED,
@@ -672,6 +673,7 @@ def test_default_death_star_numbers_match_the_decisions_doc():
 def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
     assert FLEET_CONFIG == replace(
         DEFAULT_CONFIG,
+        chain_rules=False,
         corporations=FOUR_CORPORATIONS,
         planet_pair_bonus={},
         facility_rules=False,
@@ -679,6 +681,12 @@ def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
         death_star_stage_values=(40, 50, 60, 70),
     )
     FLEET_CONFIG.validate_rule_variants()
+
+
+def test_facility_config_is_the_default_before_supply_chains_were_adopted():
+    assert FACILITY_CONFIG == replace(DEFAULT_CONFIG, chain_rules=False)
+    assert DEFAULT_CONFIG.chain_rules and DEFAULT_CONFIG.fleet_limit == 3
+    FACILITY_CONFIG.validate_rule_variants()
 
 
 def test_classic_config_is_the_fleet_config_before_the_death_star_was_adopted():
@@ -789,6 +797,32 @@ def test_fleet_games_play_exactly_as_before_facilities(key):
     for p in game.players:
         digest.update(f"{p.id}:{p.cash}:{game.player_worth(p)}\n".encode())
     assert digest.hexdigest()[:16] == FLEET_DIGESTS[key]
+
+
+FACILITY_DIGESTS = {
+    ("baron@site", 3, 1): "f0a1bb7949f18e39",
+    ("admiral@site", 3, 2): "8ac39c105925177d",
+    ("contractor", 4, 3): "ef5123b4b5b4b33a",
+    ("early-builder~0.5", 2, 4): "e1e91ba10354f674",
+    ("random", 3, 5): "224960e17cec1a31",
+    ("greedy-path", 4, 6): "baff0db6d063e65e",
+    ("mix:staller,targeted,saver", 3, 7): "d180f68b84ee02d5",
+}
+"""Hashes of full game logs and final cash and worth under the facility rules, captured on the
+engine before supply chains were added (main at 679c52a, where they were the default)."""
+
+
+@pytest.mark.parametrize("key", sorted(FACILITY_DIGESTS))
+def test_facility_games_play_exactly_as_before_supply_chains(key):
+    kind, players, seed = key
+    game, _ = play_one(seed, players, kind, FACILITY_CONFIG)
+    digest = hashlib.sha256()
+    for entry in game.log:
+        digest.update(str(entry).encode())
+        digest.update(b"\n")
+    for p in game.players:
+        digest.update(f"{p.id}:{p.cash}:{game.player_worth(p)}\n".encode())
+    assert digest.hexdigest()[:16] == FACILITY_DIGESTS[key]
 
 
 # --- serialization -------------------------------------------------------------------------
