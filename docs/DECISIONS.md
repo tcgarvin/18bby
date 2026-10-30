@@ -494,6 +494,23 @@ admiral the best response in 27 of 45 opponent sets, launch 18%, contracts 12.5%
 floats in 7% of games (0% without the bonus), IGB in 1%. Easy opponents were recalibrated
 (`docs/sweeps/difficulty-2026-10-28`).
 
+## Opponent difficulties: very easy and easy (decided 2026-10-29)
+
+The web app's single opponent level, "easy", is renamed **very easy** (`very-easy`), unchanged:
+the reference player takes 43% against two such bots. A new **easy** targets 40%
+(`DIFFICULTY_TARGET_SHARE`; a fair share at three players is 33.3%). Both are offered in the New
+game picker, very easy first and the default.
+
+- **Why 40%.** It is the hardest target every character can reach: hoarder bots cannot be made
+  harder than about 42.5% by noise, and straight and churner reach 40% at only about 0.1 noise.
+  Hoarder stays the one easy character a few points easier (43.5% on fresh maps).
+- **Saved games are not migrated.** Bot seats saved as `easy` before the rename play the new easy
+  from their next move.
+
+**Evidence** (`docs/sweeps/difficulty-2026-10-29`): fitted on 60 maps; on 30 fresh maps the
+reference player takes 38.9-40.7% against every strategy but hoarder, 40.2% overall, against
+very easy's 43.0%.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,

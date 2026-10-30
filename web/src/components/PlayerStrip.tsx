@@ -1,5 +1,6 @@
 import type { GameState, PlayerState } from "../api";
 import { corpColor } from "../selectors";
+import { difficultyLabel } from "../difficulty";
 import { Ticker } from "../playback/Ticker";
 import { CertStack } from "./CertStack";
 import { Help } from "./Help";
@@ -12,7 +13,7 @@ interface PlayerStripProps {
 
 /** The badge text for a bot seat: its difficulty when it has one. */
 export function botLabel(difficulty: string): string {
-  return difficulty ? `${difficulty} bot` : "bot";
+  return difficulty ? `${difficultyLabel(difficulty).toLowerCase()} bot` : "bot";
 }
 
 /** The player whose move it is: the stock round's actor, or the operating corporation's president. */

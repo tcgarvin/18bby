@@ -360,14 +360,14 @@ REVENUE_CACHE_SIZE = 1 << 16
 """Bound on memoized revenue matchings kept per process."""
 
 # AI difficulty for the web app's named opponents (see bby18.bots.roster).
-DIFFICULTY_TARGET_SHARE: dict[str, float] = {"easy": 0.43}
+DIFFICULTY_TARGET_SHARE: dict[str, float] = {"very-easy": 0.43, "easy": 0.40}
 """Per difficulty, the worth share a reference player (the stable's ``builder``) should take
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
 facility rules the 1.0 noise maximum gives 0.45-0.53, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
     # Calibrated 2026-10-28 for DIFFICULTY_TARGET_SHARE with six corporations and site-aware
-    # starting (docs/sweeps/difficulty-2026-10-28).
-    "easy": {
+    # starting (docs/sweeps/difficulty-2026-10-28); "easy" until 2026-10-29.
+    "very-easy": {
         "baron": 0.91,
         "baron-prestige": 0.92,
         "baron-tycoon": 0.9,
@@ -381,6 +381,23 @@ BOT_NOISE: dict[str, dict[str, float]] = {
         "straight": 0.74,
         "targeted": 0.86,
         "tycoon": 0.85,
+    },
+    # Fitted 2026-10-29 on 60 maps (docs/sweeps/difficulty-2026-10-29). Hoarder cannot be made
+    # harder than about 42.5%, so it stays the one character easier than the target.
+    "easy": {
+        "baron": 0.79,
+        "baron-prestige": 0.85,
+        "baron-tycoon": 0.77,
+        "builder": 0.56,
+        "churner": 0.12,
+        "diversifier": 0.56,
+        "early-builder": 0.76,
+        "hoarder": 0.7,
+        "prestige": 0.6,
+        "spoiler": 0.51,
+        "straight": 0.11,
+        "targeted": 0.71,
+        "tycoon": 0.56,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

@@ -282,6 +282,14 @@ def test_easy_bot_seats_get_distinct_named_characters(client):
     assert all(b["difficulty"] == "easy" and b["plan"] == "" for b in bots)
 
 
+def test_bot_seats_keep_the_difficulty_picked_for_each(client):
+    seats = [{"name": "Me"}] + [
+        {"name": "x", "bot": True, "difficulty": d} for d in ("very-easy", "easy")
+    ]
+    state = client.post("/api/games", json={"seats": seats, "seed": 9}).json()["state"]
+    assert [p["difficulty"] for p in state["players"]] == ["", "very-easy", "easy"]
+
+
 def test_same_seed_draws_the_same_characters(client):
     seats = [{"name": "Me"}, {"name": "x", "bot": True, "difficulty": "easy"}]
     first = client.post("/api/games", json={"seats": seats, "seed": 3}).json()["state"]
