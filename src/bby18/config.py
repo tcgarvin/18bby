@@ -192,8 +192,9 @@ class GameConfig:
     ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit when charted
     (or upgraded) toward the planet, first come, first served, and the planet connects only
     through claimed sides. A seizure turns the facility nearest the site Imperial."""
-    chain_rules: bool = False
-    """Supply chains (requires ``facility_rules``; see "Supply chains" in docs/DECISIONS.md).
+    chain_rules: bool = True
+    """Supply chains, adopted 2026-10-30 (``FACILITY_CONFIG`` and older configs turn it off;
+    requires ``facility_rules``; see "Supply chains" in docs/DECISIONS.md).
     Revenue runs at most one chain per facility owned instead of one pair: a chain carries
     goods up ``commodity_order`` along typed links (contracts count as links into the site), and
     a planet holding one of the corporation's facilities may be a middle stop, where the chain
@@ -362,8 +363,9 @@ IPO_PRICE_RULES = ("par", "market_after_float")
 CAPITALIZATION_RULES = ("full", "incremental")
 
 DEFAULT_CONFIG = GameConfig()
-"""The adopted rules (2026-10-27): the Death Star track with facilities and planet exits, at
-most 3 facilities per corporation, contracts at 50/60/70/80. The web app serves these."""
+"""The adopted rules (2026-10-30): the Death Star track with facilities and planet exits, supply
+chains (one chain per facility, at most 3 facilities per corporation, the owner choosing what a
+seizure takes), contracts at 50/60/70/80. The web app serves these."""
 
 FACILITY_CONFIG = replace(DEFAULT_CONFIG, chain_rules=False, fleet_limit=3)
 """The rules adopted 2026-10-27 and played until supply chains, kept for comparison sweeps and
@@ -371,6 +373,7 @@ tests: facilities and planet exits, one pair per facility, at most 3 facilities,
 seizing the facility nearest the site."""
 
 FLEET_CONFIG = GameConfig(
+    chain_rules=False,
     corporations=FOUR_CORPORATIONS,
     planet_pair_bonus={},
     facility_rules=False,

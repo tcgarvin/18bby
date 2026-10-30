@@ -426,6 +426,8 @@ address decides where the lanes can go. The private benefit (capacity) pays for 
 
 ### Seizure
 
+- *(Superseded 2026-10-30 by "Supply chains": each corporation now chooses the facility it
+  surrenders. `FACILITY_CONFIG` keeps the rule below.)*
 - At a seizure (stages 1 and 3), the Empire takes over **one facility from every corporation
   that owns one**: the one **nearest the active construction site** (hex distance), and on a tie
   the **most recently built**. The facility becomes Imperial: it stays on the planet, fills its
@@ -513,7 +515,12 @@ very easy's 43.0%.
 
 ## Supply chains (decided 2026-10-30)
 
-**Status:** STATUS_PLACEHOLDER
+**Status:** adopted 2026-10-30 as the default rules (`chain_rules`), with the facility limit
+kept at 3; `FACILITY_CONFIG` keeps the pair rules of 2026-10-27. Sweep:
+`docs/sweeps/supply-chains-2026-10-30` (two strategies coexist where the pair rules had one;
+63% of revenue runs through middle stops; launches 18% → 25%). A limit of 4 was swept and not
+adopted: it did not bind for the bots and narrowed balance to one strategy. *(The user floated
+4 "if needed"; this is the evidence, not a ruling.)*
 
 **Why:** corporations grew to two or so routes and stopped, and Outer Rim to Core routes almost
 never paid: a route was a pair of planets worth a flat 30 (50 with the regional bonus), so a long

@@ -673,6 +673,7 @@ def test_default_death_star_numbers_match_the_decisions_doc():
 def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
     assert FLEET_CONFIG == replace(
         DEFAULT_CONFIG,
+        chain_rules=False,
         corporations=FOUR_CORPORATIONS,
         planet_pair_bonus={},
         facility_rules=False,
@@ -680,6 +681,12 @@ def test_fleet_config_is_the_default_before_the_facilities_were_adopted():
         death_star_stage_values=(40, 50, 60, 70),
     )
     FLEET_CONFIG.validate_rule_variants()
+
+
+def test_facility_config_is_the_default_before_supply_chains_were_adopted():
+    assert FACILITY_CONFIG == replace(DEFAULT_CONFIG, chain_rules=False)
+    assert DEFAULT_CONFIG.chain_rules and DEFAULT_CONFIG.fleet_limit == 3
+    FACILITY_CONFIG.validate_rule_variants()
 
 
 def test_classic_config_is_the_fleet_config_before_the_death_star_was_adopted():

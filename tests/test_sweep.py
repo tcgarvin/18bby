@@ -67,7 +67,7 @@ def test_parse_spec_without_grid_has_only_named_variants():
 
 
 def test_an_empty_spec_variant_plays_the_adopted_death_star_rules():
-    classic = {"death_star_rules": False, "facility_rules": False}
+    classic = {"chain_rules": False, "death_star_rules": False, "facility_rules": False}
     spec = parse_spec({"variants": {"base": {}, "classic": classic}, "seeds": [1, 2]})
     assert spec.variants["base"] == DEFAULT_CONFIG
     assert spec.variants["base"].death_star_rules and spec.variants["base"].facility_rules

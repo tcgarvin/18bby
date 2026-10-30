@@ -11,12 +11,12 @@ from bby18.bots.forecast import TrackForecast
 from bby18.bots.greedy import NO_ROUTE_COST, _FacilityOption
 from bby18.bots.routing import PlanetDoors, route_costs
 from bby18.bots.stable import STABLE
-from bby18.config import DEFAULT_CONFIG, SEIZURE
+from bby18.config import FACILITY_CONFIG, SEIZURE
 from bby18.game import Game
 from bby18.hexgrid import Direction as D
 from bby18.hexgrid import Hex
 
-RULES = DEFAULT_CONFIG
+RULES = FACILITY_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Tests that build specific tiles run on an empty sky."""
 

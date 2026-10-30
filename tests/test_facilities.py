@@ -16,7 +16,7 @@ from bby18.actions import (
     Upgrade,
 )
 from bby18.board import Planet, load_board
-from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FLEET_CONFIG, SEIZURE
+from bby18.config import CLASSIC_CONFIG, DEFAULT_CONFIG, FACILITY_CONFIG, FLEET_CONFIG, SEIZURE
 from bby18.death_star import SITE_NAME
 from bby18.game import EMPIRE, Game
 from bby18.hexgrid import Direction as D
@@ -26,7 +26,7 @@ from bby18.playtest import play_one
 from bby18.session import GameSession, Phase
 from bby18.state import CorpStatus, Facility
 
-RULES = DEFAULT_CONFIG
+RULES = FACILITY_CONFIG
 OPEN_RULES = replace(RULES, asteroid_fraction=0.0, nebula_fraction=0.0)
 """Tests that build specific tiles run on an empty sky."""
 

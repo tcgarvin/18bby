@@ -17,21 +17,24 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   every seat order; `bby18 tournament-report --rows rows.jsonl` finds best responses and
   equilibria. The balance goal is no single dominant strategy, not equal win rates.
 - Death Star rules in sweeps: the rules are the default (with facilities since 2026-10-27, six
-  corporations and Coruscant's +10 pair bonus since 2026-10-28), so a spec variant `{}` plays
-  them; seat `strategy@site` bot kinds there (site-aware starting, as the web opponents play).
-  Add `"corporations": ["CEC", "KDY", "CSC", "KTG"], "planet_pair_bonus": {},
-  "facility_rules": false, "fleet_limit": 4, "death_star_stage_values": [40, 50, 60, 70]`
-  (`FLEET_CONFIG`) to compare with the fleet rules of 2026-10-26; the same corporations and bonus
-  with `"death_star_rules": false, "facility_rules": false` (`CLASSIC_CONFIG`'s rules; facilities
-  need the Death Star rules) to compare with the rules before 2026-10-26, and
+  corporations and Coruscant's +10 pair bonus since 2026-10-28, supply chains since 2026-10-30),
+  so a spec variant `{}` plays them; seat `strategy@site` bot kinds there (site-aware starting,
+  as the web opponents play). Add `"chain_rules": false` (`FACILITY_CONFIG`) to compare with the
+  pair rules of 2026-10-27; add `"chain_rules": false, "corporations": ["CEC", "KDY", "CSC",
+  "KTG"], "planet_pair_bonus": {}, "facility_rules": false, "fleet_limit": 4,
+  "death_star_stage_values": [40, 50, 60, 70]` (`FLEET_CONFIG`) to compare with the fleet rules
+  of 2026-10-26; the same corporations and bonus with `"chain_rules": false, "death_star_rules":
+  false, "facility_rules": false` (`CLASSIC_CONFIG`'s rules; chains need facilities, which need
+  the Death Star rules) to compare with the rules before 2026-10-26, and
   `"map_file": "map-127.json"` for the board before the east edge was cut (also 2026-10-26).
   Games with `death_star_rules` on get `ds.*` row fields from a move
   observer (`src/bby18/death_star_metrics.py`, no log parsing); `bby18 death-star-report --rows
   rows.jsonl` compares variants on the clock, fleets, bankruptcies, withholds and contracts
   (`--bot` keeps one bot mix). Every row also counts network actions (total and late) and planets
   touched; games with `facility_rules` on add `fac.*` fields
-  (`src/bby18/facility_metrics.py`), which the report prints as a facilities block. Bots price
-  planet exits in their routes in `src/bby18/bots/routing.py`.
+  (`src/bby18/facility_metrics.py`), which the report prints as a facilities block, and games
+  with `chain_rules` on add `chain.*` fields (`src/bby18/chain_metrics.py`, a chains block).
+  Bots price planet exits in their routes in `src/bby18/bots/routing.py`.
 - Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy started
   by the Death Star site (`roster_policy`, bot kind `strategy@site`) with a per-difficulty
   `noise` from `BOT_NOISE` in `config.py` (difficulties `very-easy` and `easy`, each with a
@@ -51,17 +54,22 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   50-80; the web app serves only these): site placement, track state and fleet-price helpers in
   `src/bby18/death_star.py`; enforcement in `game.py` and, for planet exits, `network.py`; the
   fleet (facility) phase in `session.py`; the API's state block `facilities` in
-  `src/bby18/api/serialize.py` and `web/src/facilities.ts`. Tests of the fleet rules use
+  `src/bby18/api/serialize.py` and `web/src/facilities.ts`. Supply chains (`chain_rules`, the
+  default since 2026-10-30): the chain search in `src/bby18/revenue.py` (`_best_chains`; middle
+  stops are the corporation's facility planets, `Game.middle_stops`), the surrender phase in
+  `session.py` (`Phase.SURRENDER`, `Game.surrender_queue`), chains in the web app in
+  `web/src/chains.ts`. Tests of the pair rules use `FACILITY_CONFIG`, of the fleet rules
   `FLEET_CONFIG` (API tests monkeypatch the served config, as in `tests/test_api_facilities.py`),
   tests of the rules before the Death Star `CLASSIC_CONFIG`; with those switches off, games must
-  stay bit-identical (`tests/test_death_star.py` pins full-game log hashes of `CLASSIC_CONFIG`
-  and `FLEET_CONFIG` games).
+  stay bit-identical (`tests/test_death_star.py` pins full-game log hashes of `CLASSIC_CONFIG`,
+  `FLEET_CONFIG` and `FACILITY_CONFIG` games).
 
 ## Conventions
 
 - Planets are hubs: no charting, no service cubes. Under the facility rules a planet has one
   exit plus one per facility, claimed by the lanes charted toward it; with them off every exit
-  is open. See `network.py`.
+  is open. See `network.py`. Under the chain rules revenue is chains, not pairs: a chain only
+  climbs `commodity_order`, and only a planet with the corporation's facility is a middle stop.
 - Hex coordinates are axial `(q, r)`, pointy-top, matching `docs/design/hex-map-design.md`.
 - Bots must only choose from the legal action lists the engine provides.
 - Keep the game end condition isolated in `Game.is_over`: the station's launch or the backstop
