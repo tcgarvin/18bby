@@ -2,14 +2,13 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import type { NewGameResponse, Seat } from "../api";
 import { ApiError, createGame } from "../api";
+import { DIFFICULTIES } from "../difficulty";
 
 interface NewGameProps {
   onCreated: (response: NewGameResponse) => void;
   notice: string | null;
 }
 
-/** Difficulties offered for bot seats, easiest first. More will be added as they are tuned. */
-const DIFFICULTIES = [{ value: "easy", label: "Easy" }];
 /** Sent as a bot seat's name; the server replaces it with the character it picks. */
 const BOT_PLACEHOLDER = "Random opponent";
 

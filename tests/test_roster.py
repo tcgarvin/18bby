@@ -10,7 +10,7 @@ from bby18.bots.roster import (
     draw_characters,
 )
 from bby18.bots.stable import STABLE
-from bby18.config import BOT_NOISE
+from bby18.config import BOT_NOISE, DIFFICULTY_TARGET_SHARE
 
 
 def test_every_character_plays_a_stable_strategy_with_a_plan():
@@ -26,6 +26,13 @@ def test_character_names_are_unique_and_fit_a_seat():
 def test_every_difficulty_calibrates_every_roster_strategy():
     for difficulty in DIFFICULTIES:
         assert {c.strategy for c in ROSTER} <= set(BOT_NOISE[difficulty])
+
+
+def test_difficulties_run_easiest_first_and_each_has_a_target():
+    assert DIFFICULTIES == ("very-easy", "easy")
+    assert set(DIFFICULTY_TARGET_SHARE) == set(DIFFICULTIES)
+    shares = [DIFFICULTY_TARGET_SHARE[d] for d in DIFFICULTIES]
+    assert shares == sorted(shares, reverse=True)
 
 
 def test_character_policy_is_the_strategy_with_its_noise():

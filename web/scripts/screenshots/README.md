@@ -9,7 +9,7 @@ uvx --with playwright==1.63.0 python web/scripts/screenshots/shoot.py [OUT_DIR] 
 
 It starts the API (`BBY18_MODE=local`) and a Vite dev server on free ports (so it never clashes
 with `npm run dev`; `vite.config.mjs` here is that server's config), creates a game with one human
-seat and three easy bots, plays the human seat through the engine's legal actions (prefers buying
+seat and three very easy bots, plays the human seat through the engine's legal actions (prefers buying
 at the highest par, then charting, upgrading, servicing, facilities) until the round and tile
 thresholds are met, and shoots the first stop in each phase. Servers are stopped on exit. Takes
 about 15 seconds; the same seed gives the same game.

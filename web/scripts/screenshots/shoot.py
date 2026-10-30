@@ -31,7 +31,7 @@ DEFAULT_OUT = Path(
 )
 PHASES = ("stock", "network", "fleet", "dividend")
 VIEWPORT = {"width": 1600, "height": 1000}
-SEATS = [{"name": "Tim"}] + [{"name": f"Bot {n}", "bot": True, "difficulty": "easy"} for n in "ABC"]
+SEATS = [{"name": "Tim"}] + [{"name": f"Bot {n}", "bot": True, "difficulty": "very-easy"} for n in "ABC"]
 # The human charts as much as possible so the board fills up; every action is one the engine
 # lists as legal. Upgrades add exits to charted tiles, which is what makes junctions.
 ACTION_PREFERENCE = ("buy", "chart", "upgrade", "service", "build_facility", "dividend")
