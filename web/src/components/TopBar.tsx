@@ -137,6 +137,25 @@ function Acting({ state }: { state: GameState }) {
   }
   const corp = state.currentCorporation;
   const facilities = state.facilities !== undefined;
+  if (state.phase === "surrender") {
+    return (
+      <>
+        <span className="acting__phase">
+          Surrender a facility
+          <Help topic="seizure" />
+        </span>
+        {corp && (
+          <span className="acting__who">
+            <span className="chip" style={{ background: corpColor(state, corp) }}>
+              {corp}
+            </span>{" "}
+            {who}
+            {bot ? " (bot)" : ""}
+          </span>
+        )}
+      </>
+    );
+  }
   return (
     <>
       <span className="acting__phase">

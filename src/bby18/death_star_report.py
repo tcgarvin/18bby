@@ -16,6 +16,7 @@ from typing import Any
 
 from bby18.death_star import stage_name
 from bby18.death_star_metrics import ROW_PREFIX
+from bby18.chain_metrics import ROW_PREFIX as CHAIN_PREFIX
 from bby18.facility_metrics import ROW_PREFIX as FACILITY_PREFIX
 from bby18.metrics import LATE_ROUND
 from bby18.playtest import seat_kinds
@@ -50,9 +51,14 @@ def variant_report(name: str, rows: Sequence[Row]) -> str:
     facility_rows = [r for r in rows if f"{FACILITY_PREFIX}facilities_built" in r]
     if facility_rows and len(facility_rows) != len(rows):
         raise ValueError(f"Variant {name!r} mixes games with the facility rules on and off")
+    chain_rows = [r for r in rows if f"{CHAIN_PREFIX}turns" in r]
+    if chain_rows and len(chain_rows) != len(rows):
+        raise ValueError(f"Variant {name!r} mixes games with the chain rules on and off")
     state = "on" if rules_on else "off"
     if facility_rows:
         state += ", facility rules on"
+    if chain_rows:
+        state += ", chain rules on"
     rounds = [int(r["rounds_played"]) for r in rows]
     lines = [
         f"variant {name}: {len(rows)} games, Death Star rules {state}",
@@ -68,6 +74,8 @@ def variant_report(name: str, rows: Sequence[Row]) -> str:
         lines += _death_star_lines(rows, "facilities" if facility_rows else "fleets")
     if facility_rows:
         lines += _facility_lines(rows)
+    if chain_rows:
+        lines += _chain_lines(rows)
     return "\n".join(lines)
 
 
@@ -129,6 +137,32 @@ def _facility_lines(rows: Sequence[Row]) -> list[str]:
         f"{_percent(_facility_sum(rows, 'exits_left_unclaimed'), built)}",
         f"    seizures decided by the tie-break between planets per game "
         f"{per_game('seizure_ties'):.2f}",
+    ]
+
+
+def _chain_lines(rows: Sequence[Row]) -> list[str]:
+    """Supply chains under the chain rules: how long they run, what they earn, and what
+    seizures cost."""
+
+    def total(name: str) -> float:
+        return sum(float(r[f"{CHAIN_PREFIX}{name}"]) for r in rows)
+
+    chains = total("chains_2") + total("chains_3") + total("chains_4")
+    revenue = total("revenue")
+    surrenders = total("surrenders")
+    return [
+        "  supply chains (chain rules):",
+        f"    chains per operating turn that ran one {_ratio(chains, total('turns'))}; "
+        f"by stops: 2 {_percent(total('chains_2'), chains)}, 3 "
+        f"{_percent(total('chains_3'), chains)}, 4 {_percent(total('chains_4'), chains)}",
+        f"    basic routes {_percent(total('basic_chains'), chains)}, ending at the site "
+        f"{_percent(total('contract_chains'), chains)}, earning the regional bonus "
+        f"{_percent(total('regional_chains'), chains)}",
+        f"    revenue from chains with a middle stop {_percent(total('multi_stop_revenue'), revenue)}"
+        f", regional bonuses {_percent(total('regional_revenue'), revenue)}",
+        f"    surrenders per game {surrenders / len(rows):.2f}; breaking a running chain "
+        f"{_percent(total('surrenders_of_middle_stops'), surrenders)}; revenue a turn lost per "
+        f"surrender {_ratio(total('surrenders_lost_revenue'), surrenders, 1)}",
     ]
 
 

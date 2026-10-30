@@ -62,7 +62,8 @@ export function mergePlanets(base: PlanetFacilities[], changed: PlanetFacilities
 
 /**
  * The facility state after a move frame: its changed planets merged into `base`, with the frame's
- * seizure targets. Nothing is buildable while a replay shows, so there are no options.
+ * seizure targets and any waiting seizure's queue and options (shown read-only). Nothing is
+ * buildable while a replay shows, so there are no build options.
  */
 export function mergeFacilities(
   base: FacilitiesState | undefined,
@@ -73,6 +74,8 @@ export function mergeFacilities(
     perPlanet: frame.perPlanet,
     planets: mergePlanets(base?.planets ?? [], frame.planets),
     seizureTargets: frame.seizureTargets,
+    surrenderQueue: frame.surrenderQueue,
+    surrenderOptions: frame.surrenderOptions,
     options: [],
   };
 }

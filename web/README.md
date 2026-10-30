@@ -67,6 +67,12 @@ it ends them; the deployed site saves them in Postgres (see `docs/DEPLOYMENT.md`
   planet with the server's preview of each, the facility the next seizure takes, facilities that
   turned Imperial, planets to outline after others' moves, and whether a new lane claims a
   planet's exit or dangles. Tested in `facilities.test.ts`.
+- `src/chains.ts`: derived views of the supply-chain rules (`config.chainRules`): each
+  corporation's revenue told as its cargo runs ("Kessel → Sullust → Corellia → Death Star · 30 +
+  30 + 60 + 20 regional"; under the pair rules each pair reads as a two-stop chain), and the
+  surrender a seizure puts to a corporation (the server's options with the revenue each loses,
+  and the corporations the Empire asked, for the `surrender` phase's rail). Tested in
+  `chains.test.ts`.
 - `src/tilediff.ts`: which hexes changed between two states, for outlining others' moves.
   Tested in `tilediff.test.ts`.
 - `src/hotkeys.ts`: the `useHotkeys` hook behind the keyboard shortcuts. Tested in

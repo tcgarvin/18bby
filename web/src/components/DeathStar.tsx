@@ -1,4 +1,5 @@
 import type { DeathStarState, SupplyItem } from "../api";
+import type { RunUnit } from "../deathstar";
 import { gameEnd, pendingStages, resultLabel, resultText, stageCubes, stageProgress, supplyText } from "../deathstar";
 import { itemWord } from "../facilities";
 import { Help } from "./Help";
@@ -53,17 +54,19 @@ interface FleetIconsProps {
   item?: SupplyItem;
   /** Mark this as the corporation's fleet anchor for replays; leave off for second copies. */
   anchor?: boolean;
+  /** What each one runs: a revenue pair, or a supply chain under the chain rules. */
+  runs?: RunUnit;
 }
 
 /** A corporation's fleets (or facilities) as icons, with empty slots up to the limit. */
-export function FleetIcons({ corpId, fleets, limit, item = "fleet", anchor = true }: FleetIconsProps) {
+export function FleetIcons({ corpId, fleets, limit, item = "fleet", anchor = true, runs = "pair" }: FleetIconsProps) {
   const slots = Math.max(limit, fleets);
   const word = itemWord(item, limit);
   return (
     <span
       className="fleets"
       data-fleets-for={anchor ? corpId : undefined}
-      title={`${fleets} of ${limit} ${word}: each runs one revenue pair`}
+      title={`${fleets} of ${limit} ${word}: each runs one ${runs === "chain" ? "supply chain" : "revenue pair"}`}
       aria-label={`${fleets} of ${limit} ${word}`}
       role="img"
     >
@@ -80,7 +83,16 @@ export function FleetIcons({ corpId, fleets, limit, item = "fleet", anchor = tru
  * when the game ends, and what the next fleet (or facility, under the facility rules) costs. Animation anchors: data-death-star-track,
  * data-fleet-supply.
  */
-export function DeathStarBar({ deathStar, over = false }: { deathStar: DeathStarState; over?: boolean }) {
+export function DeathStarBar({
+  deathStar,
+  over = false,
+  chainRules = false,
+}: {
+  deathStar: DeathStarState;
+  over?: boolean;
+  /** Under the chain rules each corporation chooses the facility a seizure takes. */
+  chainRules?: boolean;
+}) {
   const progress = stageProgress(deathStar);
   const pending = pendingStages(deathStar);
   const end = gameEnd(deathStar);
@@ -100,7 +112,7 @@ export function DeathStarBar({ deathStar, over = false }: { deathStar: DeathStar
             <li
               key={stage.name}
               className={`dsstage dsstage--${state}`}
-              title={`${i + 1}. ${stage.name}: contracts score ${stage.value} while it is being built. When it fills: ${resultText(stage.result, deathStar)}.`}
+              title={`${i + 1}. ${stage.name}: contracts score ${stage.value} while it is being built. When it fills: ${resultText(stage.result, deathStar, chainRules)}.`}
             >
               <span className="dsstage__name">
                 {stage.name}
@@ -124,7 +136,7 @@ export function DeathStarBar({ deathStar, over = false }: { deathStar: DeathStar
         ) : pending.length > 0 ? (
           <>
             <strong>{pending.map((stage) => stage.name).join(" and ")} built:</strong>{" "}
-            {pending.map((stage) => resultText(stage.result, deathStar)).join("; then ")} at the end of this round
+            {pending.map((stage) => resultText(stage.result, deathStar, chainRules)).join("; then ")} at the end of this round
           </>
         ) : progress.stage ? (
           <>

@@ -19,6 +19,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 
 from bby18.actions import BuildFacility, BuyFleet, SellShares
+from bby18.chain_metrics import ChainMetrics, ChainTally, middle_stops_run
 from bby18.config import SEIZURE, SITE_MOVE, GameConfig
 from bby18.facility_metrics import FacilityMetrics, build_exit_kind, facility_metrics
 from bby18.game import Game
@@ -232,6 +233,10 @@ class DeathStarRecorder:
         self.build_exits: Counter[str] = Counter()
         """Under the facility rules, each built facility by where its new exit went
         (``build_exit_kind``)."""
+        self.chains = ChainTally()
+        """Under the chain rules, the chains run and the facilities surrendered."""
+        self._before_surrender: tuple[frozenset[str], int] = (frozenset(), 0)
+        """The middle stops and revenue of the corporation about to surrender a facility."""
 
     def __call__(self, session: GameSession, move: PlayedMove) -> None:
         game = session.game
@@ -242,6 +247,12 @@ class DeathStarRecorder:
             self._record_fleet(game, move)
         elif move.phase is Phase.DIVIDEND:
             self._record_dividend(point, move)
+            if self._config.chain_rules:
+                self.chains.record_turn(game, game.corp(move.corporation))
+        elif move.phase is Phase.SURRENDER:
+            middles, revenue = self._before_surrender
+            self.chains.record_surrender(middles, revenue, game, game.corp(move.corporation))
+            self.corps[move.corporation].fleets_seized += 1
         elif move.phase is Phase.NETWORK:
             if game.corp(move.corporation).status is CorpStatus.CLOSED:
                 closed = self.corps[move.corporation]
@@ -250,6 +261,14 @@ class DeathStarRecorder:
                 closed.closed_round = point.round
                 closed.closed_president = move.actor
         self._record_track(game, point, move)
+        if session.phase is Phase.SURRENDER:
+            # The observer runs after each move, so the chooser's state before its surrender is
+            # read now, while the session waits on it.
+            chooser = session.current_corporation
+            self._before_surrender = (
+                middle_stops_run(game, chooser),
+                game.revenue(chooser).total,
+            )
         # Fleets rise in fleet moves and, under the facility rules, when a corporation floats
         # with its home facility; only a stage result lowers them, which _record_track counts.
         self._fleets = {c.id: c.fleets for c in game.corporations.values()}
@@ -307,9 +326,11 @@ class DeathStarRecorder:
         if track.stages_resolved != self._resolved:
             self.stage_resolved_at.extend([point.clock] * (track.stages_resolved - self._resolved))
             self._resolved = track.stages_resolved
+            # Under the chain rules seizures take facilities only in surrender moves, which
+            # count them; a stage resolved in the same move must not count that loss again.
             for state in game.corporations.values():
                 lost = self._fleets[state.id] - state.fleets
-                if lost > 0:
+                if lost > 0 and not self._config.chain_rules:
                     self.corps[state.id].fleets_seized += lost
         self._contract_value = game.contract_value()
 
@@ -361,6 +382,10 @@ class DeathStarRecorder:
             fleets_end_round=dict(self.fleets_end_round),
             corps=self.corps,
         )
+
+    def chain_metrics(self) -> ChainMetrics:
+        """Summarize the chains run; meaningful only for a game under the chain rules."""
+        return ChainMetrics.of(self.chains)
 
     def facility_metrics(self, game: Game) -> FacilityMetrics:
         """Summarize the finished game's facilities and planet exits; the game must be under

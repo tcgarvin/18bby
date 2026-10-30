@@ -511,6 +511,62 @@ game picker, very easy first and the default.
 reference player takes 38.9-40.7% against every strategy but hoarder, 40.2% overall, against
 very easy's 43.0%.
 
+## Supply chains (decided 2026-10-30)
+
+**Status:** STATUS_PLACEHOLDER
+
+**Why:** corporations grew to two or so routes and stopped, and Outer Rim to Core routes almost
+never paid: a route was a pair of planets worth a flat 30 (50 with the regional bonus), so a long
+lane cost about twice a contract pair near the construction site and paid back too late. In
+18xx a company grows by making its few routes richer, not more numerous. Chains make a route
+something to extend, and make facilities matter more: corporations invest ahead to keep big
+chains and to have something to give the Empire.
+
+**The story:** a corporation's fleet picks up a cargo, drops it at the next planet, picks up that
+planet's goods and carries them on, always to a more sophisticated commodity:
+
+- **Commodity order** (`commodity_order`): raw goods (Agriculture, Resources), then Industry, then
+  Markets and Shipyards, then the Death Star. Every typed pair reads one way up it: food to
+  market (A→M), ore to industry (R→I), ore to the shipyards (R→S), goods to market (I→M),
+  components to the shipyards (I→S), and a contract is a cargo delivered to the station (R, I
+  or S → the site). Markets and the station are where chains end.
+- **A chain** is a sequence of planets the corporation reaches, each link a typed pair or a
+  contract going up the order. So no loops and no repeated type; the longest possible chain is
+  Resources → Industry → Shipyard → Death Star.
+- **Middle stops need a facility:** a planet holding one of the corporation's own facilities may
+  be a destination once and a source once (a middle stop). Any other planet is one end of one
+  link. No planet is in two of a corporation's chains. A second own facility on the same planet
+  adds a chain but not a second middle stop there.
+- **One chain per facility** owned, as there was one pair per facility. A chain may pass
+  through planets without scoring them; only the network decides what is reachable.
+- **Scoring:** each link pays its pair value (30 typed, plus planet bonuses such as Coruscant's
+  +10; a contract the current stage value), and the chain earns the regional bonus (+20)
+  **once**, when its first stop and its last stop short of the station lie one in the Core and
+  one in the Outer Rim. *(Reading chosen while building: a chain into the station takes its
+  bonus from its last stop before the site, so Outer Rim ore through Core industry to the
+  station earns it; a contract alone still never does.)*
+- **Basic routes** (5) stay single standalone pairs and never join a chain: there is no cargo.
+- **Dual-type planets** (Corellia I/S, Naboo A/R) play one type per chain. On this map that
+  never binds: Naboo can only start a chain, and every way through Corellia also works with one
+  type.
+- **Revenue** is still the best the corporation's network allows, computed for it.
+
+### Seizure
+
+- At a seizure each corporation that owns a facility **chooses** the one it surrenders, in
+  operating order, right after the round in which the stage filled (a new surrender step in the
+  session). The surrendered facility becomes Imperial as before: it stays, fills its slot and
+  keeps its exit. The Empire no longer takes the facility nearest the site.
+- **Why:** a seized middle stop breaks a chain, so the loss should be the owner's call: a
+  corporation that bought a spare facility can protect its big chain.
+
+### Readings chosen while building (placeholders, not discussed)
+
+- A contract must be worth at least a basic route (config check), which the chain search relies
+  on.
+- Bots surrender the facility whose loss costs the least revenue next turn, then the one
+  farthest from their homeworld.
+
 ## Explicitly deferred
 
 Empire escalation, rebellion, security development, named trade routes, military planets,

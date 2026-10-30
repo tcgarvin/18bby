@@ -931,6 +931,24 @@ class Game:
             return []
         return [SurrenderFacility(h) for h in sorted({f.planet for f in self.facilities_of(corp)})]
 
+    def revenue_after_surrender(
+        self, corp: Corporation, action: SurrenderFacility, contract_value: int
+    ) -> RevenueResult:
+        """What ``corp``'s network would earn at ``contract_value`` after ``action``: one chain
+        fewer, and no middle stop at the planet unless another of its facilities stays there.
+        Without the experimental income floor."""
+        held = [f.planet for f in self.facilities_of(corp)]
+        kept = frozenset(held)
+        if held.count(action.planet) == 1:
+            kept -= {action.planet}
+        return compute_revenue(
+            self.reachable_planets(corp),
+            self.config,
+            contract_value=contract_value,
+            max_pairs=max(corp.fleets - 1, 0),
+            middle_stops=kept,
+        )
+
     def surrender_facility(self, corp: Corporation, action: SurrenderFacility) -> None:
         """``corp`` hands the Empire its facility on ``action.planet`` (the newest, if it has
         two there). It stays on the planet, fills its slot and keeps its exit."""

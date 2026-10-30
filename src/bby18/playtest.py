@@ -12,6 +12,7 @@ from bby18.board import Terrain
 from bby18.bots import GreedyBot, GreedyPolicy, RandomBot
 from bby18.bots.stable import STABLE
 from bby18.config import GameConfig
+from bby18.chain_metrics import ChainMetrics
 from bby18.death_star_metrics import DeathStarMetrics, DeathStarRecorder
 from bby18.facility_metrics import FacilityMetrics
 from bby18.game import Game
@@ -77,6 +78,9 @@ class GameSummary:
     facilities: FacilityMetrics | None = None
     """Facility and planet-exit measurements; ``None`` without the facility rules, so those
     rows carry no ``fac.*`` fields."""
+    chains: ChainMetrics | None = None
+    """Supply-chain measurements; ``None`` without the chain rules, so those rows carry no
+    ``chain.*`` fields."""
 
     @property
     def planets_reached_fraction(self) -> float:
@@ -123,6 +127,8 @@ class GameSummary:
             row.update(self.death_star.to_row())
         if self.facilities is not None:
             row.update(self.facilities.to_row())
+        if self.chains is not None:
+            row.update(self.chains.to_row())
         return row
 
 
@@ -241,7 +247,8 @@ def play_one(
     recorder = DeathStarRecorder(game)
     run_game(game, deciders, observer=recorder)
     facilities = recorder.facility_metrics(game) if config.facility_rules else None
-    return game, summarize_game(game, seed, recorder.metrics(game), facilities)
+    chains = recorder.chain_metrics() if config.chain_rules else None
+    return game, summarize_game(game, seed, recorder.metrics(game), facilities, chains)
 
 
 def summarize_game(
@@ -249,10 +256,11 @@ def summarize_game(
     seed: int,
     death_star: DeathStarMetrics | None = None,
     facilities: FacilityMetrics | None = None,
+    chains: ChainMetrics | None = None,
 ) -> GameSummary:
     """Measure a finished game. ``death_star`` is what a ``DeathStarRecorder`` saw of it,
-    for a game played under the Death Star rules, and ``facilities`` its facility measurements
-    under the facility rules."""
+    for a game played under the Death Star rules, ``facilities`` its facility measurements
+    under the facility rules, and ``chains`` its chain measurements under the chain rules."""
     worth = {p.id: game.player_worth(p) for p in game.players}
     winner = max(worth, key=lambda k: worth[k])
     margin, cv = worth_spread(worth)
@@ -295,6 +303,7 @@ def summarize_game(
         rounds_played=game.round_number,
         death_star=death_star,
         facilities=facilities,
+        chains=chains,
     )
 
 

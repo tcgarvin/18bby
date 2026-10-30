@@ -11,6 +11,7 @@ const PHASE_NAMES: Record<GameSummary["phase"], string> = {
   network: "operating round",
   fleet: "operating round",
   dividend: "operating round",
+  surrender: "seizure",
   game_over: "finished",
 };
 

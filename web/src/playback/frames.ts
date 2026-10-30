@@ -32,9 +32,11 @@ import { playerName } from "../selectors";
 export type EmpireEvent =
   /**
    * `corps` each lost one fleet (or facility); empty when nobody had one. Under the facility rules
-   * `taken` names each facility that became Imperial.
+   * `taken` names each facility that became Imperial. Under the chain rules nothing is taken yet:
+   * `demanded` lists the corporations that must each choose one to surrender, in order (the
+   * surrender moves that follow take them).
    */
-  | { type: "seizure"; corps: string[]; taken?: SeizedFacility[] }
+  | { type: "seizure"; corps: string[]; taken?: SeizedFacility[]; demanded?: string[] }
   | { type: "site_move"; from: Axial; to: Axial }
   | { type: "launch"; at: Axial }
   | { type: "bankrupt"; corp: string };
@@ -98,6 +100,8 @@ export type MoveKind =
       price: PriceChange;
     }
   | { kind: "finish_fleets"; corp: string; fleets: number; item: SupplyItem }
+  /** At a seizure under the chain rules, `corp` handed the Empire its facility on `planet`; it owns `facilities` after. */
+  | { kind: "surrender_facility"; corp: string; planet: string; hex: Axial; facilities: number }
   | {
       kind: "dividend";
       corp: string;
@@ -314,6 +318,10 @@ export function moveKind(frame: MoveFrame, prev: GameState): MoveKind {
       price: { corp: corpId, before: supply(prev.deathStar), after: supply(after.deathStar) },
     };
   }
+  if (action.type === "surrender_facility") {
+    const planet = prev.facilities?.planets.find((p) => sameHex(p.hex, action.planet))?.name ?? formatHex(action.planet);
+    return { kind: "surrender_facility", corp: corpId, planet, hex: action.planet, facilities: corpAfter.fleets };
+  }
   if (action.type === "finish_fleets") {
     return { kind: "finish_fleets", corp: corpId, fleets: corpAfter.fleets, item: prev.deathStar?.fleets.item ?? "fleet" };
   }
@@ -412,7 +420,11 @@ export function empireEvents(prev: GameState, frame: MoveFrame): EmpireEvent[] {
           return before !== undefined && c.fleets < before.fleets;
         })
         .map((c) => c.id);
-      if (after.facilities) {
+      const demanded = after.facilities?.surrenderQueue ?? [];
+      if (demanded.length > 0) {
+        // The chain rules: each corporation chooses in a surrender move of its own.
+        events.push({ type: "seizure", corps: [], taken: [], demanded });
+      } else if (after.facilities) {
         events.push({ type: "seizure", corps, taken: seizedFacilities(prev.facilities, after.facilities) });
       } else {
         events.push({ type: "seizure", corps });
@@ -442,6 +454,9 @@ export function trackNote(before: DeathStarState | undefined, after: DeathStarSt
 function describeEmpire(event: EmpireEvent, prev: GameState, planets: Planet[]): string {
   switch (event.type) {
     case "seizure":
+      if (event.demanded && event.demanded.length > 0) {
+        return `The Empire demands a facility from ${listText(event.demanded)}; ${event.demanded.length === 1 ? "it chooses" : "each chooses"} which to give up`;
+      }
       if (event.taken) {
         const taken = event.taken.map((f, i) => `${f.corp}'s ${i === 0 ? "facility " : ""}at ${f.planet}`);
         return taken.length > 0
@@ -540,6 +555,8 @@ function describeKind(kind: MoveKind, frame: MoveFrame | null, prev: GameState, 
       return kind.item === "facility"
         ? `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "facility" : "facilities"}`
         : `${kind.corp} runs ${kind.fleets} ${kind.fleets === 1 ? "fleet" : "fleets"}`;
+    case "surrender_facility":
+      return `${kind.corp} gives the Empire its facility at ${kind.planet}, keeping ${kind.facilities} ${kind.facilities === 1 ? "facility" : "facilities"}`;
     case "empire":
       return describeEmpire(kind.event, prev, planets);
     case "dividend":

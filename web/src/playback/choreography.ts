@@ -141,6 +141,18 @@ export function effectsFor(kind: MoveKind, durationMs: number, color: (corpId: s
           ? [{ effect: "highlight", target: anchor.fleetSupply(), color: LOSS, durationMs: settle, delayMs: later } as Effect]
           : []),
       ];
+    case "surrender_facility":
+      return [
+        { effect: "highlight", target: anchor.hex(kind.hex), color: EMPIRE, durationMs: settle },
+        {
+          effect: "pop",
+          at: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)],
+          label: "−1 facility",
+          color: LOSS,
+          durationMs: settle,
+          delayMs: later,
+        },
+      ];
     case "finish_fleets":
       return [{ effect: "pop", at: [anchor.fleets(kind.corp), anchor.orderCorp(kind.corp), anchor.corp(kind.corp)], label: itemCount(kind.item, kind.fleets), durationMs: settle }];
     case "empire":
@@ -157,6 +169,16 @@ function empireEffects(event: Extract<MoveKind, { kind: "empire" }>["event"], se
     case "seizure":
       return [
         track,
+        ...(event.demanded ?? []).map(
+          (corp): Effect => ({
+            effect: "pop",
+            at: [anchor.fleets(corp), anchor.orderCorp(corp), anchor.corp(corp)],
+            label: "Surrender 1",
+            color: EMPIRE,
+            durationMs: settle,
+            delayMs: later,
+          }),
+        ),
         ...event.corps.map(
           (corp): Effect => ({
             effect: "pop",

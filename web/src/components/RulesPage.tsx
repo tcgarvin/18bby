@@ -390,10 +390,14 @@ export function RulesPage({ section }: { section: SectionId | null }) {
         </Section>
 
         <Section id="revenue" title="How revenue is earned">
-          <p>
-            Revenue comes from <strong>pairs</strong> of reachable planets. A planet can be in at most one pair per
-            corporation per operating turn. The game finds the set of pairs with the highest total.
-          </p>
+          {rules.chainRules ? (
+            <ChainRules rules={rules} />
+          ) : (
+            <p>
+              Revenue comes from <strong>pairs</strong> of reachable planets. A planet can be in at most one pair per
+              corporation per operating turn. The game finds the set of pairs with the highest total.
+            </p>
+          )}
           <h3>Trade pairs</h3>
           <p>
             Two planets whose types fit together as a supply chain earn <strong>{rules.typedPairValue}</strong>:
@@ -775,9 +779,56 @@ export function RulesPage({ section }: { section: SectionId | null }) {
   );
 }
 
+/** "Agriculture, Resources", or the tag itself for one without a name (the site's W). */
+function commodityName(tag: string): string {
+  return TYPE_NAMES[tag] ?? tag;
+}
+
+/**
+ * The supply chains (chain rules), ahead of the pair values they score with: one chain per
+ * facility, climbing the commodity order, with middle stops at the corporation's own facilities.
+ */
+function ChainRules({ rules }: { rules: Rules }) {
+  const ranks = new Map<number, string[]>();
+  for (const [tag, rank] of Object.entries(rules.commodityOrder)) ranks.set(rank, [...(ranks.get(rank) ?? []), tag]);
+  const steps = [...ranks.entries()].sort(([a], [b]) => a - b).map(([, tags]) => tags.sort().map(commodityName).join(" or "));
+  const last = steps.length - 1;
+  return (
+    <>
+      <p>
+        Revenue comes from <strong>supply chains</strong> through a corporation's network:{" "}
+        <strong>one chain per facility</strong> it owns. Cargo only climbs, from raw goods up to the Death Star:
+      </p>
+      <p>
+        {steps.map((step, i) => (
+          <span key={step}>
+            {i === last ? `the construction site (${step})` : step}
+            {i < last && " → "}
+          </span>
+        ))}
+      </p>
+      <p>
+        Each link of a chain pays like the pair it makes (below), and a link into the site is a Death Star contract.
+        A planet holding one of the corporation's own facilities can be a <strong>middle stop</strong>: the chain drops
+        one cargo there and picks up the next, as in Kessel → Sullust → Corellia → Death Star. No planet is in two of a
+        corporation's chains. A chain whose first stop and last stop short of the site are one in the{" "}
+        {rules.regionalBonusRegions[0]} and one in the {rules.regionalBonusRegions[1]} earns the regional bonus of{" "}
+        <strong>+{rules.regionalBonus}</strong> once. Two planets that make no link can still run a basic route, a chain
+        of two stops. The game finds the chains with the highest total.
+      </p>
+    </>
+  );
+}
+
 const STAGE_RESULT_RULES: Record<Rules["deathStar"]["stages"][number]["result"], (rules: Rules) => ReactNode> = {
   seizure: (rules) =>
-    rules.facilityRules ? (
+    rules.chainRules ? (
+      <>
+        <strong>Seizure:</strong> every corporation that owns a facility hands the Empire one of its choice, one
+        after another in operating order. It becomes Imperial: it stays on its planet, fills its slot and keeps its
+        exit, but earns for nobody.
+      </>
+    ) : rules.facilityRules ? (
       <>
         <strong>Seizure:</strong> the Empire takes over one facility from every corporation that has one: the one
         nearest the construction site (the most recently built on a tie). It becomes Imperial: it stays on its
@@ -958,15 +1009,21 @@ function FacilityChecks({ rules }: { rules: Rules }) {
         No planet holds more than {rules.facilities.perPlanet}, no corporation owns more than{" "}
         {rules.deathStar.fleetLimit}, and Finish is not offered while it owns none.
       </Check>
-      <Check>A corporation never runs more pairs than it owns facilities: the dividend view says how many pairs run.</Check>
+      <Check>
+        {rules.chainRules
+          ? "A corporation never runs more chains than it owns facilities, and no planet is in two of its chains: the dividend view lists each chain stop by stop."
+          : "A corporation never runs more pairs than it owns facilities: the dividend view says how many pairs run."}
+      </Check>
       <Check>
         Each contract pair scored adds one cube to the track, whether paid or withheld, and the Empire adds{" "}
         {rules.deathStar.empireCubesPerStockRound} at the end of each stock round.
       </Check>
       <Check>
-        When a seizure stage fills, at the end of that round each corporation with a facility loses the one nearest the
-        site: its marker becomes the purple Imperial diamond, and the planet keeps the exit. When the site-move stage
-        fills, the site jumps to the dashed future site and the old hex is empty space.
+        {rules.chainRules
+          ? "When a seizure stage fills, at the end of that round each corporation with a facility is asked to give one up, and the one it picks"
+          : "When a seizure stage fills, at the end of that round each corporation with a facility loses the one nearest the site:"}{" "}
+        {rules.chainRules ? "becomes" : "its marker becomes"} the purple Imperial diamond, and the planet keeps the exit. When the
+        site-move stage fills, the site jumps to the dashed future site and the old hex is empty space.
       </Check>
       <Check>
         A corporation with no facility at its facility step that cannot build one is shown as closed, its shares

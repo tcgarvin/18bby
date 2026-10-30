@@ -64,10 +64,11 @@ export function pendingStages(deathStar: DeathStarState): DeathStarStage[] {
   return deathStar.stages.filter((stage) => stage.filled && !stage.resolved);
 }
 
-/** What a stage result does, in a few words. */
-export function resultText(result: StageResult, deathStar?: DeathStarState): string {
+/** What a stage result does, in a few words. `chainRules`: each corporation chooses what a seizure takes. */
+export function resultText(result: StageResult, deathStar?: DeathStarState, chainRules = false): string {
   switch (result) {
     case "seizure":
+      if (chainRules) return "Seizure: each corporation hands the Empire one facility of its choice";
       return deathStar?.fleets.item === "facility"
         ? "Seizure: the Empire takes over each corporation's facility nearest the site"
         : "Seizure: every corporation with a fleet loses one";
@@ -150,26 +151,34 @@ export function nextSeizure(deathStar: DeathStarState): { stage: DeathStarStage;
   return { stage, cubesToGo: Math.max(0, (deathStar.stage + 1) * deathStar.cubesPerStage - deathStar.cubes) };
 }
 
+/** What one fleet (or facility) runs: a pair, or a supply chain under the chain rules. */
+export type RunUnit = "pair" | "chain";
+
 export interface PairUsage {
-  /** Pairs the matching runs now (at most one per fleet). */
+  /** Pairs (chains) run now: at most one per fleet. */
   run: number;
-  /** Pairs the network could run with no fleet limit. */
+  /** Pairs (chains) the network could run with no fleet limit. */
   available: number;
   fleets: number;
   /** What runs the pairs: fleets, or facilities under the facility rules. */
   item: SupplyItem;
+  unit: RunUnit;
 }
 
-/** How many of a network's pairs its fleets (or facilities) run; null without the Death Star rules. */
-export function pairUsage(corp: CorporationState, item: SupplyItem = "fleet"): PairUsage | null {
+/**
+ * How many of a network's pairs its fleets (or facilities) run, or under the chain rules how
+ * many chains; null without the Death Star rules.
+ */
+export function pairUsage(corp: CorporationState, item: SupplyItem = "fleet", chainRules = false): PairUsage | null {
   if (!corp.fleetRevenue) return null;
-  return { run: corp.revenue.pairs.length, available: corp.fleetRevenue.uncappedPairs, fleets: corp.fleets, item };
+  const run = chainRules ? corp.revenue.chains.length : corp.revenue.pairs.length;
+  return { run, available: corp.fleetRevenue.uncappedPairs, fleets: corp.fleets, item, unit: chainRules ? "chain" : "pair" };
 }
 
-/** "3 of 5 pairs run · 3 fleets", or "2 pairs run · 3 fleets" when every pair is run. */
+/** "3 of 5 pairs run · 3 fleets", or "2 chains run · 3 facilities" when every one is run. */
 export function pairUsageText(usage: PairUsage): string {
   const fleets = itemCount(usage.item, usage.fleets);
-  const pairs = usage.available === 1 ? "pair" : "pairs";
-  if (usage.available > usage.run) return `${usage.run} of ${usage.available} ${pairs} run · ${fleets}`;
-  return `${usage.run} ${usage.run === 1 ? "pair" : "pairs"} run · ${fleets}`;
+  const unit = (n: number) => `${usage.unit}${n === 1 ? "" : "s"}`;
+  if (usage.available > usage.run) return `${usage.run} of ${usage.available} ${unit(usage.available)} run · ${fleets}`;
+  return `${usage.run} ${unit(usage.run)} run · ${fleets}`;
 }

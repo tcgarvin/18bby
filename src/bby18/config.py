@@ -365,6 +365,11 @@ DEFAULT_CONFIG = GameConfig()
 """The adopted rules (2026-10-27): the Death Star track with facilities and planet exits, at
 most 3 facilities per corporation, contracts at 50/60/70/80. The web app serves these."""
 
+FACILITY_CONFIG = replace(DEFAULT_CONFIG, chain_rules=False, fleet_limit=3)
+"""The rules adopted 2026-10-27 and played until supply chains, kept for comparison sweeps and
+tests: facilities and planet exits, one pair per facility, at most 3 facilities, the Empire
+seizing the facility nearest the site."""
+
 FLEET_CONFIG = GameConfig(
     corporations=FOUR_CORPORATIONS,
     planet_pair_bonus={},

@@ -13,6 +13,7 @@ import type {
   TerrainKind,
 } from "./api";
 import { isHexAction } from "./api";
+import { demandedCorporations } from "./chains";
 import { corporationColor } from "./colors";
 import { hexKey } from "./hex";
 
@@ -63,12 +64,28 @@ export interface QueueEntry {
  * those after it are still to come.
  */
 export function operatingQueue(state: GameState): QueueEntry[] {
+  if (state.phase === "surrender") return surrenderQueue(state);
   if (state.phase !== "network" && state.phase !== "fleet" && state.phase !== "dividend") return [];
   const thisRound = state.log.filter((entry) => entry.round === state.roundLabel);
   const currentAt = state.currentCorporation === null ? -1 : state.operatingOrder.indexOf(state.currentCorporation);
   return state.operatingOrder.map((corpId, i) => {
     const stage: StepStage = currentAt < 0 || i > currentAt ? "upcoming" : i === currentAt ? "current" : "done";
     const log = stage === "upcoming" ? [] : thisRound.filter((entry) => entry.actor === corpId);
+    return { corpId, stage, log };
+  });
+}
+
+/**
+ * A seizure under the chain rules: the corporations it asked for a facility, in the order they
+ * choose, with who has chosen. A corporation's log is the Empire's line taking its facility.
+ */
+function surrenderQueue(state: GameState): QueueEntry[] {
+  const order = demandedCorporations(state);
+  const thisRound = state.log.filter((entry) => entry.round === state.roundLabel && entry.actor === "Empire");
+  const currentAt = state.currentCorporation === null ? -1 : order.indexOf(state.currentCorporation);
+  return order.map((corpId, i) => {
+    const stage: StepStage = currentAt < 0 || i > currentAt ? "upcoming" : i === currentAt ? "current" : "done";
+    const log = stage === "done" ? thisRound.filter((entry) => entry.text.startsWith(`takes over ${corpId}'s facility`)).slice(-1) : [];
     return { corpId, stage, log };
   });
 }

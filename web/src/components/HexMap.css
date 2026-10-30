@@ -176,6 +176,15 @@
   stroke-width: 1.4;
 }
 
+.hexmap__pair-arrow {
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.hexmap__pair-arrow--contract {
+  fill: var(--empire);
+}
+
 .hexmap__pair-pill {
   fill: #fff;
   stroke-width: 1.2;

@@ -29,7 +29,7 @@ const toWest: BuildFacilityAction = { type: "build_facility", planet: KUAT, exit
 const corellia: BuildFacilityAction = { type: "build_facility", planet: [-5, 3], cost: 60 };
 
 function operator(overrides: Partial<CorporationState> = {}): CorporationState {
-  return corporation("CEC", { status: "floated", treasury: 200, fleets: 1, revenue: { total: 40, pairs: [] }, ...overrides });
+  return corporation("CEC", { status: "floated", treasury: 200, fleets: 1, revenue: { total: 40, pairs: [], chains: [] }, ...overrides });
 }
 
 /** CEC in its facility step with builds at Kuat (open, or to the lane on its W side) and at Corellia. */
@@ -99,7 +99,13 @@ describe("merging move frames", () => {
 
   it("takes the frame's seizure targets and drops the options", () => {
     const state = facilityStep().facilities!;
-    const merged = mergeFacilities(state, { perPlanet: 2, planets: [], seizureTargets: [{ corp: "CEC", hex: [-5, 3] }] });
+    const merged = mergeFacilities(state, {
+      perPlanet: 2,
+      planets: [],
+      seizureTargets: [{ corp: "CEC", hex: [-5, 3] }],
+      surrenderQueue: [],
+      surrenderOptions: [],
+    });
     expect(merged).toEqual({ ...state, seizureTargets: [{ corp: "CEC", hex: [-5, 3] }], options: [] });
     expect(mergeFacilities(state, undefined)).toBe(state);
   });

@@ -792,17 +792,12 @@ class GreedyBot:
         next turn, valued with one chain fewer and without the planet as a middle stop unless a
         second facility of ours stays there; on a tie, the planet farthest from the homeworld,
         then the first listed. Noise does not reach this choice."""
-        planets = game.reachable_planets(corp)
-        owned = [f.planet for f in game.facilities_of(corp)]
         contract_value = game.contract_value()
         home = game.homeworld(corp)
 
         def key(indexed: tuple[int, SurrenderFacility]) -> tuple[int, int, int]:
             index, action = indexed
-            kept = frozenset(owned)
-            if owned.count(action.planet) == 1:
-                kept -= {action.planet}
-            revenue = self._capped_revenue(game, planets, corp.fleets - 1, contract_value, kept)
+            revenue = game.revenue_after_surrender(corp, action, contract_value).total
             return revenue, action.planet.distance(home), -index
 
         return max(enumerate(legal), key=key)[1]

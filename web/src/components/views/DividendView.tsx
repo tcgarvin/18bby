@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Action, Axial, Board, CorporationState, DividendAction, GameState } from "../../api";
+import { chainKind, chainPath, chainSum, revenueChains } from "../../chains";
 import { pairUsage, pairUsageText, sitePlanet } from "../../deathstar";
 import { supplyItem } from "../../facilities";
 import { useHotkeys } from "../../hotkeys";
@@ -330,15 +331,22 @@ function Moves({ price, treasury }: { price: [number, number]; treasury: [number
 
 /**
  * The scored pairs behind the revenue, matching the arcs on the map: solid typed, dashed basic,
- * dotted contract. Under the Death Star rules it also says how many pairs the fleets (or facilities) run.
+ * dotted contract. Under the chain rules each row is a supply chain told as its cargo runs, with
+ * what each link earns. Under the Death Star rules it also says how many pairs (chains) the fleets
+ * (or facilities) run.
  */
 function RevenueBreakdown({ state, corp }: { state: GameState; corp: CorporationState }) {
   const { total, pairs } = corp.revenue;
+  const chainRules = state.config.chainRules;
+  const chains = revenueChains(corp.revenue);
   const item = supplyItem(state.deathStar);
-  const usage = pairUsage(corp, item);
+  const usage = pairUsage(corp, item, chainRules);
   const contracts = pairs.filter((p) => p.contract).length;
-  const typed = pairs.filter((p) => p.typed && !p.contract).length;
-  const basic = pairs.length - typed - contracts;
+  const kinds = chains.map(chainKind);
+  const typed = kinds.filter((kind) => kind === "typed").length;
+  const basic = kinds.filter((kind) => kind === "basic").length;
+  const delivering = kinds.length - typed - basic;
+  const unit = chainRules ? "chain" : "pair";
   return (
     <div className="revenue__pairs">
       <h3 className="revenue__title">
@@ -351,41 +359,46 @@ function RevenueBreakdown({ state, corp }: { state: GameState; corp: Corporation
       {usage && (
         <p className="revenue__usage">
           <span>{pairUsageText(usage)}</span>
-          {usage.available > usage.run && <span className="muted">one pair per {item}</span>}
+          {usage.available > usage.run && (
+            <span className="muted">
+              one {unit} per {item}
+            </span>
+          )}
           <Help topic={item === "facility" ? "facility" : "fleet"} />
         </p>
       )}
-      {pairs.length === 0 ? (
-        <p className="muted">No scoring pairs yet.</p>
+      {chains.length === 0 ? (
+        <p className="muted">{chainRules ? "No supply chains yet." : "No scoring pairs yet."}</p>
       ) : (
         <table className="pairs">
           <tbody>
-            {pairs.map((pair) => (
-              <tr key={`${pair.a}-${pair.b}`}>
-                <td>
-                  <span
-                    className={`pairs__line${pair.contract ? " pairs__line--contract" : pair.typed ? "" : " pairs__line--basic"}`}
-                    aria-hidden
-                  />
-                  {pair.a} ↔ {pair.b}
-                </td>
-                <td className={pair.contract ? "pairs__contract" : "muted"}>
-                  {pair.contract ? "contract" : pair.typed ? "typed" : "basic"}
-                </td>
-                <td className="num">{pair.value}</td>
-              </tr>
-            ))}
+            {chains.map((chain, i) => {
+              const kind = kinds[i];
+              return (
+                <tr key={chain.stops.join("-")}>
+                  <td>
+                    <span className={`pairs__line${kind === "typed" ? "" : ` pairs__line--${kind}`}`} aria-hidden />
+                    {chainRules ? chainPath(chain) : `${chain.stops[0]} ↔ ${chain.stops[1]}`}
+                    {chainRules && (chain.links.length > 1 || chain.regional > 0) && (
+                      <span className="pairs__sum muted">{chainSum(chain)}</span>
+                    )}
+                  </td>
+                  <td className={kind === "contract" ? "pairs__contract" : "muted"}>{kind}</td>
+                  <td className="num">{chain.value}</td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr>
               <td>Total</td>
               <td className="muted">
-                {contracts > 0 && (
+                {delivering > 0 && (
                   <>
-                    {contracts} contract <Help topic="contract" /> ·{" "}
+                    {delivering} contract <Help topic="contract" /> ·{" "}
                   </>
                 )}
-                {typed} typed <Help topic="typedPair" /> · {basic} basic <Help topic="basicRoute" />
+                {typed} typed <Help topic={chainRules ? "chain" : "typedPair"} /> · {basic} basic <Help topic="basicRoute" />
               </td>
               <td className="num">{total}</td>
             </tr>
