@@ -28,6 +28,7 @@ from bby18.actions import (
     NoNetworkAction,
     PassStock,
     StockAction,
+    SurrenderFacility,
 )
 from bby18.game import BuyBlock, Game
 from bby18.state import Corporation, Player
@@ -53,6 +54,13 @@ class Decider(Protocol):
         called only under the Death Star rules."""
         ...
 
+    def choose_surrender(
+        self, game: Game, corp: Corporation, legal: list[SurrenderFacility]
+    ) -> SurrenderFacility:
+        """The facility ``corp`` hands the Empire at a seizure; called only under the chain
+        rules."""
+        ...
+
 
 class Phase(Enum):
     STOCK = "stock"
@@ -61,11 +69,26 @@ class Phase(Enum):
     """Buying fleets, between network actions and revenue; only under the Death Star rules.
     Under the facility rules this is the facility step."""
     DIVIDEND = "dividend"
+    SURRENDER = "surrender"
+    """A seizure under the chain rules, after an operating round or stock round: each
+    corporation that owns a facility chooses the one it surrenders."""
     GAME_OVER = "game_over"
 
 
 OPERATING_PHASES = (Phase.NETWORK, Phase.FLEET, Phase.DIVIDEND)
 """Phases in which a corporation is operating."""
+CORPORATION_PHASES = OPERATING_PHASES + (Phase.SURRENDER,)
+"""Phases in which a corporation's president acts for it."""
+
+
+class Resume(Enum):
+    """Where play goes once the Death Star track has resolved (see
+    ``GameSession._resolve_death_star``)."""
+
+    FIRST_OPERATING_ROUND = "first_operating_round"
+    """The stock round ended: begin its first operating round."""
+    NEXT_OPERATING_ROUND = "next_operating_round"
+    """An operating round ended: begin the next one (or the next stock round)."""
 
 
 class Dividend(Enum):
@@ -73,7 +96,7 @@ class Dividend(Enum):
     WITHHOLD = "withhold"
 
 
-Action = StockAction | NetworkAction | FleetAction | Dividend
+Action = StockAction | NetworkAction | FleetAction | SurrenderFacility | Dividend
 
 
 @dataclass(frozen=True)
@@ -135,6 +158,8 @@ class GameSession:
         self.phase = Phase.STOCK
         self._stock = _StockState(current=game.priority_player)
         self._operating = _OperatingState(index=0, queue=[])
+        self._resume = Resume.FIRST_OPERATING_ROUND
+        """Where play goes after a surrender phase."""
         self._begin_stock_round()
 
     # --- public queries --------------------------------------------------------
@@ -144,12 +169,15 @@ class GameSession:
         """The player who must act now. Raises when the game is over."""
         if self.phase is Phase.STOCK:
             return self.game.players[self._stock.current]
-        if self.phase in OPERATING_PHASES:
+        if self.phase in CORPORATION_PHASES:
             return self.game.player(self.current_corporation.president)
         raise ValueError("The game is over; nobody acts")
 
     @property
     def current_corporation(self) -> Corporation:
+        """The operating corporation, or in a surrender phase the one choosing."""
+        if self.phase is Phase.SURRENDER:
+            return self.game.corp(self.game.surrender_queue[0])
         if self.phase not in OPERATING_PHASES:
             raise ValueError(f"No corporation acts during {self.phase.value}")
         return self.game.corp(self._operating.queue[self._operating.position])
@@ -162,6 +190,8 @@ class GameSession:
             return list(self.game.legal_network_actions(self.current_corporation))
         if self.phase is Phase.FLEET:
             return list(self.game.legal_fleet_actions(self.current_corporation))
+        if self.phase is Phase.SURRENDER:
+            return list(self.game.legal_surrenders(self.current_corporation))
         if self.phase is Phase.DIVIDEND:
             if self.game.revenue(self.current_corporation).total == 0:
                 return [Dividend.WITHHOLD]
@@ -248,8 +278,8 @@ class GameSession:
         observer(self, move)
 
     def _describe(self, action: Action, automatic: bool) -> PlayedMove:
-        operating = self.phase in OPERATING_PHASES
-        corp = self.current_corporation if operating else None
+        acting = self.phase in CORPORATION_PHASES
+        corp = self.current_corporation if acting else None
         return PlayedMove(
             action=action,
             automatic=automatic,
@@ -295,6 +325,9 @@ class GameSession:
         if self.phase is Phase.FLEET:
             fleet_legal = [a for a in legal if not isinstance(a, Dividend)]
             return bot.choose_fleet_action(self.game, corp, fleet_legal)  # type: ignore[arg-type]
+        if self.phase is Phase.SURRENDER:
+            surrenders = [a for a in legal if isinstance(a, SurrenderFacility)]
+            return bot.choose_surrender(self.game, corp, surrenders)
         revenue = self.game.revenue(corp).total
         if revenue == 0:
             return Dividend.WITHHOLD
@@ -316,6 +349,8 @@ class GameSession:
             self._fleet_step(action)  # type: ignore[arg-type]
         elif self.phase is Phase.DIVIDEND:
             self._dividend_step(action)  # type: ignore[arg-type]
+        elif self.phase is Phase.SURRENDER:
+            self._surrender_step(action)  # type: ignore[arg-type]
         else:
             raise ValueError("The game is over")
 
@@ -342,8 +377,7 @@ class GameSession:
         self._stock.current = (self._stock.current + 1) % n
         if self._stock.consecutive_passes >= n:
             game.finish_stock_round()
-            game.resolve_death_star()
-            self._begin_operating_round(0)
+            self._resolve_death_star(Resume.FIRST_OPERATING_ROUND)
 
     # --- operating rounds ------------------------------------------------------
 
@@ -366,8 +400,27 @@ class GameSession:
         self.phase = Phase.NETWORK
 
     def _end_operating_round(self) -> None:
+        self._resolve_death_star(Resume.NEXT_OPERATING_ROUND)
+
+    # --- the Death Star track --------------------------------------------------
+
+    def _resolve_death_star(self, resume: Resume) -> None:
+        """Resolve the Death Star track, then go on as ``resume`` says, unless a seizure needs
+        corporations to choose what they surrender: then enter the surrender phase first."""
         self.game.resolve_death_star()
-        self._begin_operating_round(self._operating.index + 1)
+        if self.game.surrender_queue:
+            self._resume = resume
+            self.phase = Phase.SURRENDER
+            return
+        if resume is Resume.FIRST_OPERATING_ROUND:
+            self._begin_operating_round(0)
+        else:
+            self._begin_operating_round(self._operating.index + 1)
+
+    def _surrender_step(self, action: SurrenderFacility) -> None:
+        self.game.surrender_facility(self.current_corporation, action)
+        if not self.game.surrender_queue:
+            self._resolve_death_star(self._resume)
 
     def _network_step(self, action: NetworkAction) -> None:
         self.game.apply_network_action(self.current_corporation, action)

@@ -192,6 +192,20 @@ class GameConfig:
     ``planet_base_exits`` exits plus one per facility on it; a lane claims an exit when charted
     (or upgraded) toward the planet, first come, first served, and the planet connects only
     through claimed sides. A seizure turns the facility nearest the site Imperial."""
+    chain_rules: bool = False
+    """Supply chains (requires ``facility_rules``; see "Supply chains" in docs/DECISIONS.md).
+    Revenue runs at most one chain per facility owned instead of one pair: a chain carries
+    goods up ``commodity_order`` along typed links (contracts count as links into the site), and
+    a planet holding one of the corporation's facilities may be a middle stop, where the chain
+    drops one cargo and picks up the next. Each link pays its pair value and a chain whose ends
+    are in the regional-bonus regions earns the regional bonus once. A seizure takes the
+    facility each corporation chooses to surrender, not the one nearest the site."""
+    commodity_order: dict[str, int] = field(
+        default_factory=lambda: {"A": 0, "R": 0, "I": 1, "M": 2, "S": 2, "W": 3}
+    )
+    """Tag -> rank under ``chain_rules``: a link runs from the lower rank to the higher, so a
+    chain only climbs. Raw goods (A, R), then Industry, then Market and Shipyards, then the Death
+    Star site. Every typed pair needs two ranked tags of different rank."""
     planet_base_exits: int = 1
     """Exits a planet has before any facility is built on it (``facility_rules`` only)."""
     facilities_per_planet: int = 2
@@ -267,6 +281,25 @@ class GameConfig:
             raise ValueError("planet_base_exits cannot be negative")
         if self.facilities_per_planet < 1:
             raise ValueError("facilities_per_planet must be at least 1")
+        if self.chain_rules and not self.facility_rules:
+            raise ValueError("chain_rules requires facility_rules")
+        best_basic = self.basic_route_value + sum(
+            sorted(self.planet_pair_bonus.values(), reverse=True)[:2]
+        )
+        if self.chain_rules and min(self.death_star_stage_values, default=0) < best_basic:
+            # The chain search fills leftover chains with basic routes on the premise that a
+            # contract is never worth less than a basic route.
+            raise ValueError("chain_rules needs every contract value to be at least a basic route")
+        rank = self.commodity_order
+        for pair in self.typed_pairs:
+            if len(pair) != 2 or any(tag not in rank for tag in pair):
+                raise ValueError(f"commodity_order must rank both tags of typed pair {set(pair)}")
+            low, high = sorted(rank[tag] for tag in pair)
+            if low == high:
+                raise ValueError(f"Typed pair {set(pair)} needs tags of different rank")
+        for tag in self.contract_partner_tags:
+            if tag not in rank or rank.get(self.death_star_tag, -1) <= rank[tag]:
+                raise ValueError("commodity_order must rank the site above every partner tag")
 
     def _validate_death_star_rules(self) -> None:
         """Raise ``ValueError`` if the fleet or Death Star numbers cannot make a game."""

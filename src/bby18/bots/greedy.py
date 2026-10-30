@@ -25,6 +25,7 @@ from bby18.actions import (
     SellShares,
     ShareSource,
     StockAction,
+    SurrenderFacility,
     Upgrade,
 )
 from bby18.board import Planet
@@ -347,7 +348,7 @@ class GreedyBot:
         """
         home = game.homeworld(corp)
         nearby = [p for p in game.board.planets if p.hex.distance(home) <= self.policy.home_radius]
-        return game.planet_revenue(nearby).total
+        return game.planet_revenue(nearby, middle_stops=frozenset({home})).total
 
     def site_appeal(self, game: Game, corp: Corporation) -> float:
         """The active site's contract value as seen from the homeworld, times ``contract_weight``:
@@ -640,6 +641,7 @@ class GreedyBot:
             game.reachable_planets(corp),
             game.contract_value(),
             buys[0].cost,
+            game.middle_stops(corp),
         )
         return buys[0] if wanted else FinishFleets()
 
@@ -726,7 +728,8 @@ class GreedyBot:
         weight = self._site_weight(game, forecast)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
         owned = corp.fleets
-        revenue_now = self._capped_revenue(game, planets, owned, contract_value)
+        middles = game.middle_stops(corp)
+        revenue_now = self._capped_revenue(game, planets, owned, contract_value, middles)
         reach = game.reachable(corp)
         home = game.homeworld(corp)
         site = game.death_star_site()
@@ -766,7 +769,9 @@ class GreedyBot:
             after_planets, _ = self._planning_view(
                 game, weight, [board.planet_at(h) for h in sorted(after) if board.is_planet(h)]
             )
-            revenue = self._capped_revenue(game, after_planets, owned + 1, contract_value)
+            revenue = self._capped_revenue(
+                game, after_planets, owned + 1, contract_value, middles | {action.planet}
+            )
             options.append(
                 _FacilityOption(
                     action=action,
@@ -779,6 +784,28 @@ class GreedyBot:
                 )
             )
         return options
+
+    def choose_surrender(
+        self, game: Game, corp: Corporation, legal: list[SurrenderFacility]
+    ) -> SurrenderFacility:
+        """At a seizure (chain rules), give up the facility whose loss costs the least revenue
+        next turn, valued with one chain fewer and without the planet as a middle stop unless a
+        second facility of ours stays there; on a tie, the planet farthest from the homeworld,
+        then the first listed. Noise does not reach this choice."""
+        planets = game.reachable_planets(corp)
+        owned = [f.planet for f in game.facilities_of(corp)]
+        contract_value = game.contract_value()
+        home = game.homeworld(corp)
+
+        def key(indexed: tuple[int, SurrenderFacility]) -> tuple[int, int, int]:
+            index, action = indexed
+            kept = frozenset(owned)
+            if owned.count(action.planet) == 1:
+                kept -= {action.planet}
+            revenue = self._capped_revenue(game, planets, corp.fleets - 1, contract_value, kept)
+            return revenue, action.planet.distance(home), -index
+
+        return max(enumerate(legal), key=key)[1]
 
     @staticmethod
     def _exit_opening(
@@ -853,9 +880,11 @@ class GreedyBot:
         planets: list[Planet],
         contract_value: int,
         price: int,
+        middles: frozenset[Hex],
     ) -> bool:
         """Whether a corporation owning ``owned`` fleets, reaching ``planets``, would buy one
-        more at ``price`` (assuming it can pay and is under the limit).
+        more at ``price`` (assuming it can pay and is under the limit). ``middles`` are its
+        middle stops under the chain rules.
 
         The first fleet is mandatory. A ``fleet_target`` policy buys up to its target and stops.
         Otherwise it buys when the pair the fleet adds pays back its price within
@@ -868,8 +897,8 @@ class GreedyBot:
         target = self.policy.fleet_target
         if target > 0:
             return owned < target
-        now = self._capped_revenue(game, planets, owned, contract_value)
-        marginal = self._capped_revenue(game, planets, owned + 1, contract_value) - now
+        now = self._capped_revenue(game, planets, owned, contract_value, middles)
+        marginal = self._capped_revenue(game, planets, owned + 1, contract_value, middles) - now
         if owned == 1 and marginal > 0 and forecast.fleet_reserve(1, now) > 0:
             return True
         return marginal * min(forecast.turns_left, self.policy.fleet_payback_turns) >= price
@@ -888,7 +917,13 @@ class GreedyBot:
         bought = 0
         for price in next_fleet_prices(game, room):
             if treasury < price or not self._wants_fleet(
-                game, forecast, corp.fleets + bought, planets, contract_value, price
+                game,
+                forecast,
+                corp.fleets + bought,
+                planets,
+                contract_value,
+                price,
+                game.middle_stops(corp),
             ):
                 break
             treasury -= price
@@ -897,19 +932,30 @@ class GreedyBot:
 
     @staticmethod
     def _capped_revenue(
-        game: Game, planets: list[Planet], max_pairs: int, contract_value: int
+        game: Game,
+        planets: list[Planet],
+        max_pairs: int,
+        contract_value: int,
+        middles: frozenset[Hex],
     ) -> int:
+        """Revenue of ``planets`` with at most ``max_pairs`` pairs (chains, under the chain
+        rules, stopping in the middle only at ``middles``)."""
         return compute_revenue(
-            planets, game.config, contract_value=contract_value, max_pairs=max_pairs
+            planets,
+            game.config,
+            contract_value=contract_value,
+            max_pairs=max_pairs,
+            middle_stops=middles,
         ).total
 
     def _build_reserve(self, game: Game, forecast: TrackForecast, corp: Corporation) -> int:
         """Treasury no build may spend: the mandatory first fleet if the corporation has none,
         the replacement a seizure could make necessary, and the policy's war chest."""
+        middles = game.middle_stops(corp)
         if corp.fleets == 0:
             # It will run one pair once it has bought the mandatory fleet.
             revenue = self._capped_revenue(
-                game, game.reachable_planets(corp), 1, game.contract_value()
+                game, game.reachable_planets(corp), 1, game.contract_value(), middles
             )
             survival = game.fleet_price() + forecast.fleet_reserve(1, revenue)
         else:
@@ -957,11 +1003,12 @@ class GreedyBot:
         """Each build's revenue gain under the pair cap it would really have this turn: the
         fleets owned plus those the fleet step would buy with what the build leaves."""
         weight = self._site_weight(game, forecast)
+        middles = game.middle_stops(corp)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
         fleets = corp.fleets + self._fleets_to_buy(
             game, forecast, corp, corp.treasury, planets, contract_value
         )
-        current = self._capped_revenue(game, planets, fleets, contract_value)
+        current = self._capped_revenue(game, planets, fleets, contract_value, middles)
         gains = []
         for action in candidates:
             after, _ = self._planning_view(
@@ -970,7 +1017,9 @@ class GreedyBot:
             fleets = corp.fleets + self._fleets_to_buy(
                 game, forecast, corp, corp.treasury - action.cost, after, contract_value
             )
-            gains.append(self._capped_revenue(game, after, fleets, contract_value) - current)
+            gains.append(
+                self._capped_revenue(game, after, fleets, contract_value, middles) - current
+            )
         return gains
 
     def _death_star_targets(
@@ -1108,7 +1157,9 @@ class GreedyBot:
             return self._facility_choice(game, forecast, corp, builds) is not None
         weight = self._site_weight(game, forecast)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
-        return self._wants_fleet(game, forecast, corp.fleets, planets, contract_value, price)
+        return self._wants_fleet(
+            game, forecast, corp.fleets, planets, contract_value, price, game.middle_stops(corp)
+        )
 
     def _gaining_connection_within(
         self, game: Game, forecast: TrackForecast, corp: Corporation, budget: int
@@ -1121,11 +1172,12 @@ class GreedyBot:
         reach = game.reachable(corp)
         planets, contract_value = self._planning_view(game, weight, game.reachable_planets(corp))
         fleets = corp.fleets
-        now = self._capped_revenue(game, planets, fleets, contract_value)
+        middles = game.middle_stops(corp)
+        now = self._capped_revenue(game, planets, fleets, contract_value, middles)
         more = fleets < game.config.fleet_limit
         # A planet gains "with a fleet" only beyond what the fleet alone would add.
         fleet_alone = (
-            max(now, self._capped_revenue(game, planets, fleets + 1, contract_value))
+            max(now, self._capped_revenue(game, planets, fleets + 1, contract_value, middles))
             if more
             else now
         )
@@ -1135,9 +1187,9 @@ class GreedyBot:
             if planet.hex in reach:
                 continue
             after, _ = self._planning_view(game, weight, planets + [planet])
-            if self._capped_revenue(game, after, fleets, contract_value) > now:
+            if self._capped_revenue(game, after, fleets, contract_value, middles) > now:
                 gaining.append(planet.hex)
-            elif more and self._capped_revenue(game, after, fleets + 1, contract_value) > (
+            elif more and self._capped_revenue(game, after, fleets + 1, contract_value, middles) > (
                 fleet_alone
             ):
                 gaining_with_fleet.append(planet.hex)
@@ -1173,14 +1225,15 @@ class GreedyBot:
         unlimited = copy.copy(corp)
         unlimited.treasury = 10**9
         reach = game.reachable(corp)
-        current = self._capped_revenue(game, planets, corp.fleets, contract_value)
+        middles = game.middle_stops(corp)
+        current = self._capped_revenue(game, planets, corp.fleets, contract_value, middles)
         for action in game.legal_network_actions(unlimited):
             if isinstance(action, NoNetworkAction) or action.cost <= budget:
                 continue
             after, _ = self._planning_view(
                 game, weight, self._planets_after(game, corp, action, reach)
             )
-            if self._capped_revenue(game, after, corp.fleets, contract_value) > current:
+            if self._capped_revenue(game, after, corp.fleets, contract_value, middles) > current:
                 return True
         return False
 
