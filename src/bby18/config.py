@@ -406,39 +406,38 @@ DIFFICULTY_TARGET_SHARE: dict[str, float] = {"very-easy": 0.43, "easy": 0.40}
 when seated with two bots of any one strategy. A fair share at three players is 0.333. Under the
 facility rules the 1.0 noise maximum gives 0.45-0.53, depending on the strategy."""
 BOT_NOISE: dict[str, dict[str, float]] = {
-    # Calibrated 2026-10-28 for DIFFICULTY_TARGET_SHARE with six corporations and site-aware
-    # starting (docs/sweeps/difficulty-2026-10-28); "easy" until 2026-10-29.
+    # Calibrated 2026-10-30 for DIFFICULTY_TARGET_SHARE under the supply-chain rules
+    # (docs/sweeps/difficulty-2026-10-30). Churner barely responds to noise and keeps its
+    # earlier values.
     "very-easy": {
-        "baron": 0.91,
+        "baron": 0.86,
         "baron-prestige": 0.92,
-        "baron-tycoon": 0.9,
-        "builder": 0.86,
+        "baron-tycoon": 0.84,
+        "builder": 0.79,
         "churner": 0.28,
-        "diversifier": 0.88,
-        "early-builder": 0.89,
-        "hoarder": 0.6,
-        "prestige": 0.86,
-        "spoiler": 0.74,
-        "straight": 0.74,
-        "targeted": 0.86,
-        "tycoon": 0.85,
+        "diversifier": 0.8,
+        "early-builder": 0.83,
+        "hoarder": 0.4,
+        "prestige": 0.83,
+        "spoiler": 0.73,
+        "straight": 0.69,
+        "targeted": 0.79,
+        "tycoon": 0.76,
     },
-    # Fitted 2026-10-29 on 60 maps (docs/sweeps/difficulty-2026-10-29). Hoarder cannot be made
-    # harder than about 42.5%, so it stays the one character easier than the target.
     "easy": {
-        "baron": 0.79,
-        "baron-prestige": 0.85,
-        "baron-tycoon": 0.77,
-        "builder": 0.56,
+        "baron": 0.76,
+        "baron-prestige": 0.86,
+        "baron-tycoon": 0.76,
+        "builder": 0.66,
         "churner": 0.12,
-        "diversifier": 0.56,
-        "early-builder": 0.76,
-        "hoarder": 0.7,
-        "prestige": 0.6,
-        "spoiler": 0.51,
-        "straight": 0.11,
-        "targeted": 0.71,
-        "tycoon": 0.56,
+        "diversifier": 0.65,
+        "early-builder": 0.73,
+        "hoarder": 0.5,
+        "prestige": 0.57,
+        "spoiler": 0.41,
+        "straight": 0.1,
+        "targeted": 0.74,
+        "tycoon": 0.63,
     },
 }
 """Per difficulty, each roster strategy's ``GreedyPolicy.noise``. Re-run the calibration when the

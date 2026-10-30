@@ -513,6 +513,10 @@ game picker, very easy first and the default.
 reference player takes 38.9-40.7% against every strategy but hoarder, 40.2% overall, against
 very easy's 43.0%.
 
+**Recalibrated 2026-10-30** for supply chains (`docs/sweeps/difficulty-2026-10-30`): on 30 fresh
+maps 42.4% overall for very easy and 40.4% for easy; churner a few points harder and hoarder a
+few easier than the target at both levels.
+
 ## Supply chains (decided 2026-10-30)
 
 **Status:** adopted 2026-10-30 as the default rules (`chain_rules`), with the facility limit

@@ -1,0 +1,53 @@
+{
+ "variants": {
+  "base": {}
+ },
+ "seeds": [
+  101,
+  30
+ ],
+ "players": [
+  3
+ ],
+ "bots": [
+  "mix:builder@site,baron@site~0.76,baron@site~0.76",
+  "mix:baron@site~0.76,builder@site,baron@site~0.76",
+  "mix:baron@site~0.76,baron@site~0.76,builder@site",
+  "mix:builder@site,baron-prestige@site~0.86,baron-prestige@site~0.86",
+  "mix:baron-prestige@site~0.86,builder@site,baron-prestige@site~0.86",
+  "mix:baron-prestige@site~0.86,baron-prestige@site~0.86,builder@site",
+  "mix:builder@site,baron-tycoon@site~0.76,baron-tycoon@site~0.76",
+  "mix:baron-tycoon@site~0.76,builder@site,baron-tycoon@site~0.76",
+  "mix:baron-tycoon@site~0.76,baron-tycoon@site~0.76,builder@site",
+  "mix:builder@site,builder@site~0.66,builder@site~0.66",
+  "mix:builder@site~0.66,builder@site,builder@site~0.66",
+  "mix:builder@site~0.66,builder@site~0.66,builder@site",
+  "mix:builder@site,churner@site~0.0,churner@site~0.0",
+  "mix:churner@site~0.0,builder@site,churner@site~0.0",
+  "mix:churner@site~0.0,churner@site~0.0,builder@site",
+  "mix:builder@site,diversifier@site~0.65,diversifier@site~0.65",
+  "mix:diversifier@site~0.65,builder@site,diversifier@site~0.65",
+  "mix:diversifier@site~0.65,diversifier@site~0.65,builder@site",
+  "mix:builder@site,early-builder@site~0.73,early-builder@site~0.73",
+  "mix:early-builder@site~0.73,builder@site,early-builder@site~0.73",
+  "mix:early-builder@site~0.73,early-builder@site~0.73,builder@site",
+  "mix:builder@site,hoarder@site~0.5,hoarder@site~0.5",
+  "mix:hoarder@site~0.5,builder@site,hoarder@site~0.5",
+  "mix:hoarder@site~0.5,hoarder@site~0.5,builder@site",
+  "mix:builder@site,prestige@site~0.57,prestige@site~0.57",
+  "mix:prestige@site~0.57,builder@site,prestige@site~0.57",
+  "mix:prestige@site~0.57,prestige@site~0.57,builder@site",
+  "mix:builder@site,spoiler@site~0.41,spoiler@site~0.41",
+  "mix:spoiler@site~0.41,builder@site,spoiler@site~0.41",
+  "mix:spoiler@site~0.41,spoiler@site~0.41,builder@site",
+  "mix:builder@site,straight@site~0.1,straight@site~0.1",
+  "mix:straight@site~0.1,builder@site,straight@site~0.1",
+  "mix:straight@site~0.1,straight@site~0.1,builder@site",
+  "mix:builder@site,targeted@site~0.74,targeted@site~0.74",
+  "mix:targeted@site~0.74,builder@site,targeted@site~0.74",
+  "mix:targeted@site~0.74,targeted@site~0.74,builder@site",
+  "mix:builder@site,tycoon@site~0.63,tycoon@site~0.63",
+  "mix:tycoon@site~0.63,builder@site,tycoon@site~0.63",
+  "mix:tycoon@site~0.63,tycoon@site~0.63,builder@site"
+ ]
+}

@@ -38,7 +38,7 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
 - Web opponents: named characters in `src/bby18/bots/roster.py`, each a stable strategy started
   by the Death Star site (`roster_policy`, bot kind `strategy@site`) with a per-difficulty
   `noise` from `BOT_NOISE` in `config.py` (difficulties `very-easy` and `easy`, each with a
-  target share in `DIFFICULTY_TARGET_SHARE`). Recalibrate with `docs/sweeps/difficulty-2026-10-28`
+  target share in `DIFFICULTY_TARGET_SHARE`). Recalibrate with `docs/sweeps/difficulty-2026-10-30`
   specs (script in `docs/sweeps/difficulty-2026-10-25`, reference `builder@site`; one sweep's rows
   fit every difficulty, see `difficulty-2026-10-29`) when the rules or a strategy change.
 - Lane drawing on the web map: route and trace geometry in `web/src/lanes.ts`; the order of
