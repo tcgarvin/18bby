@@ -2497,8 +2497,16 @@
   stroke-width: 1.2;
 }
 
+/* A lane as the map draws it: a pale core in a faint casing. */
+.legend__lane-edge {
+  stroke: #7f8c9e;
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.45;
+}
+
 .legend__lane {
-  stroke: #9aa3ae;
+  stroke: #edf1f5;
   stroke-width: 4;
   stroke-linecap: round;
 }

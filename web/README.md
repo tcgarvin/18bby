@@ -199,13 +199,14 @@ and who is acting.
   Click a highlighted hex to see its tile options, or an entry to show that network on the map.
 - **Operating, dividend:** the corporation's revenue and its scored pairs, with Pay and Withhold
   side by side: what each shareholder receives, the treasury, and where the share price moves
-  (marked on a slice of the market). The map shrinks to the corporation's network.
+  (marked on a slice of the market). The map shrinks to the corporation's network and starts on
+  its Routes view.
 - **Operating, fleets (Death Star rules):** after the network actions the corporation buys fleets
   from the shared supply. The rail's entry shows its fleets, the next fleet's price and what it
   adds to this turn's revenue, and warns when a coming seizure would leave it unable to replace
   its only fleet. <kbd>B</kbd> buys, <kbd>P</kbd> finishes. The Death Star bar under the top bar
   shows the track, the contract value and when the game ends throughout; the map draws the site
-  (W) and the dashed future site, and dotted arcs mark contract pairs.
+  (W) and the dashed future site, and in its Routes view dotted arcs mark contract pairs.
 - **Operating, facilities (facility rules):** fleets are replaced by facilities on planets. The
   map highlights the planets the corporation may build on; pick one there or in the rail's list
   (<kbd>1</kbd>–<kbd>9</kbd>), then choose where its new exit goes: left open, or given to a lane
@@ -252,5 +253,10 @@ and who is acting.
 - Each hex takes the region of its nearest planet. Ties go to Core, then Mid Rim, then Outer Rim.
 - A corporation is in focus when you click its operating-order entry (or its entry in the
   corporation list of the browsed Map) or when it is operating. The focused
-  corporation's traces and reachable planets are emphasized, and its scored pairs are drawn as
-  arcs labelled with their value. Solid arcs are typed pairs; dashed arcs are basic routes.
+  corporation's traces and reachable planets are emphasized.
+- The Regular | Routes toggle at the map's top left (absent on the small thumbnail) is remembered
+  in this browser. Regular shows no revenue links. Routes tints the map, quietens the traces and
+  steps back planets off the routes, then draws the focused corporation's scored pairs as arcs
+  labelled with their value: solid for typed pairs, dashed for basic routes, dotted for contracts.
+  Build targets stay out of the tint. Routes needs a focused corporation with links, and is
+  disabled otherwise; the Dividend view always starts on it, and flipping it there is not remembered.

@@ -72,7 +72,8 @@ export function MapLegend({ state, focusCorp }: { state: GameState; focusCorp: s
           </span>
           <span className="legend__item">
             <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden>
-              <path d="M0,6H9" className="legend__lane" />
+              <path d="M0,6H8.5" className="legend__lane-edge" />
+              <path d="M0,6H8.5" className="legend__lane" />
               <path d="M10.5,1.5V10.5" className="legend__dangle" />
             </svg>
             dangling lane
