@@ -24,6 +24,7 @@ export function MapThumbnail({ state, board, onOpen }: { state: GameState; board
         label="Map overview"
         deathStar={state.deathStar}
         facilities={state.facilities}
+        viewToggle={false}
       />
       <span className="mapthumb__cta">
         View map <kbd>M</kbd>

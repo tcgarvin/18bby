@@ -81,6 +81,7 @@ export function DividendView({ state, board, interactive, busy, keyboard, change
               label={`${focusCorp ?? ""} network`}
               deathStar={state.deathStar}
               facilities={state.facilities}
+              startOnRoutes
             />
           </div>
           {focus && <RevenueBreakdown state={state} corp={focus} />}
@@ -330,7 +331,7 @@ function Moves({ price, treasury }: { price: [number, number]; treasury: [number
 }
 
 /**
- * The scored pairs behind the revenue, matching the arcs on the map: solid typed, dashed basic,
+ * The scored pairs behind the revenue, matching the arcs of the map's Routes view: solid typed, dashed basic,
  * dotted contract. Under the chain rules each row is a supply chain told as its cargo runs, with
  * what each link earns. Under the Death Star rules it also says how many pairs (chains) the fleets
  * (or facilities) run.

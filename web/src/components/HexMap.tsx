@@ -12,6 +12,7 @@ import type {
   Planet,
   PlanetFacilities,
   Region,
+  RevenuePair,
   TerrainKind,
   TileState,
 } from "../api";
@@ -42,6 +43,8 @@ import {
   tracePath,
   type LanePiece,
 } from "../lanes";
+import { layoutLinks } from "../linkLayout";
+import { useMapView, type MapView } from "../mapView";
 import { scatterBlobs } from "../terrain";
 import { DeathStarShape } from "./DeathStar";
 import "./HexMap.css";
@@ -58,6 +61,8 @@ const TRACE_HALO = 1.2;
 const MIN_CORE_WIDTH = 9;
 /** The darker casing shows this much either side of the core. */
 const CASING_EDGE = 1.1;
+/** How far the casing's soft edge spreads, in SVG units. */
+const CASING_BLUR = 1.3;
 const BADGE_RADIUS = S * 0.36;
 const NEUTRAL_CHANGE = "#5b6573";
 const ASTEROID_ROCKS = { count: 9, area: S * 0.7, minRadius: 1.1, maxRadius: 3.1, salt: 1, overlap: false };
@@ -73,6 +78,16 @@ const OPEN_EXIT_SPACING = 8;
 const DANGLE_INSET = 0.24;
 /** The bar is this much longer than the lane is wide. */
 const DANGLE_OVERHANG = 2;
+const LINK_GEOMETRY = {
+  hexSide: S,
+  badgeRadius: BADGE_RADIUS,
+  pillHalfWidth: 13,
+  pillHalfHeight: 8,
+  nameOffset: BADGE_RADIUS + 8,
+  nameHalfWidth: 30,
+  nameHalfHeight: 7,
+};
+const NO_PAIRS: RevenuePair[] = [];
 
 interface HexMapProps {
   board: Board;
@@ -105,6 +120,10 @@ interface HexMapProps {
   facilities?: Pick<FacilitiesState, "planets">;
   /** A facility build to preview in the focused corporation's colour: the facility and its new exit's lane. */
   facilityPreview?: BuildFacilityAction | null;
+  /** Show the Regular | Routes toggle. Without it the map stays Regular. */
+  viewToggle?: boolean;
+  /** Start on Routes each time the map mounts, and leave the remembered choice alone when flipped. */
+  startOnRoutes?: boolean;
 }
 
 function add(a: Point, b: Point, scale = 1): Point {
@@ -432,7 +451,10 @@ export function HexMap(props: HexMapProps) {
     deathStar,
     facilities,
     facilityPreview = null,
+    viewToggle = true,
+    startOnRoutes = false,
   } = props;
+  const [chosenView, chooseView] = useMapView(startOnRoutes);
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
   const boundaries = useMemo(() => regionBoundaries(board, regions), [board, regions]);
@@ -465,7 +487,9 @@ export function HexMap(props: HexMapProps) {
   // Freshness follows exits, stubs and service as they are added, so an upgrade that reshapes a
   // tile draws in only its new arm.
   const fresh = useFreshKeys(network.keys);
-  const maskId = `hexmap-badges-${useId().replace(/:/g, "")}`;
+  const mapId = useId().replace(/:/g, "");
+  const maskId = `hexmap-badges-${mapId}`;
+  const softEdgeId = `hexmap-soft-edge-${mapId}`;
   // A facility is new when its build number, or its owner (a seizure), was not on the map before.
   const facilityKeys = useMemo(
     () => (facilities?.planets ?? []).flatMap((p) => p.facilities.map((f) => facilityKey(p, f))),
@@ -485,17 +509,34 @@ export function HexMap(props: HexMapProps) {
 
   const focus = corporations.find((c) => c.id === focusCorp) ?? null;
   const reachable = new Set(focus?.reachablePlanets ?? []);
+  const routesBlocked =
+    focus === null ? "Pick a corporation to see its routes" : focus.revenue.pairs.length === 0 ? `${focus.id} has no routes yet` : null;
+  // The choice is only overridden, not changed, while there is nothing to show: it returns with a corporation that has links.
+  const routesOn = viewToggle && chosenView === "routes" && routesBlocked === null;
+  const routePairs = routesOn && focus ? focus.revenue.pairs : NO_PAIRS;
+  const onRoute = new Set(routePairs.flatMap((pair) => [pair.a, pair.b]));
+  const routeClass = (name: string): string =>
+    routesOn ? (onRoute.has(name) ? " hexmap__planet--on-route" : " hexmap__planet--off-route") : "";
+  const linkLayouts = useMemo(() => {
+    const links = routePairs.flatMap((pair) => {
+      const [a, b] = [planetsByName.get(pair.a), planetsByName.get(pair.b)];
+      return a && b ? [{ key: `${pair.a}-${pair.b}`, from: hexToPixel(a.hex, S), to: hexToPixel(b.hex, S) }] : [];
+    });
+    return layoutLinks(links, hubs.map((hub) => hexToPixel(hub.hex, S)), LINK_GEOMETRY);
+  }, [routePairs, planetsByName, hubs]);
   const chained = (focus?.revenue.chains.length ?? 0) > 0;
   const core = coreWidth(corpIds.length);
   const casing = core + 2 * CASING_EDGE;
-  const [boxX, boxY, boxWidth, boxHeight] = box.split(" ").map(Number);
+  // The lane mask and soft edge cover the whole board, not just `box`: a zoomed map in a wider panel
+  // shows more than its viewBox, and lanes outside these regions would vanish.
+  const [boardX, boardY, boardWidth, boardHeight] = viewBox(board.hexes).split(" ").map(Number);
   const homeworlds = new Map<string, CorporationState[]>();
   for (const corp of corporations) {
     homeworlds.set(corp.homeworld, [...(homeworlds.get(corp.homeworld) ?? []), corp]);
   }
 
-  return (
-    <svg className={`hexmap${focus ? " hexmap--focused" : ""}`} viewBox={box} role="img" aria-label={label}>
+  const map = (
+    <svg className={`hexmap${focus ? " hexmap--focused" : ""}${routesOn ? " hexmap--routes" : ""}`} viewBox={box} role="img" aria-label={label}>
       <defs>
         <radialGradient id="hexmap-nebula-haze">
           <stop offset="0%" className="hexmap__haze-core" />
@@ -506,13 +547,21 @@ export function HexMap(props: HexMapProps) {
           <stop offset="100%" className="hexmap__wisp-edge" />
         </radialGradient>
         {/* Lanes and traces stop in a clean circle at a planet's badge, even when the planet is dimmed. */}
-        <mask id={maskId} maskUnits="userSpaceOnUse" x={boxX} y={boxY} width={boxWidth} height={boxHeight}>
-          <rect x={boxX} y={boxY} width={boxWidth} height={boxHeight} fill="#fff" />
+        <mask id={maskId} maskUnits="userSpaceOnUse" x={boardX} y={boardY} width={boardWidth} height={boardHeight}>
+          <rect x={boardX} y={boardY} width={boardWidth} height={boardHeight} fill="#fff" />
           {hubs.map((hub) => {
             const center = hexToPixel(hub.hex, S);
             return <circle key={hexKey(hub.hex)} cx={center.x} cy={center.y} r={BADGE_RADIUS - 0.5} fill="#000" />;
           })}
         </mask>
+        {/*
+          An SVG filter, not CSS blur(): Safari ignores CSS filters on SVG children. Its region is the
+          view, since a straight lane's bounding box has no height and would vanish; sRGB matches how
+          CSS blur() mixes colours.
+        */}
+        <filter id={softEdgeId} filterUnits="userSpaceOnUse" x={boardX} y={boardY} width={boardWidth} height={boardHeight} colorInterpolationFilters="sRGB">
+          <feGaussianBlur stdDeviation={CASING_BLUR} />
+        </filter>
       </defs>
       <g className="hexmap__cells">
         {board.hexes.map((hex) => {
@@ -552,8 +601,20 @@ export function HexMap(props: HexMapProps) {
         core={core}
         casing={casing}
         mask={`url(#${maskId})`}
+        casingFilter={`url(#${softEdgeId})`}
         superseded={preview?.type === "upgrade" && focus ? hexKey(preview.hex) : null}
       />
+
+      {/* Build targets stay out of the tint, so choosing where to build is never muddied. */}
+      {routesOn && (
+        <path
+          d={board.hexes
+            .filter((hex) => !actionableHexes.has(hexKey(hex)))
+            .map((hex) => cornersToPath(hexToPixel(hex, S), S))
+            .join("")}
+          className="hexmap__scrim"
+        />
+      )}
 
       <g className="hexmap__changes">
         {board.hexes
@@ -590,19 +651,17 @@ export function HexMap(props: HexMapProps) {
         />
       )}
 
-      {focus && (
+      {routesOn && focus && (
         <g className="hexmap__pairs">
-          {focus.revenue.pairs.map((pair) => {
+          {routePairs.map((pair) => {
             const a = planetsByName.get(pair.a);
             const b = planetsByName.get(pair.b);
             if (!a || !b) return null;
             const pa = hexToPixel(a.hex, S);
             const pb = hexToPixel(b.hex, S);
-            const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
-            const length = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-            const bow = Math.min(S * 1.2, length * 0.18);
-            const control = { x: mid.x - ((pb.y - pa.y) / length) * bow, y: mid.y + ((pb.x - pa.x) / length) * bow };
-            const labelAt = { x: (mid.x + control.x) / 2, y: (mid.y + control.y) / 2 };
+            const layout = linkLayouts.get(`${pair.a}-${pair.b}`);
+            if (!layout) return null;
+            const { control, label: labelAt } = layout;
             // Under the chain rules a link carries cargo one way, so it gets an arrowhead, and it
             // tells the whole chain it belongs to.
             const chain = chained ? chainOfLink(focus.revenue, pair) : null;
@@ -610,6 +669,7 @@ export function HexMap(props: HexMapProps) {
             return (
               <g key={`${pair.a}-${pair.b}`}>
                 {chain && <title>{chainStory(chain)}</title>}
+                <path d={`M${pa.x},${pa.y}Q${control.x},${control.y} ${pb.x},${pb.y}`} className="hexmap__pair-halo" />
                 <path
                   d={`M${pa.x},${pa.y}Q${control.x},${control.y} ${pb.x},${pb.y}`}
                   stroke={color}
@@ -659,7 +719,7 @@ export function HexMap(props: HexMapProps) {
       {site && deathStar && (
         <g
           transform={`translate(${hexToPixel(site.hex, S).x},${hexToPixel(site.hex, S).y})`}
-          className={`hexmap__planet hexmap__site${focus !== null && !reachable.has(site.name) ? " hexmap__planet--dimmed" : ""}`}
+          className={`hexmap__planet hexmap__site${focus !== null && !reachable.has(site.name) ? " hexmap__planet--dimmed" : ""}${routeClass(site.name)}`}
         >
           <title>{`${site.name} construction site · ${site.region} · ${deathStar.siteTag} (Imperial Works): an open hub. Paired with ${deathStar.contractPartnerTags.join(", ")} it is a contract worth ${deathStar.contractValue}.`}</title>
           {focus !== null && reachable.has(site.name) && (
@@ -689,7 +749,7 @@ export function HexMap(props: HexMapProps) {
             <g
               key={planet.name}
               transform={`translate(${center.x},${center.y})`}
-              className={`hexmap__planet${dimmed ? " hexmap__planet--dimmed" : ""}`}
+              className={`hexmap__planet${dimmed ? " hexmap__planet--dimmed" : ""}${routeClass(planet.name)}`}
             >
               <title>{`${planet.name} · ${planet.region} · ${badgeText(planet.tags)}${exits ? ` · ${planetExitsText(exits)}` : ""}`}</title>
               {reached && focus && (
@@ -764,6 +824,42 @@ export function HexMap(props: HexMapProps) {
       </g>
     </svg>
   );
+  // A map with no toggle needs no frame, which also keeps the thumbnail's button free of a div.
+  if (!viewToggle) return map;
+  return (
+    <div className="hexmap-frame">
+      {map}
+      <MapViewToggle routesOn={routesOn} routesBlocked={routesBlocked} onChoose={chooseView} />
+    </div>
+  );
+}
+
+/** The Regular | Routes switch over the map's top-left corner, which leaves the map clickable around its buttons. */
+export function MapViewToggle(props: { routesOn: boolean; routesBlocked: string | null; onChoose: (view: MapView) => void }) {
+  const { routesOn, routesBlocked, onChoose } = props;
+  // Pressing what is already showing is no choice: Regular, shown only because Routes is
+  // unavailable, must not overwrite a remembered Routes.
+  const press = (view: MapView): void => {
+    if ((view === "routes") !== routesOn) onChoose(view);
+  };
+  return (
+    <div className="hexmap-view" role="group" aria-label="Map view">
+      <button type="button" className="hexmap-view__button" data-map-view="regular" aria-pressed={!routesOn} onClick={() => press("regular")}>
+        Regular
+      </button>
+      <button
+        type="button"
+        className="hexmap-view__button"
+        data-map-view="routes"
+        aria-pressed={routesOn}
+        disabled={routesBlocked !== null}
+        title={routesBlocked ?? undefined}
+        onClick={() => press("routes")}
+      >
+        Routes
+      </button>
+    </div>
+  );
 }
 
 interface LaneLayersProps {
@@ -774,6 +870,8 @@ interface LaneLayersProps {
   core: number;
   casing: number;
   mask: string;
+  /** The casing's soft edge. */
+  casingFilter: string;
   /** The tile whose current shape a previewed upgrade replaces: drawn faintly under the preview. */
   superseded: string | null;
 }
@@ -783,7 +881,7 @@ interface LaneLayersProps {
  * traces (the focused one last), so routes merge without seams at borders and junctions. Glows in a corporation's colour sit under the casings: briefly behind
  * what was just built, steadily behind the focused corporation's network.
  */
-function LaneLayers({ network, fresh, focusId, corpIds, core, casing, mask, superseded }: LaneLayersProps) {
+function LaneLayers({ network, fresh, focusId, corpIds, core, casing, mask, casingFilter, superseded }: LaneLayersProps) {
   const { strokes, traces } = network;
   const drawsIn = (keys: string[]): boolean => keys.some((key) => fresh.has(key));
   const fadeClass = (tileKey: string): string => (tileKey === superseded ? " hexmap__route--superseded" : "");
@@ -813,7 +911,7 @@ function LaneLayers({ network, fresh, focusId, corpIds, core, casing, mask, supe
   return (
     <g className="hexmap__routes" mask={mask}>
       <g>{glows}</g>
-      <g>
+      <g className="hexmap__casings" filter={casingFilter}>
         {strokes.map((stroke) => (
           <path
             key={stroke.piece.key}
