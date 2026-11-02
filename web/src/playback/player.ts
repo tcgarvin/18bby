@@ -7,28 +7,39 @@
 import type { GameState } from "../api";
 import type { PlaybackStep } from "./frames";
 import type { PlaybackSpeed } from "./timing";
-import { stepDuration } from "./timing";
+import { leadDuration, stepDuration } from "./timing";
 
 export interface PlaybackSnapshot {
   playing: boolean;
+  /** True while a running playback is held; `current` stays on screen. */
+  paused: boolean;
   /** The step showing now; null when idle. */
   current: PlaybackStep | null;
   /** Index of `current` in the steps; 0 when idle. */
   index: number;
   total: number;
   speed: PlaybackSpeed;
-  /** How long `current` shows at this speed; 0 when idle. */
+  /** How long `current`'s effects have at this speed; 0 when idle. */
   durationMs: number;
+  /** How long `current` waits for the camera before its effects start; 0 when it doesn't. */
+  leadMs: number;
   /** The server state the running playback ends at; null when idle. */
   target: GameState | null;
 }
 
 export class PlaybackPlayer {
   private steps: PlaybackStep[] = [];
+  private leads: number[] = [];
   private index = 0;
   private target: GameState | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private frame: number | null = null;
+  private paused = false;
+  /** When the running timer started, and how long it was set for. */
+  private timerStart = 0;
+  private timerLength = 0;
+  /** What is left of the current step while paused. */
+  private remaining = 0;
   private listeners = new Set<() => void>();
   private snapshot: PlaybackSnapshot;
   private speed: PlaybackSpeed;
@@ -51,11 +62,14 @@ export class PlaybackPlayer {
 
   /**
    * Plays `steps`, ending at `target`. A playback already running jumps to its end first. With
-   * no steps, or at instant speed, nothing plays.
+   * no steps, or at instant speed, nothing plays. `leads` gives each step's wait for the camera
+   * at 1×, added before its effects; absent entries wait for nothing.
    */
-  play(steps: PlaybackStep[], target: GameState): void {
+  play(steps: PlaybackStep[], target: GameState, leads: number[] = []): void {
     this.stopTimer();
+    this.paused = false;
     this.steps = this.speed === "instant" ? [] : steps;
+    this.leads = leads;
     this.index = 0;
     this.target = this.steps.length > 0 ? target : null;
     this.schedule();
@@ -69,12 +83,33 @@ export class PlaybackPlayer {
     this.emit();
   }
 
+  /** Holds the running playback on its current step. */
+  pause(): void {
+    if (this.steps.length === 0 || this.paused) return;
+    const elapsed = this.timer === null ? 0 : Date.now() - this.timerStart;
+    this.remaining = Math.max(0, (this.timer === null ? this.currentDuration() : this.timerLength) - elapsed);
+    this.stopTimer();
+    this.paused = true;
+    this.emit();
+  }
+
+  /** Carries on with what was left of the step that was paused. */
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    this.startTimer(this.remaining);
+    this.emit();
+  }
+
   setSpeed(speed: PlaybackSpeed): void {
     if (speed === this.speed) return;
     this.speed = speed;
     this.onSpeedChange(speed);
     if (speed === "instant") {
       this.finish();
+    } else if (this.paused) {
+      // The step will start over at the new rate when it resumes.
+      this.remaining = this.currentDuration();
     } else {
       // Restart the current step's timer at the new rate.
       this.schedule();
@@ -96,7 +131,7 @@ export class PlaybackPlayer {
     if (!this.steps[this.index]) return;
     const start = () => {
       this.frame = null;
-      this.timer = setTimeout(() => this.advance(), this.currentDuration());
+      this.startTimer(this.currentDuration());
     };
     if (typeof requestAnimationFrame !== "function") {
       start();
@@ -108,8 +143,23 @@ export class PlaybackPlayer {
     });
   }
 
-  /** How long the current step shows at the current speed. */
+  private startTimer(length: number): void {
+    this.timerStart = Date.now();
+    this.timerLength = length;
+    this.timer = setTimeout(() => this.advance(), length);
+  }
+
+  /** How long the current step shows at the current speed, its wait for the camera included. */
   currentDuration(): number {
+    return this.effectDuration() + this.currentLead();
+  }
+
+  private currentLead(): number {
+    if (!this.steps[this.index]) return 0;
+    return leadDuration(this.leads[this.index] ?? 0, this.speed);
+  }
+
+  private effectDuration(): number {
     const step = this.steps[this.index];
     if (!step) return 0;
     const previous = this.index > 0 ? this.steps[this.index - 1].state : step.before;
@@ -130,8 +180,10 @@ export class PlaybackPlayer {
   private finish(): void {
     this.stopTimer();
     this.steps = [];
+    this.leads = [];
     this.index = 0;
     this.target = null;
+    this.paused = false;
   }
 
   private stopTimer(): void {
@@ -145,11 +197,13 @@ export class PlaybackPlayer {
     const current = this.steps[this.index] ?? null;
     return {
       playing: current !== null,
+      paused: this.paused,
       current,
       index: this.index,
       total: this.steps.length,
       speed: this.speed,
-      durationMs: this.currentDuration(),
+      durationMs: this.effectDuration(),
+      leadMs: this.currentLead(),
       target: this.target,
     };
   }

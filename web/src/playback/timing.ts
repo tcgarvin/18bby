@@ -32,6 +32,16 @@ export const BASE_DURATION_MS: Record<MoveKindName, number> = {
  */
 export const VIEW_SWITCH_MIN_MS = 550;
 
+/** How long a camera move before a step takes at 1×, and the least it takes at any speed. */
+export const CAMERA_GLIDE_MS = 350;
+const CAMERA_GLIDE_MIN_MS = 120;
+
+/** How long a step waits for the camera at this speed, for a lead of `leadMs` at 1× (0 for none). */
+export function leadDuration(leadMs: number, speed: PlaybackSpeed): number {
+  if (speed === "instant" || leadMs <= 0) return 0;
+  return Math.max(leadMs / speed, CAMERA_GLIDE_MIN_MS);
+}
+
 /** How long a step shows; `switchesView` when its phase differs from the step before. */
 export function stepDuration(kind: MoveKindName, speed: PlaybackSpeed, switchesView = false): number {
   if (speed === "instant") return 0;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Action, Board, GameState, LogEntry } from "../api";
 import { ApiError, isHexAction, submitAction, undoAction } from "../api";
 import type { GameView } from "../gameView";
@@ -11,6 +11,9 @@ import { PhaseBanner, ReplayBar } from "../playback/ReplayBar";
 import { StepEffects } from "../playback/StepEffects";
 import { playbackSteps } from "../playback/frames";
 import { usePlayback } from "../playback/usePlayback";
+import { replayLeads } from "../phone/camera";
+import { PhoneGame } from "../phone/PhoneGame";
+import { useIsPhone } from "../phone/useIsPhone";
 import { corpColor } from "../selectors";
 import { changedFacilityHexes } from "../facilities";
 import { changedHexes } from "../tilediff";
@@ -92,7 +95,9 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   /** Hexes changed by bots or forced moves since the last submitted action. */
   const [changed, setChanged] = useState<Map<string, string[]>>(new Map());
 
-  const playback = usePlayback(state, board.planets);
+  const phone = useIsPhone();
+  const phoneLeads = useMemo(() => (phone ? (steps: Parameters<typeof replayLeads>[0]) => replayLeads(steps, board) : undefined), [phone, board]);
+  const playback = usePlayback(state, board.planets, phoneLeads);
   const display: GameState = playback.display;
   const replaying = playback.playing;
   const step = playback.current;
@@ -251,6 +256,29 @@ export function GameScreen({ gameId, board, initialState, onLeave }: GameScreenP
   ]
     .filter(Boolean)
     .join(" ");
+
+  // The phone prototype covers the operating turn and replays; other screens keep the desktop's layout for now.
+  if (phone && (replaying || display.phase === "network" || display.phase === "fleet" || display.phase === "dividend")) {
+    return (
+      <FlightLayer>
+        <StepEffects step={step} durationMs={playback.durationMs} leadMs={playback.leadMs} color={(id) => corpColor(display, id)} />
+        <PhoneGame
+          state={display}
+          board={board}
+          playback={playback}
+          interactive={interactive}
+          busy={busy}
+          changedHexes={replaying ? NO_CHANGES : changed}
+          canUndo={canUndo}
+          error={error}
+          onAct={act}
+          onUndo={undo}
+          onLeave={onLeave}
+          onDismissError={() => setError(null)}
+        />
+      </FlightLayer>
+    );
+  }
 
   return (
     <FlightLayer>

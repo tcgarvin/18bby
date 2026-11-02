@@ -60,6 +60,9 @@ export interface FlightApi {
   highlight(options: HighlightOptions): Promise<void>;
   /** Ends every effect in progress, e.g. when playback is skipped. */
   clear(): void;
+  /** Holds effects in progress, and any that start, until `resume` or `clear`. */
+  pause(): void;
+  resume(): void;
 }
 
 const done = Promise.resolve();
@@ -69,6 +72,8 @@ const NO_FLIGHTS: FlightApi = {
   pop: () => done,
   highlight: () => done,
   clear: () => {},
+  pause: () => {},
+  resume: () => {},
 };
 
 const FlightContext = createContext<FlightApi>(NO_FLIGHTS);
@@ -156,12 +161,14 @@ function certificateToken(certificate: FlyingCertificate, label: string, color: 
 export function FlightLayer({ children }: { children: ReactNode }) {
   const overlay = useRef<HTMLDivElement>(null);
   const running = useRef(new Set<Animation>());
+  const paused = useRef(false);
 
   const run = useCallback((element: HTMLElement, keyframes: Keyframe[], durationMs: number, delayMs: number) => {
     const layer = overlay.current;
     if (!layer || typeof element.animate !== "function") return done;
     layer.appendChild(element);
     const animation = element.animate(keyframes, { duration: durationMs, delay: delayMs, easing: EASING, fill: "both" });
+    if (paused.current) animation.pause();
     running.current.add(animation);
     const cleanUp = () => {
       running.current.delete(animation);
@@ -213,7 +220,16 @@ export function FlightLayer({ children }: { children: ReactNode }) {
         return run(ring, highlightKeyframes(), durationMs, delayMs);
       },
       clear() {
+        paused.current = false;
         for (const animation of running.current) animation.cancel();
+      },
+      pause() {
+        paused.current = true;
+        for (const animation of running.current) animation.pause();
+      },
+      resume() {
+        paused.current = false;
+        for (const animation of running.current) animation.play();
       },
     };
   }, [run]);

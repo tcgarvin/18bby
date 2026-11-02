@@ -49,6 +49,9 @@ Rules engine and playtest harness for an 18xx-style Star Wars game. Python 3.11,
   it carries on (no spurs into hexes it doesn't serve). Revenue links show only in the map's
   Routes view (the Regular | Routes choice is in `web/src/mapView.ts`); `web/src/linkLayout.ts`
   routes their arcs and pills around badges, names and each other.
+- Phone layout (prototype, up to 640px wide): `web/src/phone/`. `PhoneGame.tsx` is the operating
+  turn and replays; `camera.ts` decides what the map frames; other screens still use the desktop's
+  views. `web/scripts/screenshots/phone_positions.py` sets up positions to try on a real phone.
 - Rule enforcement: `src/bby18/game.py` and `src/bby18/network.py`. Drivers and bots decide what
   to do; these modules decide whether it is legal and apply the consequences.
 - Death Star rules (`death_star_rules`, the default since 2026-10-26) with facilities and planet
