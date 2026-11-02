@@ -29,6 +29,55 @@ describe("PlaybackPlayer", () => {
 
   const showing = (player: PlaybackPlayer) => player.getSnapshot().current?.caption ?? null;
 
+  it("holds a step while paused and finishes what was left of it on resume", () => {
+    const player = new PlaybackPlayer(1);
+    player.play(steps, target);
+    vi.advanceTimersByTime(1000);
+    player.pause();
+    expect(player.getSnapshot().paused).toBe(true);
+    vi.advanceTimersByTime(60000);
+    expect(showing(player)).toBe("buy");
+    player.resume();
+    expect(player.getSnapshot().paused).toBe(false);
+    vi.advanceTimersByTime(799);
+    expect(showing(player)).toBe("buy");
+    vi.advanceTimersByTime(1);
+    expect(showing(player)).toBe("chart");
+  });
+
+  it("can be skipped while paused, and is no longer paused afterward", () => {
+    const player = new PlaybackPlayer(1);
+    player.play(steps, target);
+    player.pause();
+    player.skip();
+    expect(player.getSnapshot()).toMatchObject({ playing: false, paused: false, current: null });
+  });
+
+  it("ignores pause when nothing is playing", () => {
+    const player = new PlaybackPlayer(1);
+    player.pause();
+    expect(player.getSnapshot().paused).toBe(false);
+  });
+
+  it("adds a step's wait for the camera before its effects' time", () => {
+    const player = new PlaybackPlayer(1);
+    player.play(steps, target, [350]);
+    expect(player.getSnapshot()).toMatchObject({ leadMs: 350, durationMs: 1800 });
+    vi.advanceTimersByTime(2149);
+    expect(showing(player)).toBe("buy");
+    vi.advanceTimersByTime(1);
+    expect(showing(player)).toBe("chart");
+    expect(player.getSnapshot().leadMs).toBe(0);
+  });
+
+  it("shortens the camera wait with speed, down to a floor", () => {
+    const player = new PlaybackPlayer(2);
+    player.play(steps, target, [350]);
+    expect(player.getSnapshot().leadMs).toBe(175);
+    player.setSpeed(8);
+    expect(player.getSnapshot().leadMs).toBe(120);
+  });
+
   it("shows each step for its kind's duration at 1x", () => {
     const player = new PlaybackPlayer(1);
     player.play(steps, target);

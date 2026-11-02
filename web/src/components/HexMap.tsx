@@ -45,6 +45,7 @@ import {
 } from "../lanes";
 import { layoutLinks } from "../linkLayout";
 import { useMapView, type MapView } from "../mapView";
+import { useViewBoxGlide } from "../phone/useViewBoxGlide";
 import { scatterBlobs } from "../terrain";
 import { DeathStarShape } from "./DeathStar";
 import "./HexMap.css";
@@ -124,6 +125,8 @@ interface HexMapProps {
   viewToggle?: boolean;
   /** Start on Routes each time the map mounts, and leave the remembered choice alone when flipped. */
   startOnRoutes?: boolean;
+  /** Move to a new `fitHexes` over this long instead of jumping. */
+  glideMs?: number;
 }
 
 function add(a: Point, b: Point, scale = 1): Point {
@@ -380,6 +383,11 @@ function viewBox(hexes: Axial[], minSpan = 0): string {
   return `${minX.toFixed(1)} ${minY.toFixed(1)} ${(maxX - minX).toFixed(1)} ${(maxY - minY).toFixed(1)}`;
 }
 
+/** The view a map takes for `fitHexes`, so a caller can tell whether two sets frame alike. */
+export function fitViewBox(hexes: Axial[]): string {
+  return viewBox(hexes, MIN_FIT_SPAN);
+}
+
 const NO_KEYS = new Set<string>();
 
 /**
@@ -453,17 +461,20 @@ export function HexMap(props: HexMapProps) {
     facilityPreview = null,
     viewToggle = true,
     startOnRoutes = false,
+    glideMs = 0,
   } = props;
+  const svgRef = useRef<SVGSVGElement>(null);
   const [chosenView, chooseView] = useMapView(startOnRoutes);
   const corpIds = useMemo(() => corporations.map((c) => c.id), [corporations]);
   const regions = useMemo(() => assignRegions(board.hexes, board.planets), [board]);
   const boundaries = useMemo(() => regionBoundaries(board, regions), [board, regions]);
   const fitKey = fitHexes ? fitHexes.map(hexKey).join(" ") : "";
   const box = useMemo(
-    () => (fitHexes && fitHexes.length > 0 ? viewBox(fitHexes, MIN_FIT_SPAN) : viewBox(board.hexes)),
+    () => (fitHexes && fitHexes.length > 0 ? fitViewBox(fitHexes) : viewBox(board.hexes)),
     // fitKey stands in for fitHexes, which callers rebuild on every render.
     [board, fitKey],
   );
+  useViewBoxGlide(svgRef, box, glideMs);
   // The construction site is a hub like a planet (lanes stub into it, pairs arc to it), but region
   // shading stays with the real planets, as on the server.
   const site = sitePlanet(deathStar);
@@ -536,7 +547,7 @@ export function HexMap(props: HexMapProps) {
   }
 
   const map = (
-    <svg className={`hexmap${focus ? " hexmap--focused" : ""}${routesOn ? " hexmap--routes" : ""}`} viewBox={box} role="img" aria-label={label}>
+    <svg ref={svgRef} className={`hexmap${focus ? " hexmap--focused" : ""}${routesOn ? " hexmap--routes" : ""}`} viewBox={box} role="img" aria-label={label}>
       <defs>
         <radialGradient id="hexmap-nebula-haze">
           <stop offset="0%" className="hexmap__haze-core" />

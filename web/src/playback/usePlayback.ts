@@ -12,16 +12,22 @@ export interface Playback {
   /** What to draw: the step showing now while playing, else `latest`. */
   display: GameState;
   playing: boolean;
+  /** True while a running playback is held on its current step. */
+  paused: boolean;
   current: PlaybackStep | null;
   index: number;
   total: number;
   speed: PlaybackSpeed;
-  /** How long the current step shows; 0 when idle. */
+  /** How long the current step's effects have; 0 when idle. */
   durationMs: number;
+  /** How long the current step waits for the camera before its effects; 0 when it doesn't. */
+  leadMs: number;
   /** Animates from `before` (what was on screen) to `after` (the server's reply). */
   enqueue(before: GameState, after: GameState): void;
   /** Jumps to the final state. */
   skip(): void;
+  pause(): void;
+  resume(): void;
   setSpeed(speed: PlaybackSpeed): void;
 }
 
@@ -30,9 +36,14 @@ export interface Playback {
  * shown whenever nothing is playing, and a playback stops if `latest` moves on to a state it does
  * not end at (an undo, or a reload). Call `enqueue` alongside setting the new state.
  *
- * `planets` (from the board) let captions name planets.
+ * `planets` (from the board) let captions name planets. `leadsFor` gives each step's wait for a
+ * camera move at 1×, for a layout whose map moves between steps.
  */
-export function usePlayback(latest: GameState, planets: Planet[] = NO_PLANETS): Playback {
+export function usePlayback(
+  latest: GameState,
+  planets: Planet[] = NO_PLANETS,
+  leadsFor?: (steps: PlaybackStep[]) => number[],
+): Playback {
   const [player] = useState(() => new PlaybackPlayer(loadSpeed(), saveSpeed));
   const snapshot = useSyncExternalStore(player.subscribe, player.getSnapshot);
 
@@ -44,25 +55,34 @@ export function usePlayback(latest: GameState, planets: Planet[] = NO_PLANETS): 
   }, [player, latest]);
 
   const enqueue = useCallback(
-    (before: GameState, after: GameState) => player.play(playbackSteps(before, after, planets), after),
-    [player, planets],
+    (before: GameState, after: GameState) => {
+      const steps = playbackSteps(before, after, planets);
+      player.play(steps, after, leadsFor?.(steps));
+    },
+    [player, planets, leadsFor],
   );
   const skip = useCallback(() => player.skip(), [player]);
+  const pause = useCallback(() => player.pause(), [player]);
+  const resume = useCallback(() => player.resume(), [player]);
   const setSpeed = useCallback((speed: PlaybackSpeed) => player.setSpeed(speed), [player]);
 
   return useMemo(
     () => ({
       display: snapshot.current?.state ?? latest,
       playing: snapshot.playing,
+      paused: snapshot.paused,
       current: snapshot.current,
       index: snapshot.index,
       total: snapshot.total,
       speed: snapshot.speed,
       durationMs: snapshot.durationMs,
+      leadMs: snapshot.leadMs,
       enqueue,
       skip,
+      pause,
+      resume,
       setSpeed,
     }),
-    [snapshot, latest, enqueue, skip, setSpeed],
+    [snapshot, latest, enqueue, skip, pause, resume, setSpeed],
   );
 }

@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { Action, Axial, Board, CorporationState, DividendAction, GameState } from "../../api";
+import type { Action, CorporationState, DividendAction, GameState } from "../../api";
 import { chainKind, chainPath, chainSum, revenueChains } from "../../chains";
-import { pairUsage, pairUsageText, sitePlanet } from "../../deathstar";
+import { pairUsage, pairUsageText } from "../../deathstar";
 import { supplyItem } from "../../facilities";
 import { useHotkeys } from "../../hotkeys";
+import { networkHexes } from "../../phone/camera";
 import { useSettled } from "../../playback/useSettled";
 import { corpColor, dividendSplit, findCorporation, nearestCellWithPrice, playerName, terrainByKey } from "../../selectors";
 import { CertStack } from "../CertStack";
@@ -110,17 +111,6 @@ export function DividendView({ state, board, interactive, busy, keyboard, change
       </OperatingRail>
     </div>
   );
-}
-
-/** Hexes the corporation's network touches: served tiles, reachable planets and its homeworld. */
-function networkHexes(state: GameState, board: Board, corp: CorporationState): Axial[] {
-  const names = new Set([...corp.reachablePlanets, corp.homeworld]);
-  const site = sitePlanet(state.deathStar);
-  const hubs = site ? [...board.planets, site] : board.planets;
-  return [
-    ...state.tiles.filter((t) => t.service.includes(corp.id)).map((t) => t.hex),
-    ...hubs.filter((p) => names.has(p.name)).map((p) => p.hex),
-  ];
 }
 
 interface DecisionProps {
